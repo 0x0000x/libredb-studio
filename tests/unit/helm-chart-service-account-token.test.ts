@@ -67,7 +67,7 @@ describe("serviceAccount.automountServiceAccountToken on the pod spec", () => {
     expect(pod.automountServiceAccountToken).toBe(false);
   });
 
-  test("an explicit true mounts the token, with a rendered account and with the operator's own", () => {
+  test("an explicit true mounts the token, with a rendered account and with an account the chart does not create", () => {
     const created = render(["--set", "serviceAccount.automountServiceAccountToken=true"]);
     expect(created.serviceAccount?.automountServiceAccountToken).toBe(true);
     expect(created.pod.automountServiceAccountToken).toBe(true);
