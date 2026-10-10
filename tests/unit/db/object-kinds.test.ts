@@ -13,6 +13,7 @@ import {
   kindAcceptsRowWrites,
   offersTestDataGeneration,
   kindCountIsListing,
+  kindNamesWithheld,
   relationKindIds,
   isCountSampled,
   isCountUnavailable,
@@ -234,6 +235,16 @@ describe("relationKindIds", () => {
   test("consumers filter by role, never by kind id", () => {
     expect(relationKindIds(withKinds)).toEqual(["table", "view"]);
   });
+
+  test("a relation kind that withholds its names is refused, since the schema surfaces would list them", () => {
+    const declaring = {
+      ...withKinds,
+      objectKinds: [{ id: "table", role: "relation", label: "Table", labelPlural: "Tables", machineNames: "withheld" }],
+    } as ProviderCapabilities;
+    expect(() => relationKindIds(declaring)).toThrow(
+      'The relation kind "table" declares machineNames "withheld", and a relation\'s names are listed by the schema surfaces',
+    );
+  });
 });
 
 describe("isCountUnavailable", () => {
@@ -287,6 +298,25 @@ describe("kindCountIsListing", () => {
   test("a kind this engine does not declare is not assumed to be one", () => {
     expect(kindCountIsListing(withListingCounts, "role")).toBe(false);
     expect(kindCountIsListing(base, "user")).toBe(false);
+  });
+});
+
+describe("kindNamesWithheld", () => {
+  test("only an explicit withheld keeps a kind's names off machine surfaces", () => {
+    expect(
+      kindNamesWithheld({
+        id: "secrets",
+        role: "config",
+        label: "Secret",
+        labelPlural: "Secrets",
+        machineNames: "withheld",
+      }),
+    ).toBe(true);
+    expect(kindNamesWithheld({ id: "pods", role: "config", label: "Pod", labelPlural: "Pods" })).toBe(false);
+  });
+
+  test("a kind this engine does not declare is not withheld", () => {
+    expect(kindNamesWithheld(undefined)).toBe(false);
   });
 });
 

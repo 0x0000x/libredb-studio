@@ -385,11 +385,19 @@ export function offersTestDataGeneration(capabilities: ProviderCapabilities, id:
  * asking for three kinds instead of seven is three listings per container instead of seven.
  * `tests/helpers/object-surface-conformance.ts` reads it to perform that same join, so the
  * guard and the app narrow their population by one rule rather than two.
+ *
+ * A relation kind that declares `machineNames: "withheld"` is refused rather than listed or skipped: every
+ * reader here lists a relation's names, MCP's `inspect_schema` among them, so the declaration could not hold.
  */
 export function relationKindIds(capabilities: ProviderCapabilities): readonly string[] {
-  return declaredKinds(capabilities)
-    .filter((kind) => kind.role === "relation")
-    .map((kind) => kind.id);
+  const relations = declaredKinds(capabilities).filter((kind) => kind.role === "relation");
+  const withheld = relations.find((kind) => kindNamesWithheld(kind));
+  if (withheld !== undefined) {
+    throw new Error(
+      `The relation kind "${withheld.id}" declares machineNames "withheld", and a relation's names are listed by the schema surfaces`,
+    );
+  }
+  return relations.map((kind) => kind.id);
 }
 
 /**
@@ -434,6 +442,16 @@ export function isCountSampled(count: KindCount): count is { readonly count: num
  */
 export function kindCountIsListing(capabilities: ProviderCapabilities, id: string): boolean {
   return findKind(capabilities, id)?.countIsListing === true;
+}
+
+/**
+ * Whether THIS KIND's object names are kept off every machine surface (`ObjectKindSpec.machineNames`).
+ *
+ * Absent and undeclared both read as false. It takes the SPEC, as `kindHasColumns` does, because its one reader,
+ * the agent's grounding walk, already holds it.
+ */
+export function kindNamesWithheld(kind: ObjectKindSpec | undefined): boolean {
+  return kind?.machineNames === "withheld";
 }
 
 /**

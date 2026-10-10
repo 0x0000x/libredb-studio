@@ -22,6 +22,7 @@ import { getExplainStrategy, type ExplainStrategy } from "@/lib/explain";
 import type { ExplainFormat } from "@/lib/db/types";
 import { maybeInviteToStar } from "@/lib/community/star-prompt-toast";
 import { sandboxRefusal } from "@/lib/editor/sandbox-refusal";
+import { historyMaskOf, maskStatementForHistory } from "@/lib/history-mask";
 import { buildConnectionPayload } from "./use-connection-payload";
 
 export interface QueryExecutionOptions {
@@ -768,12 +769,13 @@ export function useQueryExecution({
             connectionId: activeConnection.id,
             connectionName: activeConnection.name,
             tabName: tabToExec.name,
-            query: queryToExecute,
+            query: maskStatementForHistory(queryToExecute, historyMaskOf(metadata?.capabilities)),
             executionTime,
             status: "error",
             executedAt: new Date(),
             ...(isExplain && { kind: "explain" as const }),
-            errorMessage,
+            // A server's error can repeat the statement it refuses, so its text is stored through the same mask.
+            errorMessage: maskStatementForHistory(errorMessage, historyMaskOf(metadata?.capabilities)),
           });
 
           // Handle query cancellation via response code
@@ -790,20 +792,24 @@ export function useQueryExecution({
 
         // Only add to history for new queries (not load more)
         if (!isLoadMore) {
+          const statementError: string | undefined = resultData.hasError
+            ? resultData.statements?.find((s: { status: string }) => s.status === "error")?.error
+            : undefined;
           storage.addToHistory({
             id: newLocalId(),
             connectionId: activeConnection.id,
             connectionName: activeConnection.name,
             tabName: tabToExec.name,
-            query: queryToExecute,
+            query: maskStatementForHistory(queryToExecute, historyMaskOf(metadata?.capabilities)),
             executionTime: resultData.executionTime || executionTime,
             status: resultData.hasError ? "error" : "success",
             executedAt: new Date(),
             // An EXPLAIN's rows are the plan's, not the statement's (#1447).
             ...(isExplain ? { kind: "explain" as const } : { rowCount: resultData.rowCount }),
-            errorMessage: resultData.hasError
-              ? resultData.statements?.find((s: { status: string }) => s.status === "error")?.error
-              : undefined,
+            errorMessage:
+              statementError === undefined
+                ? undefined
+                : maskStatementForHistory(statementError, historyMaskOf(metadata?.capabilities)),
           });
           setHistoryKey((prev) => prev + 1);
         }
@@ -1196,7 +1202,7 @@ export function useQueryExecution({
           connectionId: activeConnection.id,
           connectionName: activeConnection.name,
           tabName: tabToExec.name,
-          query: sql,
+          query: maskStatementForHistory(sql, historyMaskOf(metadata?.capabilities)),
           executionTime: result.executionTime ?? Date.now() - startTime,
           status: "success",
           executedAt: new Date(),
@@ -1218,18 +1224,18 @@ export function useQueryExecution({
           connectionId: activeConnection.id,
           connectionName: activeConnection.name,
           tabName: tabToExec.name,
-          query: sql,
+          query: maskStatementForHistory(sql, historyMaskOf(metadata?.capabilities)),
           executionTime: Date.now() - startTime,
           status: "error",
           executedAt: new Date(),
-          errorMessage,
+          errorMessage: maskStatementForHistory(errorMessage, historyMaskOf(metadata?.capabilities)),
         });
         setHistoryKey((prev) => prev + 1);
         setTabs((prev) => prev.map((t) => (t.id === targetTabId ? { ...t, isExecuting: false } : t)));
         toast({ title: "Query Error", description: errorMessage, variant: "destructive" });
       }
     },
-    [activeConnection, activeTabId, tabs, currentTab, setTabs, toast],
+    [activeConnection, activeTabId, tabs, currentTab, setTabs, toast, metadata],
   );
 
   /**
