@@ -107,6 +107,12 @@ export interface NodeTransportOptions {
    * transport or the connection sets is refused when the transport is built.
    */
   readonly requestHeaderNames?: readonly string[];
+  /**
+   * Text transport only, off when absent: never reach a link-local address or AWS's IPv6 instance metadata address,
+   * as the byte transport never does, whatever DB_HTTP_BLOCK_PRIVATE_HOSTS says. A literal is refused when the
+   * transport is built, and every socket is opened through a lookup that checks the address it dials.
+   */
+  readonly refusesLinkLocal?: boolean;
 }
 
 export interface NodeRequest {
@@ -215,7 +221,8 @@ export interface RequestSigner {
   sign(input: SigningInput): Readonly<Record<string, string>>;
 }
 
-export interface NodeByteTransportOptions extends NodeTransportOptions {
+/** The byte transport always refuses link-local addresses, so it takes no option for it. */
+export interface NodeByteTransportOptions extends Omit<NodeTransportOptions, "refusesLinkLocal"> {
   /** Absent: no response header is returned and `headers` is []. */
   readonly responseHeaders?: ResponseHeaderSelection;
   /** Absent: the request is sent unsigned, with no Authorization header, which the connection headers never carry. */
@@ -517,6 +524,16 @@ function encodingRefusal(encoding: string): TransportError {
     "encoding",
     `The server answered with content-encoding ${named}, and this transport reads identity only, so the response was not read`,
   );
+}
+
+/**
+ * A text transport opt-in as checked when the transport is built: absent or false is off, true is on, and anything
+ * else is refused by name, never read as either.
+ */
+function optedIn(value: unknown, name: keyof NodeTransportOptions): boolean {
+  if (value === undefined || value === false) return false;
+  if (value === true) return true;
+  throw new DatabaseConfigError(`Invalid ${name}: expected true or false`);
 }
 
 function isPositiveInteger(value: number): boolean {
@@ -1103,9 +1120,9 @@ interface Connection<A> {
 
 interface ConnectionRules {
   /**
-   * The byte factory's: a link-local or metadata literal is refused, and every socket is opened through a lookup that
-   * checks the address it dials. The text factory leaves it off, so DB_HTTP_BLOCK_PRIVATE_HOSTS alone limits where
-   * it connects.
+   * A link-local or metadata literal is refused, and every socket is opened through a lookup that checks the address
+   * it dials. The byte factory always sets it; the text factory sets it when its caller asks, and otherwise
+   * DB_HTTP_BLOCK_PRIVATE_HOSTS alone limits where it connects.
    */
   readonly refusesLinkLocal: boolean;
   /** The connection's headers as checked: lowerCased for the text factory, checkedConnectionHeaders for the byte one. */
@@ -1134,7 +1151,7 @@ function connectionOf<A>(
   // With refusesLinkLocal, and whatever the flag says, a link-local or metadata literal is refused next, so the guard's
   // sentence wins when it is on, and every socket is opened through a lookup that checks the answer it dials: with the
   // guard on, its check and then the link-local check, because the guard's has no zone rule; with it off,
-  // linkLocalRefusingLookup (byte transport design 3.9). The text factory keeps the guard's lookup alone.
+  // linkLocalRefusingLookup (byte transport design 3.9). Without refusesLinkLocal the guard's lookup is kept alone.
   const { lookup: guardLookup } = guardedNodeOptions(origin.host);
   if (refusesLinkLocal) assertNotLinkLocalLiteral(origin.host);
   const linkLocalLookup = guardLookup === undefined ? linkLocalRefusingLookup : guardedLinkLocalRefusingLookup;
@@ -1220,13 +1237,15 @@ function redirectRefusal(answer: IncomingMessage, status: number, requestUrl: st
  * The constructor opens nothing; the first request opens the first socket.
  */
 export function createNodeTransport(options: NodeTransportOptions): NodeTransport {
+  // Read once and checked before anything else, so a refused value builds nothing.
+  const refusesLinkLocal = optedIn(options.refusesLinkLocal, "refusesLinkLocal");
   const {
     address: connectionOrigin,
     connectionHeaders,
     requestHeaderNames,
     coreSettings,
   } = connectionOf(options, (origin) => new URL(endpointUrl(origin, "/")).origin, {
-    refusesLinkLocal: false,
+    refusesLinkLocal,
     headersOf: lowerCased,
   });
   const core = transportCore(coreSettings);
