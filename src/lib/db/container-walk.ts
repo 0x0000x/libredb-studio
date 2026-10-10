@@ -36,6 +36,12 @@ export interface ContainerEnumeration {
    * guessing.
    */
   readonly defaultContainer?: readonly string[];
+  /**
+   * Each container's `Container.kinds`, aligned by index with `containers`, where at least one
+   * container answered some. Absent on every engine whose containers name no kinds, so its
+   * enumeration is exactly what it was before the field existed. Read it through `kindsByContainer`.
+   */
+  readonly containerKinds?: readonly (readonly string[] | undefined)[];
 }
 
 /**
@@ -67,19 +73,127 @@ export async function enumerateContainers(provider: DatabaseProvider): Promise<C
     level = next;
   }
 
+  return enumerationOf(level);
+}
+
+/**
+ * What one walk answered, read off its DEEPEST level: the paths, the kinds each container named, and
+ * the session default.
+ *
+ * Exported for the agent's grounding walk, which walks the levels itself from the capabilities its run
+ * context holds (see `sessionDefaultContainer`), so the two walks build one answer by one rule.
+ */
+export function enumerationOf(level: readonly Container[]): ContainerEnumeration {
   const containers = level.map((container) => container.path);
+  const containerKinds = level.map((container) => container.kinds);
   const defaultContainer = sessionDefaultContainer(level);
-  return defaultContainer === undefined ? { containers } : { containers, defaultContainer };
+  return {
+    containers,
+    ...(containerKinds.some((kinds) => kinds !== undefined) ? { containerKinds } : {}),
+    ...(defaultContainer === undefined ? {} : { defaultContainer }),
+  };
+}
+
+/**
+ * The kinds each container of an enumeration named, keyed the way `dedupePaths` keys a path, so a
+ * reader that removed repeated paths still finds each one's kinds. The first answer for a path wins,
+ * as it does there; a container that named none has no entry, which `kindsForContainer` reads as
+ * every enumerable kind.
+ */
+export function kindsByContainer(enumeration: ContainerEnumeration): ReadonlyMap<string, readonly string[]> {
+  const byPath = new Map<string, readonly string[]>();
+  enumeration.containers.forEach((path, index) => {
+    const key = JSON.stringify(path);
+    const kinds = enumeration.containerKinds?.[index];
+    if (kinds !== undefined && !byPath.has(key)) byPath.set(key, kinds);
+  });
+  return byPath;
+}
+
+/** The containers a caller NAMED, as `describeNamedContainers` answers them. */
+export interface NamedContainers {
+  /** The named paths, in the caller's order, with `containerKinds` where the provider answered some. */
+  readonly enumeration: ContainerEnumeration;
+  /**
+   * The named paths the provider's listing does not hold. Only an engine that declares
+   * `containersNameKinds` can have any, and the kinds such a container holds are unknown.
+   */
+  readonly unlisted: readonly (readonly string[])[];
+}
+
+/**
+ * The distinct parents `describeNamedContainers` lists for a set of named paths, in first-seen order,
+ * or none on an engine it does not ask.
+ */
+function namedParents(
+  provider: DatabaseProvider,
+  named: readonly (readonly string[])[],
+): readonly (readonly string[])[] {
+  const capabilities = provider.getCapabilities();
+  if (capabilities.containersNameKinds !== true || containerDepth(capabilities) === 0) return [];
+  const parents = new Map<string, readonly string[]>();
+  for (const path of named) {
+    const parent = path.slice(0, -1);
+    const key = JSON.stringify(parent);
+    if (!parents.has(key)) parents.set(key, parent);
+  }
+  return [...parents.values()];
+}
+
+/**
+ * How many `listContainers` calls `describeNamedContainers` would issue for these named paths, counted
+ * without issuing any, so a caller can refuse a body before its first round trip. One on an engine with
+ * one container level, one per distinct parent below that, and none on an engine that is not asked.
+ */
+export function namedContainerListings(provider: DatabaseProvider, named: readonly (readonly string[])[]): number {
+  return namedParents(provider, named).length;
+}
+
+/**
+ * The containers a caller NAMED, with the kinds the provider answers for each.
+ *
+ * Only on an engine that declares `ProviderCapabilities.containersNameKinds`: one `listContainers`
+ * call per distinct parent of the named paths, which is one call on an engine with one container
+ * level, because the kinds of a container are the provider's answer and never the caller's. Every
+ * other engine is not asked, and its named containers are read for every enumerable kind exactly as
+ * before the field existed; neither is an engine with no container level, which has nothing to list.
+ * The number of calls is not bounded here: a caller that takes the paths from a request counts them
+ * first with `namedContainerListings` and refuses a body that would issue too many.
+ */
+export async function describeNamedContainers(
+  provider: DatabaseProvider,
+  named: readonly (readonly string[])[],
+): Promise<NamedContainers> {
+  const parents = namedParents(provider, named);
+  if (parents.length === 0) return { enumeration: { containers: named }, unlisted: [] };
+  const answered = new Map<string, Container>();
+  // Sequential on purpose, and the `no-await-in-loop` warning is accepted here, as in
+  // `enumerateContainers`: one parent at a time, so a body naming many parents never opens as many
+  // concurrent listings.
+  for (const parent of parents) {
+    const listed = await (parent.length === 0 ? provider.listContainers() : provider.listContainers(parent));
+    for (const container of listed) {
+      const listedKey = JSON.stringify(container.path);
+      if (!answered.has(listedKey)) answered.set(listedKey, container);
+    }
+  }
+  const containerKinds = named.map((path) => answered.get(JSON.stringify(path))?.kinds);
+  return {
+    enumeration: containerKinds.some((kinds) => kinds !== undefined)
+      ? { containers: named, containerKinds }
+      : { containers: named },
+    unlisted: named.filter((path) => !answered.has(JSON.stringify(path))),
+  };
 }
 
 /**
  * Which of a DEEPEST LEVEL's containers is the session's, where exactly one says so.
  *
- * Exported because a second walk reads the same fact off the same answer: the agent's
- * grounding inventory (`src/lib/agent/tools.ts`) enumerates containers from the
- * capabilities its run context already holds rather than from `provider.getCapabilities()`,
- * so it cannot call `enumerateContainers` itself, and the rule for reading a default off a
- * level must not be written twice. Task 28's sweep is where the two walks become one.
+ * Exported because other readers take the same fact off a level of their own: the object
+ * browser's scoped read in `src/hooks/use-connection-manager.ts`, and the agent's grounding
+ * inventory (`src/lib/agent/tools.ts`), which enumerates containers from the capabilities its
+ * run context already holds rather than from `provider.getCapabilities()` and reads the default
+ * through `enumerationOf`, so the rule for reading a default off a level is written once.
  *
  * More than one flagged container is a provider defect and is answered as NO default
  * rather than by picking one, the same as none: a tie-breaker that guesses is worse than

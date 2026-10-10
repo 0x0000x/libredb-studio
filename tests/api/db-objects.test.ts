@@ -1093,6 +1093,96 @@ describe("POST /api/db/objects/search", () => {
     ]);
     expect(listContainers).toHaveBeenCalledWith(["main"]);
   });
+
+  test("lists each container only for the kinds it holds", async () => {
+    const listObjects = mock(async (container: readonly string[], kind: string) => {
+      const holds = container[0] === "Cluster" ? kind === "nodes" : kind === "pods";
+      if (!holds) throw new QueryError(`the container ${container[0]} holds no ${kind}`, "postgres");
+      return [object([...container, `web-${kind}`], kind)];
+    });
+    activeProvider = objectProvider({
+      objectKinds: [
+        { id: "pods", role: "config", label: "Pod", labelPlural: "Pods" },
+        { id: "nodes", role: "config", label: "Node", labelPlural: "Nodes" },
+      ],
+      listContainers: mock(async () => [
+        { path: ["Cluster"], name: "Cluster", level: 0, kinds: ["nodes"] },
+        { path: ["shop"], name: "shop", level: 0, kinds: ["pods"] },
+      ]),
+      listObjects,
+    });
+
+    const response = await searchRoute.POST(
+      createMockRequest("/api/db/objects/search", { method: "POST", body: { connection, term: "web" } }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(listObjects.mock.calls).toEqual([
+      [["Cluster"], "nodes"],
+      [["shop"], "pods"],
+    ]);
+    expect((await parseResponseJSON<DatabaseObject[]>(response)).map((found) => found.path)).toEqual([
+      ["Cluster", "web-nodes"],
+      ["shop", "web-pods"],
+    ]);
+  });
+
+  /** `count` one-level containers holding no kinds of their own, so each pairs with both declared kinds. */
+  function manyContainers(count: number): Container[] {
+    return Array.from({ length: count }, (_unused, index) => ({ path: [`s${index}`], name: `s${index}`, level: 0 }));
+  }
+
+  test("searches a scan of exactly the inventory bound", async () => {
+    const listObjects = mock(async () => []);
+    activeProvider = objectProvider({
+      listContainers: mock(async () => manyContainers(INVENTORY_PAIR_LIMIT / 2)),
+      listObjects,
+    });
+
+    const response = await searchRoute.POST(
+      createMockRequest("/api/db/objects/search", { method: "POST", body: { connection, term: "x" } }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(listObjects).toHaveBeenCalledTimes(INVENTORY_PAIR_LIMIT);
+  });
+
+  test("refuses, before any listing, a search over more pairs than the inventory bound", async () => {
+    const listObjects = mock(async () => []);
+    activeProvider = objectProvider({
+      listContainers: mock(async () => manyContainers(INVENTORY_PAIR_LIMIT / 2 + 1)),
+      listObjects,
+    });
+
+    const response = await searchRoute.POST(
+      createMockRequest("/api/db/objects/search", { method: "POST", body: { connection, term: "x" } }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect((await parseResponseJSON<{ error: string }>(response)).error).toBe(
+      `this search would list ${INVENTORY_PAIR_LIMIT + 2} container and kind pairs, more than the ` +
+        `${INVENTORY_PAIR_LIMIT} one search may list; name fewer kinds in "kinds"`,
+    );
+    expect(listObjects).toHaveBeenCalledTimes(0);
+  });
+
+  test("naming fewer kinds brings a refused search under the bound", async () => {
+    const listObjects = mock(async () => []);
+    activeProvider = objectProvider({
+      listContainers: mock(async () => manyContainers(INVENTORY_PAIR_LIMIT / 2 + 1)),
+      listObjects,
+    });
+
+    const response = await searchRoute.POST(
+      createMockRequest("/api/db/objects/search", {
+        method: "POST",
+        body: { connection, term: "x", kinds: ["table"] },
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(listObjects).toHaveBeenCalledTimes(INVENTORY_PAIR_LIMIT / 2 + 1);
+  });
 });
 
 // ============================================================================
@@ -1194,6 +1284,193 @@ describe("POST /api/db/objects/inventory", () => {
       ["ops", "orders"],
     ]);
     expect(listContainers).toHaveBeenCalledTimes(0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Kinds per container
+  // ---------------------------------------------------------------------------
+  //
+  // A container may answer `kinds`, the enumerable kinds it holds, on an engine that declares
+  // `containersNameKinds`. The route lists only those there, on the walk and for named containers
+  // alike, so a cluster-scoped container is never asked for a namespaced kind, which its provider
+  // would refuse with a sentence and end the whole read.
+
+  const NODE_KIND: ObjectKindSpec = { id: "nodes", role: "config", label: "Node", labelPlural: "Nodes" };
+  const POD_KIND: ObjectKindSpec = { id: "pods", role: "config", label: "Pod", labelPlural: "Pods" };
+  const clusterContainers = async (): Promise<Container[]> => [
+    { path: ["Cluster"], name: "Cluster", level: 0, kinds: ["nodes"] },
+    { path: ["shop"], name: "shop", level: 0, kinds: ["pods"] },
+  ];
+
+  /**
+   * A provider that declares `containersNameKinds`, refuses an inapplicable pair, as the contract asks,
+   * and lists one object otherwise.
+   */
+  function clusterProvider() {
+    const listObjects = mock(async (container: readonly string[], kind: string) => {
+      const holds = container[0] === "Cluster" ? kind === "nodes" : kind === "pods";
+      if (!holds) throw new QueryError(`the container ${container[0]} holds no ${kind}`, "postgres");
+      return [object([...container, `${kind}-one`], kind)];
+    });
+    const provider = objectProvider({
+      objectKinds: [POD_KIND, NODE_KIND],
+      listContainers: mock(clusterContainers),
+      listObjects,
+    });
+    const capabilities = { ...provider.getCapabilities(), containersNameKinds: true as const };
+    provider.getCapabilities = () => capabilities;
+    activeProvider = provider;
+    return listObjects;
+  }
+
+  test("the walk lists each container's own kinds and never an inapplicable pair", async () => {
+    const listObjects = clusterProvider();
+
+    const response = await inventoryRoute.POST(
+      createMockRequest("/api/db/objects/inventory", { method: "POST", body: { connection } }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(listObjects.mock.calls).toEqual([
+      [["Cluster"], "nodes"],
+      [["shop"], "pods"],
+    ]);
+    expect((await parseResponseJSON<{ objects: DatabaseObject[] }>(response)).objects.map((o) => o.path)).toEqual([
+      ["Cluster", "nodes-one"],
+      ["shop", "pods-one"],
+    ]);
+  });
+
+  test("named containers are listed for the kinds the provider says they hold, asked once", async () => {
+    const listObjects = clusterProvider();
+
+    const response = await inventoryRoute.POST(
+      createMockRequest("/api/db/objects/inventory", {
+        method: "POST",
+        body: { connection, containers: [["shop"], ["Cluster"]] },
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(listObjects.mock.calls).toEqual([
+      [["shop"], "pods"],
+      [["Cluster"], "nodes"],
+    ]);
+    expect(activeProvider.listContainers).toHaveBeenCalledTimes(1);
+  });
+
+  test("a named container the provider's listing does not hold is refused before any listing", async () => {
+    const listObjects = clusterProvider();
+
+    const response = await inventoryRoute.POST(
+      createMockRequest("/api/db/objects/inventory", {
+        method: "POST",
+        body: { connection, containers: [["Cluster"], ["gone"]] },
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect((await parseResponseJSON<{ error: string }>(response)).error).toBe(
+      '"containers" names [["gone"]], which the provider\'s container listing does not hold, so the kinds held ' +
+        "there are unknown; name containers the containers route lists",
+    );
+    expect(listObjects).toHaveBeenCalledTimes(0);
+  });
+
+  /**
+   * A two-level engine that declares `containersNameKinds`, so naming a container costs a listing of
+   * its parent. None ships today; the bound below is what keeps one from fanning out on a body's say.
+   */
+  function twoLevelNamingProvider() {
+    const provider = objectProvider({
+      objectKinds: [POD_KIND],
+      listContainers: mock(async (parent?: readonly string[]) =>
+        parent === undefined ? [] : [{ path: [...parent, "app"], name: "app", level: 1, kinds: ["pods"] }],
+      ),
+      listObjects: mock(async (container: readonly string[], kind: string) => [object([...container, "one"], kind)]),
+    });
+    const capabilities = {
+      ...provider.getCapabilities(),
+      containerLevels: [
+        { id: "catalog", label: "Catalog", labelPlural: "Catalogs" },
+        { id: "schema", label: "Schema", labelPlural: "Schemas" },
+      ] as ContainerLevels,
+      containersNameKinds: true as const,
+    };
+    provider.getCapabilities = () => capabilities;
+    activeProvider = provider;
+    return provider;
+  }
+
+  test("named containers under more parents than the pair limit are refused before any container listing", async () => {
+    const provider = twoLevelNamingProvider();
+    const named = Array.from({ length: INVENTORY_PAIR_LIMIT + 1 }, (_unused, index) => [`c${index}`, "app"]);
+
+    const response = await inventoryRoute.POST(
+      createMockRequest("/api/db/objects/inventory", {
+        method: "POST",
+        body: { connection, containers: named },
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect((await parseResponseJSON<{ error: string }>(response)).error).toBe(
+      `"containers" names containers under ${INVENTORY_PAIR_LIMIT + 1} parents, and the kinds each holds take one ` +
+        `container listing per parent, more than the ${INVENTORY_PAIR_LIMIT} one inventory may issue; name fewer containers`,
+    );
+    expect(provider.listContainers).toHaveBeenCalledTimes(0);
+    expect(provider.listObjects).toHaveBeenCalledTimes(0);
+  });
+
+  test("a named container repeated in the body costs one container listing per distinct parent", async () => {
+    const provider = twoLevelNamingProvider();
+    const named = [["main", "app"], ...Array.from({ length: 50 }, () => ["main", "app"]), ["other", "app"]];
+
+    const response = await inventoryRoute.POST(
+      createMockRequest("/api/db/objects/inventory", {
+        method: "POST",
+        body: { connection, containers: named },
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect((provider.listContainers as ReturnType<typeof mock>).mock.calls).toEqual([[["main"]], [["other"]]]);
+    expect((provider.listObjects as ReturnType<typeof mock>).mock.calls).toEqual([
+      [["main", "app"], "pods"],
+      [["other", "app"], "pods"],
+    ]);
+  });
+
+  test("the refusal of unlisted named containers echoes the first five and counts the rest, once each", async () => {
+    clusterProvider();
+    const gone = Array.from({ length: 7 }, (_unused, index) => [`gone${index}`]);
+
+    const response = await inventoryRoute.POST(
+      createMockRequest("/api/db/objects/inventory", {
+        method: "POST",
+        body: { connection, containers: [...gone, ...gone] },
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect((await parseResponseJSON<{ error: string }>(response)).error).toBe(
+      `"containers" names ${JSON.stringify(gone.slice(0, 5))} and 2 more, which the provider's container listing ` +
+        "does not hold, so the kinds held there are unknown; name containers the containers route lists",
+    );
+  });
+
+  test("a requested kind is listed only where it applies", async () => {
+    const listObjects = clusterProvider();
+
+    const response = await inventoryRoute.POST(
+      createMockRequest("/api/db/objects/inventory", {
+        method: "POST",
+        body: { connection, kinds: ["pods"] },
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(listObjects.mock.calls).toEqual([[["shop"], "pods"]]);
   });
 
   // ---------------------------------------------------------------------------

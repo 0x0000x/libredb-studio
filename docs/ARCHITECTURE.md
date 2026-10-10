@@ -186,6 +186,7 @@ No `isMongoDB` / `=== 'mongodb'` checks outside provider classes. All behavior d
 
 `src/lib/db/object-kinds.ts` is the kernel through which every provider reads its own declaration, and it takes only facts that follow from the declaration and hold for every engine.
 How deep the container chain is (`containerDepth()`), which container paths are an address (`acceptedContainerShapes()`, over `containerPathShapes`) and which object kinds exist (`declaredKinds()`) are such facts.
+So is which kinds one container holds (`applicableKinds()`, over `Container.kinds`, and `kindsForContainer()`, its form over every enumerable kind): the tree, the tree filter, the inventory and search routes and the agent's grounding walk ask a container only for those.
 The HTTP object routes read them through the same functions, so a route refusal and a provider refusal cannot disagree about one declaration (#1147).
 A rule that only one engine's reads need stays in that engine's file, next to the reads it protects.
 PostgreSQL's `containerSchema()` is the example: it refuses a declaration that names no `schema` level, because the PostgreSQL reads look the schema up by id, so it lives beside those reads rather than in the kernel (#1092).
@@ -195,7 +196,7 @@ A descriptor field that only one engine sets is a sign that its rule belongs in 
 The editor's query dialects follow the same rule through three registries, each a `Record` the compiler holds complete.
 `QUERY_DIALECTS` (`src/lib/db/query-dialects.ts`) gives each declared `queryDialect` its tab type and its three row-menu answers.
 `DIALECT_EDITORS` (`src/lib/editor/dialect-editors.ts`) gives each tab type its Monaco language and its formatter, keyed by tab type because that is what a restored tab carries.
-`DIALECT_GENERATORS` (`src/lib/query-generators.ts`) gives each dialect what a tree click and Generate Query write.
+`DIALECT_GENERATORS` (`src/lib/query-generators.ts`) gives each dialect what a tree click and Generate Query write, and, for a provider that declares `rowActions`, what each declared row action runs.
 A dialect is one record in each, and no reader branches on its name: `tests/unit/lib/dialect-reader-allowlist.test.ts` holds every other reader of `queryDialect`, of the JSON language and of a negated language to a closed list with its owner.
 
 ### 4.2. Authentication Flow
@@ -345,13 +346,13 @@ src/
 │   ├── results-grid/        # ResultCard, RowDetailSheet, StatsBar
 │   ├── admin/               # AdminDashboard shell (section routes) + tabs/ panels
 │   ├── monitoring/          # MonitoringDashboard + tabs
-│   ├── object-tree/         # The desktop sidebar's lazy object tree (containers, folders, objects, columns)
+│   ├── object-tree/         # The desktop sidebar's lazy object tree (containers, kind groups, folders, objects, columns)
 │   │   ├── ObjectTree.tsx    # Tree shell: hand-rolled window, roving tabindex, keyboard, menu anchor
 │   │   ├── TreeRow.tsx       # One row, ARIA numbers taken verbatim; the chevron is its own hit target
 │   │   ├── RowMenu.tsx       # The row menu, rendered as a sibling of the tree element, not inside it
 │   │   ├── flatten.ts        # Expansion state to a flat row list, with each row's ARIA position (pure)
 │   │   ├── use-tree-nodes.ts # The lazy cache: containers, counts, a folder's objects, a row's columns
-│   │   ├── row-actions.ts    # What a row may be asked to do, read off the kind's own declaration
+│   │   ├── row-actions.ts    # What a row may be asked to do, read off the kind's own declaration and the declared row actions
 │   │   └── index.ts          # What a shell imports: ObjectTree plus the two types its handlers need
 │   ├── schema-explorer/     # SchemaExplorer (the flat list: mobile schema tab, published export)
 │   └── ui/                  # Shadcn/UI primitives

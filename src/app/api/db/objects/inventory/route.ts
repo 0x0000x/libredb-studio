@@ -14,8 +14,15 @@ import {
   resolveKinds,
   type ObjectInventory,
 } from "@/lib/api/object-route";
-import { enumerateContainers } from "@/lib/db/container-walk";
-import type { DatabaseObject, ObjectDetail } from "@/lib/db/types";
+import {
+  type ContainerEnumeration,
+  describeNamedContainers,
+  enumerateContainers,
+  kindsByContainer,
+  namedContainerListings,
+} from "@/lib/db/container-walk";
+import { applicableKinds } from "@/lib/db/object-kinds";
+import type { DatabaseObject, DatabaseProvider, ObjectDetail } from "@/lib/db/types";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +53,13 @@ export const dynamic = "force-dynamic";
  * then meets `INVENTORY_PAIR_LIMIT`. The pair limit truncates the SCAN, never the walk. Bounding
  * the walk belongs in `container-walk.ts`, which the agent's grounding inventory shares, so it is
  * one decision for both readers rather than a cap invented here. Filed rather than guessed at (#789).
+ *
+ * Named containers do not walk, but on an engine that declares `containersNameKinds` they cost one
+ * `listContainers` call per distinct parent, before the first pair exists, because the kinds a
+ * container holds are the provider's answer. That is one call on an engine with one container level.
+ * Below that the count is the body's to choose, so it IS bounded: a body whose named containers sit
+ * under more parents than `INVENTORY_PAIR_LIMIT` is refused before any listing, since a scan that
+ * long would be cut by the pair limit anyway.
  *
  * `includeColumns` is back, and it is a DIFFERENT read from the one that was removed. The first
  * spelling called `describeObject` once per object, up to 5000 sequential round trips, and was
@@ -79,9 +93,14 @@ export async function POST(req: NextRequest) {
     //
     // The enumeration also answers which container the SESSION is in, off the same walk and at
     // no extra round trip. A body that NAMED its containers skips the walk, so there is no
-    // default to report and none is invented (#789).
-    const enumerated = named === undefined ? await enumerateContainers(provider) : { containers: named };
+    // default to report and none is invented (#789). On an engine whose containers name their
+    // kinds, the named ones are still asked of the provider, because which kinds a container
+    // holds is the provider's answer: a caller naming a cluster's cluster-scoped container must
+    // not have its namespaced kinds listed there. See `namedEnumeration`.
+    const enumerated =
+      named === undefined ? await enumerateContainers(provider) : await namedEnumeration(provider, dedupePaths(named));
     const containers = dedupePaths(enumerated.containers);
+    const kindsOf = kindsByContainer(enumerated);
     const listObjects = provider.listObjects.bind(provider);
 
     // Flattened to one loop so each limit is checked in one place. Nested loops would need a label
@@ -90,7 +109,9 @@ export async function POST(req: NextRequest) {
     // The scan below is sequential, and the `no-await-in-loop` warning is accepted for it: a
     // `Promise.all` would take one pool client per pair, and it could not stop at either limit,
     // which is the whole point of the bounds.
-    const pairs = containers.flatMap((container) => kinds.map((kind) => ({ container, kind: kind.id })));
+    const pairs = containers.flatMap((container) =>
+      applicableKinds(kinds, kindsOf.get(JSON.stringify(container))).map((kind) => ({ container, kind: kind.id })),
+    );
     const scanned = pairs.slice(0, INVENTORY_PAIR_LIMIT);
 
     // Reported the same way an object overflow is, rather than as a 400, and the choice matters for
@@ -178,3 +199,41 @@ export async function POST(req: NextRequest) {
     };
   });
 }
+
+/**
+ * The containers a body NAMED, with the kinds the provider answers for each, refusing one its listing
+ * does not hold.
+ *
+ * Only an engine that declares `containersNameKinds` is asked, and only it can have such a container:
+ * reading one for every kind would pair it with kinds it may not hold, the provider refuses an
+ * inapplicable pair with a sentence, and that refusal would end the whole inventory. So the caller is
+ * told before any listing, in a sentence naming what it sent. The paths arrive deduplicated, and the
+ * sentence echoes the first few of them and counts the rest, so a large body never comes back whole.
+ */
+async function namedEnumeration(
+  provider: DatabaseProvider,
+  named: readonly (readonly string[])[],
+): Promise<ContainerEnumeration> {
+  const listings = namedContainerListings(provider, named);
+  if (listings > INVENTORY_PAIR_LIMIT) {
+    throw new ObjectRouteError(
+      `"containers" names containers under ${listings} parents, and the kinds each holds take one container ` +
+        `listing per parent, more than the ${INVENTORY_PAIR_LIMIT} one inventory may issue; name fewer containers`,
+      400,
+    );
+  }
+  const { enumeration, unlisted } = await describeNamedContainers(provider, named);
+  if (unlisted.length > 0) {
+    const shown = unlisted.slice(0, UNLISTED_ECHO_LIMIT);
+    const more = unlisted.length - shown.length;
+    throw new ObjectRouteError(
+      `"containers" names ${JSON.stringify(shown)}${more > 0 ? ` and ${more} more` : ""}, which the provider's ` +
+        "container listing does not hold, so the kinds held there are unknown; name containers the containers route lists",
+      400,
+    );
+  }
+  return enumeration;
+}
+
+/** How many unlisted named containers a refusal names before it only counts the rest. */
+const UNLISTED_ECHO_LIMIT = 5;

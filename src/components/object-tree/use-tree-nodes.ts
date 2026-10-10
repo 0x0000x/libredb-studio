@@ -23,7 +23,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildConnectionPayload } from "@/hooks/use-connection-payload";
 import { appFetch } from "@/lib/config/base-path";
-import { containerDepth, enumerableKinds, isCountSampled, isCountUnavailable } from "@/lib/db/object-kinds";
+import {
+  applicableKinds,
+  containerDepth,
+  enumerableKinds,
+  isCountSampled,
+  isCountUnavailable,
+  kindGroup,
+} from "@/lib/db/object-kinds";
 import type {
   Container,
   DatabaseObject,
@@ -262,8 +269,9 @@ function readFor(row: TreeRowModel, depth: 0 | 1 | 2): TreeRead | undefined {
       ? childContainersRead(row.path)
       : { request: { route: "counts", container: row.path }, slot: { kind: "counts", key: pathKey(row.path) } };
   }
-  // A COLUMN row, which is a leaf and asks for nothing. Stated rather than reached by falling off
-  // the end, so a later arm cannot silently start answering for it.
+  // A COLUMN row, which is a leaf and asks for nothing, and a GROUP row, which only holds folders
+  // whose own rows ask for their reads. Stated rather than reached by falling off the end, so a later
+  // arm cannot silently start answering for either.
   return undefined;
 }
 
@@ -297,7 +305,8 @@ const NO_IDS: ReadonlySet<string> = new Set();
  * A folder whose count is an exact `0` holds nothing to find, and one the engine refused to count
  * cannot be listed either, so neither is counted. A bounded count is a floor, `0+` included, so it
  * is. Failed reads are counted apart and left out of `reads`, so the press does not hammer a slot
- * that just answered 429.
+ * that just answered 429. A container that names its kinds (`Container.kinds`) has folders for those
+ * alone, so only those are read: any other pair would meet the provider's refusal.
  */
 function unreadReads(
   cache: TreeCache,
@@ -314,16 +323,14 @@ function unreadReads(
   for (const container of cache.containers) {
     if (container.path.length < depth) consider(childContainersRead(container.path));
   }
-  const leaves =
-    depth === 0
-      ? [[]]
-      : cache.containers.filter((container) => container.path.length === depth).map((container) => container.path);
-  for (const path of leaves) {
-    const counts = cache.counts[pathKey(path)];
-    for (const spec of kinds) {
+  const leaves: readonly Pick<Container, "path" | "kinds">[] =
+    depth === 0 ? [{ path: [] }] : cache.containers.filter((container) => container.path.length === depth);
+  for (const leaf of leaves) {
+    const counts = cache.counts[pathKey(leaf.path)];
+    for (const spec of applicableKinds(kinds, leaf.kinds)) {
       const count = counts?.[spec.id];
       if (count !== undefined && (isCountUnavailable(count) || (!isCountSampled(count) && count.count === 0))) continue;
-      consider(listRead(path, spec.id));
+      consider(listRead(leaf.path, spec.id));
     }
   }
   return { reads, failed };
@@ -483,6 +490,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 function isRenderableShape(read: TreeRead, data: unknown): boolean {
   if (read.slot.kind === "counts") return isRecord(data) && Object.values(data).every(isRecord);
+  // A container's `kinds` is read with `includes` inside the walk, so a host answering anything but a
+  // list of strings there would throw INSIDE the render; absent is the ordinary answer. Its `path`
+  // segments go through `pathKey`, which calls `replaceAll` on each, so they must be strings too.
+  if (read.slot.kind === "containers") {
+    return (
+      Array.isArray(data) &&
+      data.every(
+        (entry) =>
+          isRecord(entry) &&
+          Array.isArray(entry.path) &&
+          entry.path.every((segment) => typeof segment === "string") &&
+          (entry.kinds === undefined ||
+            (Array.isArray(entry.kinds) && entry.kinds.every((id) => typeof id === "string"))),
+      )
+    );
+  }
   // What the walk DEREFERENCES, and both fields are dereferenced rather than merely read.
   // `column.name` goes through `pathKey`, which calls `replaceAll` on it, so a non-string throws
   // INSIDE the walk; `column.type` has `.split("(")` called on it in the row. Neither `isPrimary`
@@ -600,6 +623,9 @@ export function useTreeNodes(
   // The kinds that draw a folder. A kind only the Keys panel enumerates is declared and draws
   // none, so no key name reaches the tree (#1089 3.4).
   const kinds = useMemo(() => enumerableKinds(capabilities), [capabilities]);
+  // The kind groups the filter opens so a match inside one shows; none on an engine that declares
+  // none, and none for a host's malformed group, which `kindGroup` reads as no group.
+  const groups = useMemo(() => [...new Set(kinds.flatMap((kind) => kindGroup(kind)?.id ?? []))], [kinds]);
   const depth = useMemo(() => containerDepth(capabilities), [capabilities]);
 
   // The cache is thrown away by DERIVING it rather than by resetting it in an effect: a connection
@@ -689,7 +715,7 @@ export function useTreeNodes(
     const searchRows = flattenTree({
       kinds,
       containers: cache.containers,
-      expanded: searchExpanded(cache.expanded, cache.containers, cache.objects),
+      expanded: searchExpanded(cache.expanded, cache.containers, cache.objects, groups),
       counts: cache.counts,
       objects: cache.objects,
       details: cache.details,
@@ -698,7 +724,7 @@ export function useTreeNodes(
     });
     const { rows: matched, matches } = filterRows(searchRows, needle);
     return { rows: collapseRows(matched, collapsed), matches };
-  }, [cache, collapsed, depth, kinds, needle, readsColumns]);
+  }, [cache, collapsed, depth, groups, kinds, needle, readsColumns]);
 
   const rows = filtered?.rows ?? treeRows;
 
@@ -779,10 +805,13 @@ export function useTreeNodes(
   const toggle = useCallback(
     (id: string) => {
       const opening = rows.find((row) => row.id === id);
-      // A container or folder in the FILTERED view is open because the filter opened it, so closing
-      // it is the filter's business: writing it to `expanded` would change the reader's tree behind
-      // the filter and fire reads for rows they never opened (D4).
-      if (filtered !== undefined && (opening?.kind === "container" || opening?.kind === "folder")) {
+      // A container, group or folder in the FILTERED view is open because the filter opened it, so
+      // closing it is the filter's business: writing it to `expanded` would change the reader's tree
+      // behind the filter and fire reads for rows they never opened (D4).
+      if (
+        filtered !== undefined &&
+        (opening?.kind === "container" || opening?.kind === "group" || opening?.kind === "folder")
+      ) {
         setCollapsedState({
           connectionId,
           needle,
