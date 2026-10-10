@@ -63,7 +63,7 @@ describe("a method other than GET or POST is refused before any socket", () => {
     expect(listener.seen).toEqual([]);
   });
 
-  test("the method is checked first: a DELETE with a zero cap and a foreign URL names the method", async () => {
+  test("the method is checked before the cap and the URL: a DELETE with a zero cap and a foreign URL names the method", async () => {
     const listener = await httpListener(jsonAnswer(200, "{}"));
     const { transport } = connect(listener);
     const error = await failure(() =>
