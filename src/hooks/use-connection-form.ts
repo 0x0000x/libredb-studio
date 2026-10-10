@@ -17,6 +17,7 @@ import {
   connectionFieldRefusal,
   getDBConfig,
   hostUriSchemes,
+  isFileBased,
   offersSshTunnel,
   type ConnectionField,
 } from "@/lib/db-ui-config";
@@ -344,46 +345,89 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** The SSL modes under which the dialog draws the Client Certificate and Client Private Key boxes. */
+const CLIENT_CERT_SSL_MODES: ReadonlySet<SSLMode> = new Set<SSLMode>(["verify-ca", "verify-full"]);
+
+/** An imported entry copied into plain values, so what is checked is exactly what fills the form. */
+interface ImportedSnapshot {
+  readonly name: string;
+  readonly notices: readonly string[];
+  readonly fields: readonly (readonly [ImportedField, string])[];
+  readonly ssl: Readonly<Partial<ImportedSsl>> | undefined;
+}
+
 /**
- * Why one imported entry cannot fill the form for `type`, or undefined when it can. The entry comes from a parser the
- * type declares, which runs in the browser on pasted text, so it is read as data: every field must be one this type
- * takes (never the consent to send a password without TLS), every value text and, for a select, one of its choices,
- * and the SSL / TLS settings only those the dialog draws, with a mode whenever there are any.
+ * Copies an imported entry into plain values, reading each of its parts once, or undefined when it is not in the
+ * shape an import gives. A part that throws while it is read is a shape the entry does not have: the error is dropped
+ * unread, since it may quote the pasted text.
  */
-function importRefusal(type: DatabaseType, context: ImportedContext): string | undefined {
-  const entry: unknown = context;
-  if (
-    !isPlainRecord(entry) ||
-    typeof entry.name !== "string" ||
-    !Array.isArray(entry.notices) ||
-    !entry.notices.every((notice) => typeof notice === "string") ||
-    !isPlainRecord(entry.fields) ||
-    (entry.ssl !== undefined && !isPlainRecord(entry.ssl))
-  ) {
-    return IMPORT_REFUSALS.shape;
+function snapshotImported(context: ImportedContext): ImportedSnapshot | undefined {
+  try {
+    const entry: unknown = context;
+    if (!isPlainRecord(entry)) return undefined;
+    const name = entry.name;
+    const notices = entry.notices;
+    const fields = entry.fields;
+    const ssl = entry.ssl;
+    if (typeof name !== "string" || !Array.isArray(notices) || !isPlainRecord(fields)) return undefined;
+    if (ssl !== undefined && !isPlainRecord(ssl)) return undefined;
+    const noticeList = [...notices];
+    if (!noticeList.every((notice) => typeof notice === "string")) return undefined;
+    return {
+      name,
+      notices: noticeList as string[],
+      fields: Object.entries(fields) as [ImportedField, string][],
+      ssl: ssl === undefined ? undefined : (Object.fromEntries(Object.entries(ssl)) as Partial<ImportedSsl>),
+    };
+  } catch {
+    return undefined;
   }
+}
+
+/**
+ * Reads one imported entry for `type`: the snapshot to fill the form from, or why it cannot fill it. The entry comes
+ * from a parser the type declares, which runs in the browser on pasted text, so it is read as data and read once:
+ * every field must be one this type takes (never the consent to send a password without TLS), every value text and,
+ * for a select, one of its choices, and the SSL / TLS settings only those the dialog draws, with a mode whenever there
+ * are any: none for a file-based type, which draws no SSL panel, client certificates only under the modes that draw
+ * their boxes, and no certificate at all with SSL off.
+ */
+function readImported(
+  type: DatabaseType,
+  context: ImportedContext,
+): { readonly refusal: string } | { readonly snapshot: ImportedSnapshot } {
+  const snapshot = snapshotImported(context);
+  if (snapshot === undefined) return { refusal: IMPORT_REFUSALS.shape };
   const config = getDBConfig(type);
-  for (const [field, value] of Object.entries(entry.fields)) {
-    if (field === "allowInsecureAuth" || !config.connectionFields.includes(field as ConnectionField)) {
-      return IMPORT_REFUSALS.field;
+  for (const [field, value] of snapshot.fields) {
+    if ((field as string) === "allowInsecureAuth" || !config.connectionFields.includes(field as ConnectionField)) {
+      return { refusal: IMPORT_REFUSALS.field };
     }
     const choices = config.fieldOptions?.[field as ConnectionField];
     if (typeof value !== "string" || (choices !== undefined && !choices.some((choice) => choice.value === value))) {
-      return IMPORT_REFUSALS.value;
+      return { refusal: IMPORT_REFUSALS.value };
     }
   }
-  const ssl = Object.entries(entry.ssl ?? {});
-  if (ssl.length > 0 && !ssl.some(([field]) => field === "mode")) return IMPORT_REFUSALS.ssl;
+  const ssl = Object.entries(snapshot.ssl ?? {});
+  if (ssl.length === 0) return { snapshot };
+  if (isFileBased(type) || !ssl.some(([field]) => field === "mode")) return { refusal: IMPORT_REFUSALS.ssl };
   for (const [field, value] of ssl) {
     if (
       !IMPORTED_SSL_FIELDS.has(field) ||
       typeof value !== "string" ||
       (field === "mode" && !Object.hasOwn(IMPORTED_SSL_MODES, value))
     ) {
-      return IMPORT_REFUSALS.ssl;
+      return { refusal: IMPORT_REFUSALS.ssl };
     }
   }
-  return undefined;
+  const { mode, caCert, clientCert, clientKey } = snapshot.ssl as Partial<ImportedSsl>;
+  if (
+    ((clientCert !== undefined || clientKey !== undefined) && !CLIENT_CERT_SSL_MODES.has(mode as SSLMode)) ||
+    (caCert !== undefined && mode === "disable")
+  ) {
+    return { refusal: IMPORT_REFUSALS.ssl };
+  }
+  return { snapshot };
 }
 
 /**
@@ -1266,28 +1310,38 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
 
   /**
    * Fills the form from one entry of the import the type declares (`connectionImport` in db-ui-config.ts). The entry
-   * replaces every connection-scoped field, so nothing typed for another server, a password, a certificate or an SSH
-   * tunnel, is sent to this one: the form is reset, as a save resets it, and then filled. The type, the environment and
-   * a name already typed are kept; with no name, the entry's own is used, and with no port, the type's default. Only a
-   * new connection is filled: an edited one keeps fields the form does not own, such as an agent's credentials, which
-   * belong to the server it was saved for. A refused entry fills nothing and says why in the result banner.
+   * replaces every connection-scoped field, so nothing typed for another server, a password, a certificate, an SSH
+   * tunnel or a connection string left in the paste box, is sent to this one: the form is reset, as a save resets it,
+   * and then filled. The type, the environment, a name already typed and the choices about how to connect (read-only,
+   * the object scan and the query timeout) are kept; with no name, the entry's own is used, and with no port, the
+   * type's default. Only a new connection is filled: an edited one keeps fields the form does not own, such as an
+   * agent's credentials, which belong to the server it was saved for. A refused entry fills nothing and says why in
+   * the result banner. Returns whether the form was filled.
    */
   const applyImported = useCallback(
-    (context: ImportedContext) => {
-      const refusal = isEditMode ? IMPORT_REFUSALS.editing : importRefusal(type, context);
-      if (refusal !== undefined) {
-        setTestResult({ tone: "error", message: refusal });
-        return;
+    (context: ImportedContext): boolean => {
+      const read: { readonly refusal: string } | { readonly snapshot: ImportedSnapshot } = isEditMode
+        ? { refusal: IMPORT_REFUSALS.editing }
+        : readImported(type, context);
+      if ("refusal" in read) {
+        setTestResult({ tone: "error", message: read.refusal });
+        return false;
       }
+      const entry = read.snapshot;
       resetConnectionFields();
+      setShowPasteInput(false);
+      setPasteInput("");
       setType(type);
       setEnvironment(environment);
-      setName(name !== "" ? name : context.name);
+      setName(name !== "" ? name : entry.name);
+      setReadOnly(readOnly);
+      setSkipObjectScan(skipObjectScan);
+      setQueryTimeout(queryTimeout);
       setPort(getDBConfig(type).defaultPort);
-      for (const [field, value] of Object.entries(context.fields) as [ImportedField, string][]) {
+      for (const [field, value] of entry.fields) {
         importSetters[field](value);
       }
-      const ssl = context.ssl;
+      const ssl = entry.ssl;
       if (ssl?.mode !== undefined) {
         setSSLMode(ssl.mode);
         setShowSSL(ssl.mode !== "disable");
@@ -1298,12 +1352,13 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
       // The next server has not been warned about anything.
       setAcknowledgedCaution(null);
       setTestResult(
-        context.notices.length === 0
-          ? { tone: "success", message: `Filled from ${context.name}. Review the fields and connect.` }
-          : { tone: "warning", message: `Filled from ${context.name}. ${context.notices.join(" ")}` },
+        entry.notices.length === 0
+          ? { tone: "success", message: `Filled from ${entry.name}. Review the fields and connect.` }
+          : { tone: "warning", message: `Filled from ${entry.name}. ${entry.notices.join(" ")}` },
       );
+      return true;
     },
-    [isEditMode, type, environment, name, resetConnectionFields, importSetters],
+    [isEditMode, type, environment, name, readOnly, skipObjectScan, queryTimeout, resetConnectionFields, importSetters],
   );
 
   // Ordered for display (the modal renders these as a 2-column grid), and covering the whole

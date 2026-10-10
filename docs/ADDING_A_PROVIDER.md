@@ -514,7 +514,8 @@ The seed loader refuses a `readOnly: true` seed whose literal credential matches
 Add a test that the real record declares each entry you add.
 
 `connectionImport`, a third optional declaration, offers an import in the dialog: a `label` for its action and a `load` that resolves to the parser, a function from the pasted text to `{ contexts, refusals }` (`src/lib/connection-import.ts`).
-The dialog loads the parser only when the import opens, offers it only for a new connection, and fills the form from the entry the user picks through `applyImported`, which refuses an entry that names a field the type does not take and never takes the consent to send a password without TLS.
+The dialog loads the parser only when the import opens, offers it only for a new connection, and fills the form from the entry the user picks through `applyImported`, which refuses an entry that names a field the type does not take or an SSL / TLS setting the dialog does not draw for the type and mode, and never takes the consent to send a password without TLS.
+The import keeps the user's choices about how to connect (read-only, the object scan and the query timeout) and resets every server-scoped field before it fills.
 The parser runs in the browser: it imports no `node:` module and no provider, never throws, and never keeps or prints a parser error, which can quote a credential.
 A declaring type is listed in `DECLARING` in `tests/unit/lib/connection-import-declaration.test.ts`.
 

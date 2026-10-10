@@ -172,6 +172,49 @@ describe("useConnectionForm: applyImported fills a new connection", () => {
     expect(result.current.testResult?.tone).toBe("success");
   });
 
+  test("the choices about how to connect are kept: read-only, the object scan and the query timeout", async () => {
+    const { result, onConnect } = renderForm();
+    act(() => result.current.setType("neo4j"));
+    act(() => result.current.setReadOnly(true));
+    act(() => result.current.setSkipObjectScan(true));
+    act(() => result.current.setQueryTimeout("30000"));
+    act(() => result.current.applyImported(entry({ fields: { host: "db.example" } })));
+    expect([result.current.readOnly, result.current.skipObjectScan, result.current.queryTimeout]).toEqual([
+      true,
+      true,
+      "30000",
+    ]);
+    await act(async () => {
+      await result.current.handleConnect();
+    });
+    expect(onConnect.mock.calls[0]?.[0]).toMatchObject({ readOnly: true, skipObjectScan: true, queryTimeout: 30000 });
+  });
+
+  test("a connection string pasted for another server and not applied is dropped with its box", () => {
+    const { result } = renderForm();
+    act(() => result.current.setShowPasteInput(true));
+    act(() => result.current.setPasteInput(`postgres://other:${MARKER}@other.example/app`));
+    act(() => result.current.applyImported(entry()));
+    expect([result.current.showPasteInput, result.current.pasteInput]).toEqual([false, ""]);
+  });
+
+  test("the entry is read once: a value that changes after the check is not the one filled", () => {
+    const { result } = renderForm();
+    let reads = 0;
+    const fields = {
+      get host() {
+        reads += 1;
+        return reads === 1 ? "checked.example" : MARKER;
+      },
+    };
+    const given = { name: "staging", notices: [], fields } as unknown as ImportedContext;
+    let filled: boolean | undefined;
+    act(() => {
+      filled = result.current.applyImported(given);
+    });
+    expect([filled, result.current.host, reads]).toEqual([true, "checked.example", 1]);
+  });
+
   test("a connection string switches the form to the connection-string mode", () => {
     const { result } = renderForm();
     act(() => result.current.setType("mongodb"));
@@ -221,6 +264,66 @@ describe("useConnectionForm: applyImported refuses an entry and fills nothing", 
     expect(result.current.testResult).toEqual({ tone: "error", message: sentence });
     expect(result.current.testResult?.message).not.toContain(MARKER);
     expect([result.current.host, result.current.password, result.current.name]).toEqual(["kept.example", "", ""]);
+  });
+
+  test.each([
+    [
+      "a client certificate under require, where the dialog draws no box for it",
+      { mode: "require", clientCert: MARKER },
+    ],
+    [
+      "a client key under verify-system, where the dialog draws no box for it",
+      { mode: "verify-system", clientKey: MARKER },
+    ],
+    ["a client key with SSL off", { mode: "disable", clientKey: MARKER }],
+    ["a CA certificate with SSL off", { mode: "disable", caCert: MARKER }],
+  ] as const)("%s", (_label, ssl) => {
+    const { result, onConnect } = renderForm();
+    act(() => result.current.setHost("kept.example"));
+    let filled: boolean | undefined;
+    act(() => {
+      filled = result.current.applyImported(entry({ ssl }));
+    });
+    expect(filled).toBe(false);
+    expect(result.current.testResult).toEqual({ tone: "error", message: SSL });
+    expect([result.current.host, result.current.caCert, result.current.clientCert, result.current.clientKey]).toEqual([
+      "kept.example",
+      "",
+      "",
+      "",
+    ]);
+    expect(onConnect).not.toHaveBeenCalled();
+  });
+
+  test("an SSL setting for a file-based type, whose dialog draws no SSL panel", () => {
+    const { result } = renderForm();
+    act(() => result.current.setType("sqlite"));
+    act(() =>
+      result.current.applyImported(
+        entry({ fields: { database: "/tmp/app.db" }, ssl: { mode: "verify-full", caCert: MARKER } }),
+      ),
+    );
+    expect(result.current.testResult).toEqual({ tone: "error", message: SSL });
+    expect([result.current.database, result.current.sslMode, result.current.caCert]).toEqual(["", "disable", ""]);
+  });
+
+  test("an entry that throws while it is read is refused as a shape, and nothing escapes", () => {
+    const { result } = renderForm();
+    const given = {
+      name: "staging",
+      notices: [],
+      get fields() {
+        throw new Error(MARKER);
+      },
+    } as unknown as ImportedContext;
+    let filled: boolean | undefined;
+    expect(() =>
+      act(() => {
+        filled = result.current.applyImported(given);
+      }),
+    ).not.toThrow();
+    expect(filled).toBe(false);
+    expect(result.current.testResult).toEqual({ tone: "error", message: SHAPE });
   });
 
   test("a choice the type's select does not offer", () => {
