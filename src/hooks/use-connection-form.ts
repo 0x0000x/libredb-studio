@@ -13,7 +13,14 @@ import {
   type QueryWarning,
 } from "@/lib/types";
 import { describeWarning } from "@/components/results-grid/utils";
-import { connectionFieldRefusal, getDBConfig, hostUriSchemes, offersSshTunnel } from "@/lib/db-ui-config";
+import {
+  connectionFieldRefusal,
+  getDBConfig,
+  hostUriSchemes,
+  offersSshTunnel,
+  type ConnectionField,
+} from "@/lib/db-ui-config";
+import type { ImportedContext, ImportedField, ImportedSsl } from "@/lib/connection-import";
 import { databendNotAppliedNotice, parseConnectionString } from "@/lib/connection-string-parser";
 import { parseHostUri, tlsModeAfterScheme, type HostUriResult } from "@/lib/connection-host-uri";
 import { newLocalId } from "@/lib/ids";
@@ -305,6 +312,81 @@ function readHostBox(type: DatabaseType, text: string): HostUriResult {
 }
 
 /**
+ * Why an imported entry fills nothing, each a fixed sentence: an entry carries credentials, so a refusal never repeats
+ * a value or a key it was given.
+ */
+const IMPORT_REFUSALS = {
+  editing: "An import fills a new connection, so it is not applied while a connection is being edited.",
+  shape: "The imported entry is not in the shape an import gives, so nothing was filled.",
+  field: "The imported entry names a field this connection type does not take, so nothing was filled.",
+  value:
+    "The imported entry gives a value that is not text, or a choice this connection type does not offer, so nothing was filled.",
+  ssl: "The imported entry gives an SSL / TLS setting the dialog does not offer, or certificates without an SSL mode, so nothing was filled.",
+} as const;
+
+/** Every SSL mode, keyed so a mode added to `SSLMode` fails the typecheck until an import may name it. */
+const IMPORTED_SSL_MODES: Readonly<Record<SSLMode, true>> = {
+  disable: true,
+  require: true,
+  "verify-system": true,
+  "verify-ca": true,
+  "verify-full": true,
+};
+
+const IMPORTED_SSL_FIELDS: ReadonlySet<string> = new Set<keyof ImportedSsl>([
+  "mode",
+  "caCert",
+  "clientCert",
+  "clientKey",
+]);
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Why one imported entry cannot fill the form for `type`, or undefined when it can. The entry comes from a parser the
+ * type declares, which runs in the browser on pasted text, so it is read as data: every field must be one this type
+ * takes (never the consent to send a password without TLS), every value text and, for a select, one of its choices,
+ * and the SSL / TLS settings only those the dialog draws, with a mode whenever there are any.
+ */
+function importRefusal(type: DatabaseType, context: ImportedContext): string | undefined {
+  const entry: unknown = context;
+  if (
+    !isPlainRecord(entry) ||
+    typeof entry.name !== "string" ||
+    !Array.isArray(entry.notices) ||
+    !entry.notices.every((notice) => typeof notice === "string") ||
+    !isPlainRecord(entry.fields) ||
+    (entry.ssl !== undefined && !isPlainRecord(entry.ssl))
+  ) {
+    return IMPORT_REFUSALS.shape;
+  }
+  const config = getDBConfig(type);
+  for (const [field, value] of Object.entries(entry.fields)) {
+    if (field === "allowInsecureAuth" || !config.connectionFields.includes(field as ConnectionField)) {
+      return IMPORT_REFUSALS.field;
+    }
+    const choices = config.fieldOptions?.[field as ConnectionField];
+    if (typeof value !== "string" || (choices !== undefined && !choices.some((choice) => choice.value === value))) {
+      return IMPORT_REFUSALS.value;
+    }
+  }
+  const ssl = Object.entries(entry.ssl ?? {});
+  if (ssl.length > 0 && !ssl.some(([field]) => field === "mode")) return IMPORT_REFUSALS.ssl;
+  for (const [field, value] of ssl) {
+    if (
+      !IMPORTED_SSL_FIELDS.has(field) ||
+      typeof value !== "string" ||
+      (field === "mode" && !Object.hasOwn(IMPORTED_SSL_MODES, value))
+    ) {
+      return IMPORT_REFUSALS.ssl;
+    }
+  }
+  return undefined;
+}
+
+/**
  * The input kinds that deliver a whole value at once. A pasted or dropped address is split on arrival; a typed
  * one is not, because `http://l` is already a valid address and splitting it would take the box away from the
  * user mid-word. `buildConnection` splits a typed address instead.
@@ -460,6 +542,45 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
       sshPassword: setSSHPassword,
       sshPrivateKey: setSSHPrivateKey,
       sshPassphrase: setSSHPassphrase,
+    }),
+    [],
+  );
+  /**
+   * The setter an imported value of each field goes to, keyed like the importable fields. A mapped type over them, so
+   * a field added to `connectionFields` without a setter here fails the typecheck instead of being dropped from an
+   * import. Memoized over nothing but setters, which `useState` keeps stable, as `resetSetters` is.
+   */
+  const importSetters: { readonly [K in ImportedField]: (value: string) => void } = useMemo(
+    () => ({
+      host: setHost,
+      port: setPort,
+      user: setUser,
+      password: setPassword,
+      database: setDatabase,
+      schema: setSchema,
+      // An imported connection string is the one connected with, as a pasted one is.
+      connectionString: (value) => {
+        setConnectionString(value);
+        setMongoConnectionMode("connectionString");
+      },
+      // The edit load opens the Advanced accordion for these two, so a value is never filled out of sight.
+      serviceName: (value) => {
+        setServiceName(value);
+        setShowAdvanced(true);
+      },
+      instanceName: (value) => {
+        setInstanceName(value);
+        setShowAdvanced(true);
+      },
+      localDataCenter: setLocalDataCenter,
+      authSource: setAuthSource,
+      apiKeyId: setApiKeyId,
+      apiKeySecret: setApiKeySecret,
+      // importRefusal lets through only a choice the type's select offers.
+      saslMechanism: (value) => setSaslMechanism(value as ConnectionFormDefaults["saslMechanism"]),
+      dataServers: setDataServers,
+      warehouse: setWarehouse,
+      region: setRegion,
     }),
     [],
   );
@@ -1143,6 +1264,48 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
     });
   }, [pasteInput, name, sslMode]);
 
+  /**
+   * Fills the form from one entry of the import the type declares (`connectionImport` in db-ui-config.ts). The entry
+   * replaces every connection-scoped field, so nothing typed for another server, a password, a certificate or an SSH
+   * tunnel, is sent to this one: the form is reset, as a save resets it, and then filled. The type, the environment and
+   * a name already typed are kept; with no name, the entry's own is used, and with no port, the type's default. Only a
+   * new connection is filled: an edited one keeps fields the form does not own, such as an agent's credentials, which
+   * belong to the server it was saved for. A refused entry fills nothing and says why in the result banner.
+   */
+  const applyImported = useCallback(
+    (context: ImportedContext) => {
+      const refusal = isEditMode ? IMPORT_REFUSALS.editing : importRefusal(type, context);
+      if (refusal !== undefined) {
+        setTestResult({ tone: "error", message: refusal });
+        return;
+      }
+      resetConnectionFields();
+      setType(type);
+      setEnvironment(environment);
+      setName(name !== "" ? name : context.name);
+      setPort(getDBConfig(type).defaultPort);
+      for (const [field, value] of Object.entries(context.fields) as [ImportedField, string][]) {
+        importSetters[field](value);
+      }
+      const ssl = context.ssl;
+      if (ssl?.mode !== undefined) {
+        setSSLMode(ssl.mode);
+        setShowSSL(ssl.mode !== "disable");
+        setCaCert(ssl.caCert ?? "");
+        setClientCert(ssl.clientCert ?? "");
+        setClientKey(ssl.clientKey ?? "");
+      }
+      // The next server has not been warned about anything.
+      setAcknowledgedCaution(null);
+      setTestResult(
+        context.notices.length === 0
+          ? { tone: "success", message: `Filled from ${context.name}. Review the fields and connect.` }
+          : { tone: "warning", message: `Filled from ${context.name}. ${context.notices.join(" ")}` },
+      );
+    },
+    [isEditMode, type, environment, name, resetConnectionFields, importSetters],
+  );
+
   // Ordered for display (the modal renders these as a 2-column grid), and covering the whole
   // DatabaseType union — the same form edits existing connections, so an omitted type leaves the
   // picker with nothing selected. tests/hooks/use-connection-form.test.ts enforces the coverage.
@@ -1297,6 +1460,7 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
     handleTestConnection,
     handleConnect,
     handlePasteConnectionString,
+    applyImported,
 
     // Derived data
     dbTypes,
