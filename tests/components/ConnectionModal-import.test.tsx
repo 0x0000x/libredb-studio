@@ -85,6 +85,31 @@ describe("ConnectionModal: a declared connection import", () => {
     expect(screen.queryByTestId(CONNECTION_IMPORT_ACTION_ID)).toBeNull();
   });
 
+  test("switching between two declaring types drops the first type's entries and parser", async () => {
+    const postgres = declareOnPostgres();
+    const mysqlImporter = mock<ConnectionImporter>(() => ({ contexts: [], refusals: [] }));
+    const mysqlLoad = mock(async () => mysqlImporter);
+    restores.push(declareConnectionImport("mysql", { label: "Import a MySQL file", load: mysqlLoad }));
+    render(<ConnectionModal isOpen onClose={() => {}} onConnect={() => {}} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId(CONNECTION_IMPORT_ACTION_ID));
+    });
+    fireEvent.change(screen.getByTestId("connection-import-text"), { target: { value: "postgres text" } });
+    fireEvent.click(screen.getByTestId("connection-import-read"));
+    expect(screen.getAllByTestId("connection-import-context")).toHaveLength(1);
+    fireEvent.click(screen.getByText("MySQL"));
+    expect(screen.queryByTestId("connection-import-context")).toBeNull();
+    expect(screen.getByTestId(CONNECTION_IMPORT_ACTION_ID).textContent).toBe("Import a MySQL file");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId(CONNECTION_IMPORT_ACTION_ID));
+    });
+    fireEvent.change(screen.getByTestId("connection-import-text"), { target: { value: "mysql text" } });
+    fireEvent.click(screen.getByTestId("connection-import-read"));
+    expect(mysqlLoad).toHaveBeenCalledTimes(1);
+    expect(mysqlImporter.mock.calls).toEqual([["mysql text"]]);
+    expect(postgres.importer.mock.calls).toEqual([["postgres text"]]);
+  });
+
   test("no action while a connection is edited", () => {
     declareOnPostgres();
     const editing: DatabaseConnection = {

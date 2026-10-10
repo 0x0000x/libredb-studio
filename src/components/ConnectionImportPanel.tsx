@@ -18,6 +18,19 @@ const LOAD_FAILED = "The import could not be loaded. Close it and open it again 
 const READ_FAILED = "The import could not read the text, so nothing was filled.";
 const NOTHING_FOUND = "No entry was found in the text.";
 
+/**
+ * An importer's result copied into plain lists, or undefined when it is not in the shape an importer is declared to
+ * return: the panel draws it, so a malformed one is a failed read rather than a render that throws. Each entry is read
+ * as data again by the form that fills from it.
+ */
+function readResult(out: unknown): ConnectionImportResult | undefined {
+  if (typeof out !== "object" || out === null) return undefined;
+  const { contexts, refusals } = out as Record<string, unknown>;
+  if (!Array.isArray(contexts) || !Array.isArray(refusals)) return undefined;
+  if (!refusals.every((refusal) => typeof refusal === "string")) return undefined;
+  return { contexts: [...contexts], refusals: [...refusals] };
+}
+
 type Reader =
   | { readonly state: "loading" }
   | { readonly state: "ready"; readonly importer: ConnectionImporter }
@@ -27,14 +40,16 @@ type Reader =
  * The connection dialog's import, drawn for a type whose `DB_UI_CONFIG` entry declares `connectionImport`: an action
  * that opens a paste box, loads the declared parser the first time it opens, reads the pasted text in the browser, and
  * lists the entries found, one button each, to fill the form from. Nothing is sent, logged or stored. The pasted text
- * is dropped as soon as it is read, and the entries as soon as one fills the form or the import closes.
+ * is dropped as soon as it is read, and the entries as soon as one fills the form or the import closes; an entry the
+ * form refuses leaves them listed, so another can be chosen without pasting the text again.
  */
 export function ConnectionImportPanel({
   declaration,
   onApply,
 }: {
   readonly declaration: ConnectionImportDeclaration;
-  readonly onApply: (context: ImportedContext) => void;
+  /** Fills the form from one entry; false when the form refused it, which keeps the import open on its entries. */
+  readonly onApply: (context: ImportedContext) => boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [reader, setReader] = useState<Reader | null>(null);
@@ -69,8 +84,9 @@ export function ConnectionImportPanel({
     const pasted = text;
     setText("");
     try {
-      setResult(reader.importer(pasted));
-      setReadFailed(false);
+      const read = readResult(reader.importer(pasted));
+      setResult(read ?? null);
+      setReadFailed(read === undefined);
     } catch {
       // An importer is declared never to throw. One that does may quote the text, a credential included, in its
       // error, so the error is dropped unread and never logged.
@@ -80,8 +96,7 @@ export function ConnectionImportPanel({
   };
 
   const apply = (context: ImportedContext) => {
-    close();
-    onApply(context);
+    if (onApply(context)) close();
   };
 
   return (
