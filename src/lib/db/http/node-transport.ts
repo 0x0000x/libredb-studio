@@ -53,6 +53,9 @@
  *   and every socket is opened through a lookup that checks the address it dials, after the guard's own check when the
  *   flag is on.
  *
+ * `createNodeTransport` takes two of these on request, the 101 refusal as `refusesUpgrade` and the link-local
+ * refusal as `refusesLinkLocal`, both off when absent, so a provider that does not ask keeps the behaviour it had.
+ *
  * `nodeTlsMaterial` is the TLS mapping D37 counts, shared here so that a new REST provider takes it instead of
  * writing another copy.
  *
@@ -113,6 +116,11 @@ export interface NodeTransportOptions {
    * transport is built, and every socket is opened through a lookup that checks the address it dials.
    */
   readonly refusesLinkLocal?: boolean;
+  /**
+   * Text transport only, off when absent: fail a 101 answer at once as a network failure and destroy its socket, as
+   * the byte transport does, rather than leave the request waiting for its deadline.
+   */
+  readonly refusesUpgrade?: boolean;
 }
 
 export interface NodeRequest {
@@ -221,8 +229,8 @@ export interface RequestSigner {
   sign(input: SigningInput): Readonly<Record<string, string>>;
 }
 
-/** The byte transport always refuses link-local addresses, so it takes no option for it. */
-export interface NodeByteTransportOptions extends Omit<NodeTransportOptions, "refusesLinkLocal"> {
+/** The byte transport always refuses link-local addresses and a 101 answer, so it takes neither option. */
+export interface NodeByteTransportOptions extends Omit<NodeTransportOptions, "refusesLinkLocal" | "refusesUpgrade"> {
   /** Absent: no response header is returned and `headers` is []. */
   readonly responseHeaders?: ResponseHeaderSelection;
   /** Absent: the request is sent unsigned, with no Authorization header, which the connection headers never carry. */
@@ -1181,11 +1189,11 @@ interface Prepared {
  * write, so whatever throws there or in node:http fails this request alone and frees its slot. `answered` is handed the
  * answer, its status and the request that carried it once the answer's own errors are wired to the exchange.
  *
- * With `refusesUpgrade`, the byte transport's, a 101 answer fails the request at once as a network failure and its
- * socket is destroyed. node:http hands a 101 that carries Connection: upgrade and an Upgrade header to the request's
- * `upgrade` event, never to the response callback, so without it the request never settles: it holds its slot until
- * its deadline and is reported as a timeout. Any other 101 reaches the response callback, where the byte transport
- * refuses it by its status.
+ * With `refusesUpgrade`, which the byte transport always sets and the text transport sets on request, a 101 answer
+ * fails the request at once as a network failure and its socket is destroyed. node:http hands a 101 that carries
+ * Connection: upgrade and an Upgrade header to the request's `upgrade` event, never to the response callback, so
+ * without it the request never settles: it holds its slot until its deadline and is reported as a timeout. Any other
+ * 101 reaches the response callback, where each factory that set it refuses it by its status.
  */
 function dispatch<T>(
   core: TransportCore,
@@ -1239,6 +1247,7 @@ function redirectRefusal(answer: IncomingMessage, status: number, requestUrl: st
 export function createNodeTransport(options: NodeTransportOptions): NodeTransport {
   // Read once and checked before anything else, so a refused value builds nothing.
   const refusesLinkLocal = optedIn(options.refusesLinkLocal, "refusesLinkLocal");
+  const refusesUpgrade = optedIn(options.refusesUpgrade, "refusesUpgrade");
   const {
     address: connectionOrigin,
     connectionHeaders,
@@ -1272,6 +1281,12 @@ export function createNodeTransport(options: NodeTransportOptions): NodeTranspor
           body: payload?.text,
         }),
         (answer, status) => {
+          if (refusesUpgrade && status === 101) {
+            // A 101 without both Connection: upgrade and an Upgrade header, refused as the upgrade event refuses one;
+            // fail() destroys its socket, so it never returns to the pool.
+            pending.fail(new TransportError("network", SWITCHED_PROTOCOLS));
+            return;
+          }
           const redirect = redirectRefusal(answer, status, request.url);
           if (redirect !== null) {
             // Released unread: fail() destroys the answer, so no redirect is followed and no body is read.
@@ -1306,6 +1321,7 @@ export function createNodeTransport(options: NodeTransportOptions): NodeTranspor
             });
           });
         },
+        refusesUpgrade,
       );
     });
 

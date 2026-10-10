@@ -137,6 +137,7 @@ Besides `contentType`, `contentEncoding` and `retryAfter`, it returns only the r
 A `signer` is called once per request just before it is written, with the exact method, Host, path, query and headers, and adds only the header names it lists.
 Its connection headers meet the rule a request's own headers meet, so `authorization` comes from the signer alone.
 It never reaches a link-local address or AWS's IPv6 instance metadata address, whatever `DB_HTTP_BLOCK_PRIVATE_HOSTS` says.
+`createNodeTransport` takes both of the byte transport's refusals on request, each off when absent: `refusesLinkLocal: true` keeps a text transport off those addresses the same way, a literal when the transport is built and a DNS answer at the lookup, and `refusesUpgrade: true` fails a 101 answer at once instead of leaving the request to its deadline.
 The older HTTP providers keep their own transports until D37 in [`BACKLOG.md`](BACKLOG.md) moves them.
 
 **Send gRPC calls through the shared gRPC transport.**
