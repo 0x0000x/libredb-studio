@@ -4,6 +4,101 @@ entries:
   - annotations:
       artifacthub.io/category: database
       artifacthub.io/changes: |
+        - "Kubernetes connects read-only, filled in by hand or from a pasted kubeconfig: a tree of the cluster and its namespaces, a YAML view of every built-in object, Describe and Logs on a row, and a kubectl subset in the editor, from get, describe and logs to top, events and auth can-i; no Secret value reaches any surface"
+        - "A click on a pod row shows its last 50 log lines, the way a click on a table previews 50 rows"
+        - "S3-compatible object storage connects read-only over the S3 REST API with no SDK: buckets in the tree, a Keys panel that walks one folder level at a time, object metadata, a capped preview of text, JSON, CSV or Parquet, and AWS CLI read commands in the editor"
+        - "Test Connection to a Kubernetes, Qdrant or InfluxDB host that never completes the connect names the host, the port and the seconds waited, as a connection error instead of a slow query"
+        - "Fixes across StarRocks, RisingWave, ScyllaDB, Milvus, Couchbase, Trino, Oracle test data, the monitoring Terminate action and the AI schema context"
+        - "Track app release 0.18.3 (appVersion bump; default image tag follows)"
+      artifacthub.io/containsSecurityUpdates: "false"
+      artifacthub.io/images: |
+        - name: libredb-studio
+          image: ghcr.io/libredb/libredb-studio:0.18.3
+          platforms:
+            - linux/amd64
+            - linux/arm64
+      artifacthub.io/license: MIT
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/libredb/libredb-studio#readme
+        - name: Container Image
+          url: https://github.com/libredb/libredb-studio/pkgs/container/libredb-studio
+        - name: Source
+          url: https://github.com/libredb/libredb-studio
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 0.18.3
+    created: "2026-10-11T16:01:08.149640252Z"
+    dependencies:
+    - condition: postgresql.enabled
+      name: postgresql
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.x.x
+    description: Web-based SQL IDE for cloud-native teams supporting twenty-nine engines
+      - PostgreSQL, MySQL, SQLite, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis,
+      Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Apache
+      Cassandra, libSQL, Prometheus, Apache Kafka, etcd, Neo4j, Milvus, Qdrant, InfluxDB,
+      InfluxDB 3, Oxia, Databend, S3-compatible object storage and Kubernetes
+    digest: 54d0859c1378631e439baf07f7df54c06a4dddc38c7a2b94fd93437d8d530f93
+    home: https://github.com/libredb/libredb-studio
+    icon: https://raw.githubusercontent.com/libredb/libredb-studio/main/public/logo.svg
+    keywords:
+    - sql
+    - ide
+    - database
+    - postgresql
+    - mysql
+    - mongodb
+    - redis
+    - sqlite
+    - oracle
+    - mssql
+    - couchbase
+    - clickhouse
+    - druid
+    - elasticsearch
+    - opensearch
+    - trino
+    - cassandra
+    - libsql
+    - turso
+    - duckdb
+    - prometheus
+    - promql
+    - kafka
+    - etcd
+    - db2
+    - ibm-db2
+    - neo4j
+    - cypher
+    - victoriametrics
+    - redpanda
+    - milvus
+    - qdrant
+    - influxdb
+    - influxql
+    - influxdb3
+    - oxia
+    - databend
+    - s3
+    - object-storage
+    - minio
+    - kubernetes
+    - web-ide
+    kubeVersion: '>=1.26.0-0'
+    maintainers:
+    - name: cevheri
+      url: https://github.com/cevheri
+    name: libredb-studio
+    sources:
+    - https://github.com/libredb/libredb-studio
+    type: application
+    urls:
+    - https://github.com/libredb/libredb-studio/releases/download/libredb-studio-0.1.85/libredb-studio-0.1.85.tgz
+    version: 0.1.85
+  - annotations:
+      artifacthub.io/category: database
+      artifacthub.io/changes: |
         - "Name Kubernetes, the read-only cluster browser, in the description and the keywords"
       artifacthub.io/containsSecurityUpdates: "false"
       artifacthub.io/images: |
@@ -5543,4 +5638,4 @@ entries:
     urls:
     - https://github.com/libredb/libredb-studio/releases/download/libredb-studio-0.1.0/libredb-studio-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-11T05:51:31.24303009Z"
+generated: "2026-10-11T16:01:08.143429442Z"
