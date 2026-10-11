@@ -2,8 +2,8 @@ apiVersion: v2
 name: libredb-studio
 description: Web-based SQL IDE for cloud-native teams supporting twenty-nine engines - PostgreSQL, MySQL, SQLite, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Apache Cassandra, libSQL, Prometheus, Apache Kafka, etcd, Neo4j, Milvus, Qdrant, InfluxDB, InfluxDB 3, Oxia, Databend, S3-compatible object storage and Kubernetes
 type: application
-version: 0.1.84
-appVersion: "0.18.2"
+version: 0.1.85
+appVersion: "0.18.3"
 kubeVersion: ">=1.26.0-0"
 home: https://github.com/libredb/libredb-studio
 icon: https://raw.githubusercontent.com/libredb/libredb-studio/main/public/logo.svg
@@ -234,10 +234,15 @@ annotations:
   # and points VAULT_K8S_TOKEN_PATH at it.
   # False: 0.1.84 changes chart metadata only, naming Kubernetes in the description, the
   # keywords and the README; no template, value or default moves.
+  # False: 0.1.85 tracks app release 0.18.3, which carries no security fix: the read-only
+  # Kubernetes and S3-compatible object storage providers, a click on a pod that shows its last
+  # 50 log lines, and provider fixes. Query history keeps no value of a kubectl credential flag,
+  # and the text transport now refuses a method other than GET or POST, which no released
+  # caller sent. No template, value or default moves, so the upgrade is the image.
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: libredb-studio
-      image: ghcr.io/libredb/libredb-studio:0.18.2
+      image: ghcr.io/libredb/libredb-studio:0.18.3
       platforms:
         - linux/amd64
         - linux/arm64
@@ -249,7 +254,12 @@ annotations:
     - name: Source
       url: https://github.com/libredb/libredb-studio
   artifacthub.io/changes: |
-    - "Name Kubernetes, the read-only cluster browser, in the description and the keywords"
+    - "Kubernetes connects read-only, filled in by hand or from a pasted kubeconfig: a tree of the cluster and its namespaces, a YAML view of every built-in object, Describe and Logs on a row, and a kubectl subset in the editor, from get, describe and logs to top, events and auth can-i; no Secret value reaches any surface"
+    - "A click on a pod row shows its last 50 log lines, the way a click on a table previews 50 rows"
+    - "S3-compatible object storage connects read-only over the S3 REST API with no SDK: buckets in the tree, a Keys panel that walks one folder level at a time, object metadata, a capped preview of text, JSON, CSV or Parquet, and AWS CLI read commands in the editor"
+    - "Test Connection to a Kubernetes, Qdrant or InfluxDB host that never completes the connect names the host, the port and the seconds waited, as a connection error instead of a slow query"
+    - "Fixes across StarRocks, RisingWave, ScyllaDB, Milvus, Couchbase, Trino, Oracle test data, the monitoring Terminate action and the AI schema context"
+    - "Track app release 0.18.3 (appVersion bump; default image tag follows)"
 dependencies:
   - name: postgresql
     version: "16.x.x"
