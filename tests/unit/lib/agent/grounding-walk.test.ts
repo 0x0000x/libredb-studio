@@ -264,7 +264,7 @@ describe("a scoped walk", () => {
     });
     for (const packed of packings(snapshot)) {
       expect(packed).toContain(
-        'Not read: 2 other Namespaces. This inventory covers only the 2 Namespaces it read ("Cluster", "default"),',
+        'Not read: 2 other Namespaces. This inventory covers only what it read in ("Cluster", "default"), so an object in any other Namespace is not listed below.',
       );
     }
   });
@@ -279,12 +279,12 @@ describe("a scoped walk", () => {
     expect(snapshot.objects).toEqual([]);
     for (const packed of packings(snapshot)) {
       expect(packed).toContain(
-        'Not read: 1 other Namespace. This inventory covers only the 2 Namespaces it read ("Cluster", "default"),',
+        'Not read: 1 other Namespace. This inventory covers only what it read in ("Cluster", "default"),',
       );
     }
   });
 
-  test("one container read is named in the singular", async () => {
+  test("the containers read are named, not counted under the level's label, since a named one may not be of it", async () => {
     const { snapshot } = await captured({
       kinds: [POD],
       containers: containers.slice(1, 3),
@@ -292,7 +292,8 @@ describe("a scoped walk", () => {
     });
 
     for (const packed of packings(snapshot)) {
-      expect(packed).toContain('This inventory covers only the 1 Namespace it read ("default"),');
+      expect(packed).toContain('This inventory covers only what it read in ("default"),');
+      expect(packed).not.toContain("Namespace it read");
     }
   });
 
@@ -322,5 +323,26 @@ describe("a scoped walk", () => {
     });
 
     expect(snapshot.unreadContainers).toBeUndefined();
+  });
+});
+
+describe("an object with no columns", () => {
+  const TABLE: ObjectKindSpec = { id: "tables", role: "relation", label: "Table", labelPlural: "Tables" };
+
+  test("a kind that is not a relation carries no column clause; a relation still says none was derivable", async () => {
+    const { snapshot } = await captured({
+      kinds: [POD, TABLE],
+      counts: () => ({ pods: { count: 1 }, tables: { count: 1 } }),
+      objects: (container, kind) =>
+        kind === "tables"
+          ? [{ path: [...container, "orders"], name: "orders", kind }]
+          : [{ path: [...container, "pod/web"], name: "pod/web", kind }],
+    });
+    // The task packer's lines: the operations packer lists names and indexes only, never columns.
+    const lines = packContextForTask(snapshot, "why do pods restart").split("\n");
+    expect(lines.find((line) => line.includes("pod/web"))).toMatch(/pod\/web \(Pod\)$/);
+    expect(lines.find((line) => line.includes("orders"))).toMatch(
+      /orders \(Table\): no columns derivable from the stored definition$/,
+    );
   });
 });

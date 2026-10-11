@@ -1129,6 +1129,11 @@ export function connectionIdentity(connection: DatabaseConnection): string {
         // cache key frames it instead, because there it decides which servers a request reaches.
         // S3's `region` is deliberately absent: it is the scope a request is signed for, not the catalog; a wrong region
         // is refused rather than answered with other buckets.
+        // Kubernetes' API path and TLS server name pick which cluster answers behind one host and port, so either
+        // names another catalog. Its namespace list is deliberately absent: it changes what the tree draws, not which
+        // cluster this is.
+        connection.apiPath ?? "",
+        connection.tlsServerName ?? "",
         connection.agentUser ?? "",
         // The tunnel is part of the ROUTE and not part of the credentials: `host` and
         // `port` above are resolved at the FAR END of it, so the same `db:5432` reached
@@ -1356,10 +1361,12 @@ function inventoryNotes(inventory: AgentInventory, shown: readonly AgentInventor
   }
   if (unreadContainers !== undefined) {
     const { count, label, labelPlural, read } = unreadContainers;
-    // The containers read are named here, not left to the entries: a read that lists nothing names none.
+    // The containers read are named here, not left to the entries: a read that lists nothing names none. They are
+    // not counted under the level's label, because a container the provider names (Kubernetes' `Cluster`) may not
+    // be one of what the label calls the others.
     const names = read.map((path) => JSON.stringify(path)).join(", ");
     notes.push(
-      `Not read: ${count} other ${count === 1 ? label : labelPlural}. This inventory covers only the ${read.length} ${read.length === 1 ? label : labelPlural} it read (${names}), so an object in any other one is not listed below. Do not read its absence as an absence in the database.`,
+      `Not read: ${count} other ${count === 1 ? label : labelPlural}. This inventory covers only what it read in (${names}), so an object in any other ${label} is not listed below. Do not read its absence as an absence in the database.`,
     );
   }
   // Each kind note says "the X BELOW are", so it is gated on the kind being in what was
@@ -1434,9 +1441,14 @@ function renderTable(table: AgentInventoryObject, inventory: AgentInventory): st
   const hiddenIndexes = table.indexes.length - indexes.length;
   if (hiddenIndexes > 0) indexes.push(`+${hiddenIndexes} more`);
 
-  const columnText = shown.length === 0 ? "no columns derivable from the stored definition" : shown.join(", ");
+  const head = `${displayName(table)}${kindLabel(table, inventory)}${readMark(table)}`;
   const indexText = indexes.length === 0 ? "" : `; indexes: ${indexes.join(", ")}`;
-  return `${displayName(table)}${kindLabel(table, inventory)}${readMark(table)}: ${columnText}${indexText}`;
+  // The sentence about a stored definition is about a relation; an object of a kind that is not one, such as a
+  // Kubernetes resource or an etcd group, has no columns to derive, so its line says nothing about columns.
+  const role = (inventory.kinds ?? []).find((kind) => kind.id === table.kind)?.role;
+  if (shown.length === 0 && indexes.length === 0 && role !== undefined && role !== "relation") return head;
+  const columnText = shown.length === 0 ? "no columns derivable from the stored definition" : shown.join(", ");
+  return `${head}: ${columnText}${indexText}`;
 }
 
 /**

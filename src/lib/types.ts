@@ -150,7 +150,13 @@ export type DatabaseType =
   // command of an AWS CLI subset. Read-only in this version whatever `readOnly` says. The connection's User field is
   // the access key ID, Password the secret access key, Database an optional pinned bucket, and `region` below the
   // signing region; a blank key pair sends unsigned requests, never this server's own credentials.
-  | "s3";
+  | "s3"
+  // Kubernetes, one cluster read over the API server's REST API by a client of this repository's own on the shared
+  // node transport (`src/lib/db/providers/platform/kubernetes/`). Not a database: a Lens-like, read-only browser and a
+  // kubectl-subset console beside the databases. Read-only in this version whatever `readOnly` says. The connection's
+  // Password field is a bearer token, Database the default namespace, and `apiPath`, `namespaces` and `tlsServerName`
+  // are its own fields; a client certificate rides in the SSL panel.
+  | "kubernetes";
 
 export type ConnectionEnvironment = "production" | "staging" | "development" | "local" | "other";
 
@@ -383,6 +389,28 @@ export interface DatabaseConnection {
    * other engine.
    */
   region?: string;
+  /**
+   * Kubernetes only: a server path prefix every API request is sent under, such as `/k8s/clusters/c-1` behind a
+   * Rancher proxy. It starts with `/` and names segments of letters, digits, dots, hyphens, underscores, tildes, colons
+   * or `@`, with no `api`, `apis`, `proxy`, `namespaces`, `nodes`, `services`, `pods`, `openapi` or `version` segment,
+   * no `//`, `.` or `..` segment, `%`, query or fragment; the provider refuses anything else before any request. One
+   * trailing `/` is removed, so `/` alone is no prefix. It picks which cluster answers behind one host and port, so it
+   * is part of the connection's identity. Absent and empty are one value. Read by no other engine.
+   */
+  apiPath?: string;
+  /**
+   * Kubernetes only: the namespaces the object tree lists, at most 1,000 DNS-1123 labels separated by commas or
+   * spaces. When set, the provider makes no namespace list call, which a namespace-bound identity may not make. It
+   * changes what is shown, not which cluster is asked or as whom. Absent and empty are one value. Read by no other
+   * engine.
+   */
+  namespaces?: string;
+  /**
+   * Kubernetes only: the host name the API server's certificate is checked against and sent as SNI, a kubeconfig's
+   * `tls-server-name`, where it differs from Host. Absent and empty mean Host, or the SSH tunnel's far end. Read by
+   * no other engine.
+   */
+  tlsServerName?: string;
   /**
    * Read no catalog when this connection opens.
    *
@@ -778,7 +806,8 @@ export interface QueryTab {
     | "qdrant"
     | "influxql"
     | "oxia"
-    | "s3";
+    | "s3"
+    | "kubectl";
   viewMode?: "results" | "explain" | "history" | "saved";
   explainPlan?: unknown;
   // Pagination state

@@ -399,6 +399,8 @@ describe("historyMaskOf", () => {
     ...QUERY_DIALECTS,
     redis: { ...QUERY_DIALECTS.redis, historyMask: { credentialFlags: ["--token"] } },
     etcd: { ...QUERY_DIALECTS.etcd, historyMask: { credentialFlags: ["--token", "--password"] } },
+    // The stand-in registry holds the two masks above alone, so the shipped kubectl record's own is left out of it.
+    kubectl: { ...QUERY_DIALECTS.kubectl, historyMask: undefined },
   };
 
   test("a registered dialect answers its record's mask", () => {
@@ -410,14 +412,37 @@ describe("historyMaskOf", () => {
     expect(historyMaskOf(caps({ queryLanguage: "sql" }), declaring)).toBeUndefined();
   });
 
+  test("unknown capabilities mask another engine's statement as a command line: altered, never the value", () => {
+    const unknown = historyMaskOf(undefined);
+    expect(maskStatementForHistory(`SELECT '--password ${SECRET}' AS note`, unknown)).toBe(
+      "SELECT --password *** AS note",
+    );
+    expect(
+      maskStatementForHistory(`SELECT *\nFROM t\nWHERE x = '--token ${SECRET}' AND y = 1;\nSELECT 2;`, unknown),
+    ).toBe("SELECT *\nFROM t\nWHERE x = '--token ***");
+    expect(maskStatementForHistory("SELECT * FROM t -- password reset", unknown)).toBe(
+      "SELECT * FROM t -- password reset",
+    );
+  });
+
   test("unknown capabilities take every declared flag once, since the dialect is not known yet", () => {
     expect(historyMaskOf(undefined, declaring)).toEqual({ credentialFlags: ["--token", "--password"] });
   });
 
-  test("the shipped registry declares no mask, so no stored statement changes until a dialect declares one", () => {
-    expect(historyMaskOf(undefined)).toBeUndefined();
+  test("the shipped registry: kubectl declares its six credential flags, and no other dialect declares a mask", () => {
+    const kubectl = {
+      credentialFlags: [
+        "--token",
+        "--password",
+        "--client-key",
+        "--client-certificate",
+        "--from-literal",
+        "--docker-password",
+      ],
+    };
+    expect(historyMaskOf(undefined)).toEqual(kubectl);
     for (const dialect of Object.keys(QUERY_DIALECTS) as QueryDialect[]) {
-      expect(historyMaskOf(caps({ queryDialect: dialect }))).toBeUndefined();
+      expect(historyMaskOf(caps({ queryDialect: dialect }))).toEqual(dialect === "kubectl" ? kubectl : undefined);
     }
   });
 });

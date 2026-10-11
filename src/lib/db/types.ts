@@ -925,12 +925,15 @@ export interface ProviderCapabilities {
    * `"s3"` is the S3 provider's: one AWS CLI read command per run, `aws s3 ls`, the `aws s3api` reads its table names,
    * or Studio's own `preview`.
    *
+   * `"kubectl"` is the Kubernetes provider's: one statement of a read-only kubectl subset per run. It landed through one
+   * record in each registry and no arm anywhere else.
+   *
    * Those arms are now records: a member added here does not compile until it has one in each of
    * `QUERY_DIALECTS` (`src/lib/db/query-dialects.ts`), `DIALECT_EDITORS` (`src/lib/editor/dialect-editors.ts`)
    * and `DIALECT_GENERATORS` (`src/lib/query-generators.ts`), and every other reader of this field and of
    * `queryLanguage` is held to a closed list by `tests/unit/lib/dialect-reader-allowlist.test.ts`.
    */
-  queryDialect?: "libredb" | "redis" | "kafka" | "etcd" | "milvus" | "qdrant" | "oxia" | "s3";
+  queryDialect?: "libredb" | "redis" | "kafka" | "etcd" | "milvus" | "qdrant" | "oxia" | "s3" | "kubectl";
   supportsExplain: boolean;
   /**
    * Present iff supportsExplain is true (enforced by provider tests).
@@ -2966,7 +2969,8 @@ export type ObjectSourceForm = "complete" | "partial";
  * (SQL Server modules, SQLite's `sqlite_schema.sql`); `regenerated` is the engine rebuilding
  * from its catalog, which PostgreSQL documents as "a decompiled reconstruction, not the
  * original text of the command"; `rendered` is a structured definition this product prints as
- * JSON (a MongoDB view, a search pipeline or template).
+ * JSON (a MongoDB view, a search pipeline or template) or as YAML (a Kubernetes object), and the
+ * caption names the part's language.
  */
 export type ObjectSourceOrigin = "stored" | "regenerated" | "rendered";
 

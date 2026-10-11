@@ -27,12 +27,12 @@
 
 ## Overview
 
-LibreDB Studio provides a RESTful API for database management operations. The API supports PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend and S3-compatible object storage.
+LibreDB Studio provides a RESTful API for database management operations. The API supports PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage and Kubernetes.
 
 ### Key Features
 
 - **JWT Authentication** - Secure token-based authentication stored in HTTP-only cookies
-- **Multi-Database Support** - Twenty-eight engines: PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage
+- **Multi-Database Support** - Twenty-nine engines: PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage, Kubernetes
 - **AI-Powered Insights** - EXPLAIN explanations, query-safety analysis and schema docs, streamed
 - **Real-time Health Monitoring** - Database metrics and performance insights
 
@@ -510,7 +510,7 @@ The bound is read after the request body is parsed, because the type that select
 | `sql` is not a string | `400` | `{ "error": "sql must be a string" }` |
 
 `POST /api/db/multi-query` refuses every connection whose type declares such a bound with `400 { "error": "This connection type runs one statement per request: send it to POST /api/db/query, because this route would split its text into several requests." }`, before it splits anything.
-Milvus and Qdrant each declare a bound of 1,048,576 bytes and InfluxDB (InfluxQL), Oxia and S3-compatible object storage one of 65,536 bytes each, and no other shipped engine declares one, so neither answer changes anything for a connection of another type.
+Milvus and Qdrant each declare a bound of 1,048,576 bytes and InfluxDB (InfluxQL), Oxia, S3-compatible object storage and Kubernetes one of 65,536 bytes each, and no other shipped engine declares one, so neither answer changes anything for a connection of another type.
 
 **Bound parameters (optional):**
 ```json
@@ -2142,7 +2142,7 @@ The object is one shape on the wire. Fields the server reads from a request body
 change how a connection is opened — are the coordinates and credentials (`id`, `name`, `type`,
 `host`, `port`, `user`, `password`, `database`, `schema`, `connectionString`), plus `ssl`,
 `sshTunnel`, `serviceName` (Oracle), `instanceName` (MSSQL), `localDataCenter` (Cassandra),
-`authSource` (MongoDB), `saslMechanism` (Kafka), `allowInsecureAuth` (Db2, InfluxDB, InfluxDB 3, Oxia, Databend, S3), `dataServers` (Oxia), `warehouse` (Databend), `region` (S3), `queryTimeout`, `agentUser`, `agentPassword`, `apiKeyId`/`apiKeySecret`
+`authSource` (MongoDB), `saslMechanism` (Kafka), `allowInsecureAuth` (Db2, InfluxDB, InfluxDB 3, Oxia, Databend, S3), `dataServers` (Oxia), `warehouse` (Databend), `region` (S3), `apiPath`, `namespaces` and `tlsServerName` (Kubernetes), `queryTimeout`, `agentUser`, `agentPassword`, `apiKeyId`/`apiKeySecret`
 (Elasticsearch, #708), and `readOnly` (#1089). `color`, `environment`, `group`,
 `managed`, `seedId`, and `createdAt` are client-side bookkeeping that travel in the same object.
 
@@ -2155,7 +2155,7 @@ interface DatabaseConnection {
   port?: number;           // Port number
   user?: string;           // Username
   password?: string;       // Password
-  database?: string;       // Database name (Couchbase: the bucket; Druid: unused, it has one catalog; Trino: the CATALOG; Cassandra: the KEYSPACE; S3: the optional pinned bucket)
+  database?: string;       // Database name (Couchbase: the bucket; Druid: unused, it has one catalog; Trino: the CATALOG; Cassandra: the KEYSPACE; S3: the optional pinned bucket; Kubernetes: the Default namespace)
   schema?: string;         // Trino: session schema for unqualified table names
   connectionString?: string; // Full connection string (alternative; Druid has no URI form, host + port only; Cassandra has none either, no URI carries localDataCenter)
   queryTimeout?: number;  // Query timeout in milliseconds; omitted uses 60000 (60 seconds)
@@ -2174,6 +2174,9 @@ interface DatabaseConnection {
   dataServers?: string; // Oxia only: a cluster's data-server addresses, host:port entries separated by commas or whitespace, at most 64; see docs/providers/oxia.md section 4.4
   warehouse?: string;   // Databend only: the warehouse every statement runs on, sent as the X-DATABEND-WAREHOUSE header; Databend Cloud requires one (the warehouse= value of its DSN) and resumes a suspended one on the first statement, billing while it runs. Not a secret
   region?: string;      // S3-compatible object storage only: the region every request is signed for (the SigV4 credential scope); absent or empty means us-east-1. Garage refuses any region but its s3_region; a MinIO or Silo started with a site region refuses bucket and object reads signed for another. Not a secret
+  apiPath?: string;     // Kubernetes only: a server path prefix every API request goes under, such as /k8s/clusters/c-1 behind a Rancher proxy; starts with / and names segments of letters, digits, dots, hyphens, underscores, tildes, colons or @, with no api, apis, proxy, namespaces, nodes, services, pods, openapi or version segment, no //, . or .. segment, %, query or fragment; one trailing / is removed, so / alone is no prefix
+  namespaces?: string;  // Kubernetes only: the namespaces the object tree lists, at most 1,000 DNS-1123 labels separated by commas or spaces; when set, no namespace list call is made
+  tlsServerName?: string; // Kubernetes only: the host name the API server's certificate is checked against and sent as SNI (kubeconfig tls-server-name)
   skipObjectScan?: boolean; // read no catalog when this connection opens: zero reads on connect, so the editor is usable immediately and the object tree offers a load action instead of scanning (#765, an Oracle owner with 43,512 tables froze the browser on connect). It defers the CATALOG, not the walk: a connection that also declares `keyScan` keeps the sidebar's Objects / Keys switch, and the switch reads nothing, because the key panel mounts only when Keys is chosen and then takes the same bounded sample (#1169)
   readOnly?: boolean;      // refuse writes, value edits and maintenance before any request (#1089). Accepted only where the engine's provider enforces it: true anywhere else is refused at seed load and before any provider is built, and a value that is not a boolean is refused everywhere
   managed?: boolean;       // true = admin-controlled: not editable in the UI, secrets kept on the server
@@ -2184,7 +2187,7 @@ interface DatabaseConnection {
   apiKeySecret?: string;   // the pair's secret half; either alone (after trim) falls back to user/password rather than sending a key built from an empty half
 }
 
-type DatabaseType = 'postgres' | 'mysql' | 'sqlite' | 'libsql' | 'duckdb' | 'mongodb' | 'redis' | 'oracle' | 'db2' | 'mssql' | 'libredb' | 'couchbase' | 'clickhouse' | 'druid' | 'elasticsearch' | 'opensearch' | 'trino' | 'cassandra' | 'prometheus' | 'kafka' | 'etcd' | 'neo4j' | 'milvus' | 'qdrant' | 'influxdb' | 'influxdb3' | 'oxia' | 'databend' | 's3';
+type DatabaseType = 'postgres' | 'mysql' | 'sqlite' | 'libsql' | 'duckdb' | 'mongodb' | 'redis' | 'oracle' | 'db2' | 'mssql' | 'libredb' | 'couchbase' | 'clickhouse' | 'druid' | 'elasticsearch' | 'opensearch' | 'trino' | 'cassandra' | 'prometheus' | 'kafka' | 'etcd' | 'neo4j' | 'milvus' | 'qdrant' | 'influxdb' | 'influxdb3' | 'oxia' | 'databend' | 's3' | 'kubernetes';
 type ConnectionEnvironment = 'production' | 'staging' | 'development' | 'local' | 'other';
 ```
 

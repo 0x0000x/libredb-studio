@@ -28,10 +28,10 @@ None of it is a GitHub issue.
 **Sections**
 
 - [SQL statement reading](#sql-statement-reading) — S2–S7 · 5
-- [Drivers and connections](#drivers-and-connections) — D1-D275, U17 · 178
+- [Drivers and connections](#drivers-and-connections) — D1-D290, U17 · 193
 - [Value interpolation](#value-interpolation) — V1
 - [Row editing](#row-editing) — R1–R3 · 3
-- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U110 · 101
+- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U112 · 103
 - [Dependencies](#dependencies) — P1-P9 · 7
 - [Documentation](#documentation) — DOC3-DOC21 · 18
 - [Release pipeline](#release-pipeline) — REL1-REL8 · 8
@@ -41,7 +41,7 @@ None of it is a GitHub issue.
 - [Security Phase 3 deferrals](#security-phase-3-deferrals) — K4-K8 · 5
 - [Security scanner triage](#security-scanner-triage) — SCAN1 · 1
 - [Agent M1 deferrals (#328)](#agent-m1-deferrals-328) — A1–A8 · 7
-- [Agent M2 deferrals (#329)](#agent-m2-deferrals-329) — B2-B104 · 40
+- [Agent M2 deferrals (#329)](#agent-m2-deferrals-329) — B2-B106 · 42
 - [Passkey deferrals (#785)](#passkey-deferrals-785) — PK1-PK9 · 8
 - [MCP server deferrals (#246)](#mcp-server-deferrals-246)
 
@@ -2455,13 +2455,14 @@ Found 2026-10-04 by the review of that change.
 
 ### D223. A binary value's hex dump is captioned as rendered JSON
 
-The shared Source tab captions a part from its `origin` alone (`sourceCaption` in `src/components/object-source/source-caption.ts`), and a hex dump of a binary value has no origin of its own, so it is captioned "A structured definition, rendered here as JSON."
+The shared Source tab captions a part from its `origin` (`sourceCaption` in `src/components/object-source/source-caption.ts`), naming the language only for JSON and YAML, and a hex dump of a binary value has no origin of its own, so it is captioned "A structured definition, rendered here as JSON."
 Oxia's hex dump and etcd's base64 view of a binary value both carry that caption, though neither is JSON.
 The S3 object preview's hex dump carries the same caption (src/lib/db/providers/objectstore/s3/preview-render.ts).
+A rendered part with values removed needs a caption clause of its own as well: a Kubernetes Secret's YAML, whose data is gone, reads "This is the body only, not a complete statement.", and every other Kubernetes object, whose managedFields is gone, reads "Complete as shown.", though neither part is a statement.
 
 Found 2026-10-04 by the review of the Oxia provider (ruling R37 of its PR).
 
-**Done when:** a binary dump part carries a caption that says what it is, for every engine.
+**Done when:** a binary dump part carries a caption that says what it is, for every engine, and a rendered part with values removed says what was removed.
 
 ### D224. An Oxia key on several shards shows one record in a record walk
 
@@ -2934,6 +2935,130 @@ A `disconnect()` that runs while the probe is in flight finds no stored session,
 Found 2026-10-10 by the review of the S3 provider; not reached by any shipped flow, which awaits `connect()` before it can call `disconnect()`.
 
 **Done when:** a `disconnect()` during `connect()`'s probe leaves the provider disconnected and the probe's transport closed once the probe settles, with a test that holds the probe, disconnects, releases it, and expects no stored session and one closed transport.
+
+### D276. No deadline bounds a provider's `connect()` as a whole
+
+`src/app/api/db/test-connection/route.ts` awaits `provider.connect()` with no deadline of its own; the `queryTimeout` it passes bounds each request a provider makes, not the sum of them.
+A provider whose `connect()` makes several requests in turn (discovery, reviews, a paged list) can therefore hold Test Connection for many query timeouts, and a provider that loops on what a server answers holds it until the loop ends.
+The Kubernetes provider bounds its own walks (one deadline per walk and a count of empty pages), and a `disconnect()` closes a session still being opened, but no rule says every provider must.
+
+Found 2026-10-11 by the review of the Kubernetes provider.
+
+**Done when:** the Test Connection route, or `BaseDatabaseProvider`, gives `connect()` one deadline derived from the query timeout, a connect past it is answered with a timeout sentence and its provider disconnected, and a test holds a connect open and expects the sentence and the disconnect.
+
+### D277. Kubernetes watch and logs are bounded snapshots, never a live stream
+
+`kubectl get -w` lists and then watches for a bounded window (10 s, or `--request-timeout`), and `kubectl logs -f` is refused, because a statement answers one result through the query route and Studio has no stream route (`src/lib/db/providers/platform/kubernetes/console/watch.ts`, `console/logs.ts`).
+A user who follows a pod runs the statement again, which reads the window or the newest lines afresh.
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** a provider stream route carries a watch and `logs -f` to the grid under a byte and a time bound, a log appends by `sinceTime` instead of reading again, `logs -f` is accepted, and tests drive both through the route on a recording transport.
+
+### D278. A Kubernetes `get` reads one type per statement
+
+`kubectl get pods,services` and `kubectl get all` are refused with "one type per statement in v1", because a statement answers exactly one grid and the results panel holds one result set per run (`src/lib/db/providers/platform/kubernetes/console/parse.ts`).
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** the results panel shows several result sets from one statement, and `get TYPE,TYPE` and `get all` answer one per type, with tests.
+
+### D279. Kubernetes custom resource types have no tree folder of their own
+
+The Custom Resources folder lists resource types, each with a List action, and their instances are read in the console, because a provider declares its kinds before it connects and a cluster's custom resource types are known only after discovery (`src/lib/db/providers/platform/kubernetes/kinds.ts`).
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** a connected provider can refresh the kinds it declares, and each custom resource type is a folder of its instances with the YAML view, with tests.
+
+### D280. A managed Kubernetes cluster needs a pasted ServiceAccount token
+
+EKS, GKE, AKS and OIDC clusters sign in through credential plugins, which Studio never runs, so a connection to one takes a static ServiceAccount token (`docs/providers/kubernetes.md` section 4.9).
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** Studio mints the token in process for EKS (a SigV4 presigned identity request), GKE (a service-account JWT grant), AKS (Entra client credentials) and OIDC, and refreshes it before it expires, through a per-request `authorization` header whose cap is above 1024 bytes or a transport rebuilt per token, with tests on recorded token endpoints.
+
+### D281. A Kubernetes Secret's values cannot be revealed
+
+Every answer to a request for Secrets loses its values before it leaves the provider (`src/lib/db/providers/platform/kubernetes/redaction.ts`), so a user who may read a Secret sees only its keys.
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** a per-key reveal, allowed by role and written as an audit event naming the user, the connection, the namespace, the Secret and the key but no value, exists with tests, and every other surface still redacts.
+
+### D282. Kubernetes shows no Helm release
+
+A Helm release is a Secret of type `helm.sh/release.v1` holding the compressed release, which redaction removes, so Studio shows no release list and no history.
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** a Helm view lists releases and their revisions from release metadata without decoding or showing a value, with tests that no value reaches a surface.
+
+### D283. Kubernetes runs no credential plugin, in any mode
+
+A kubeconfig user that signs in through `exec` or `auth-provider` is imported without a credential, because a plugin runs a program on the Studio server (`src/lib/kubernetes/kubeconfig-import.ts`).
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** a single-user local mode exists in which the launcher, not a shared server, may run a named plugin after an explicit consent, with tests; or the item is closed as never and the provider doc says so.
+
+### D284. The HTTP egress guard takes no host or CIDR allowlist
+
+`DB_HTTP_BLOCK_PRIVATE_HOSTS` refuses private addresses, where most Kubernetes API servers live, so a deployment that must reach an in-cluster API server cannot turn the guard on (`src/lib/db/http/egress-policy.ts`, `docs/SECURITY.md` Known limits).
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** an operator allowlist of hosts and CIDRs is admitted by the guard at the literal-host and the DNS and socket boundaries, with egress-policy tests.
+
+### D285. Kubernetes reports no per-kind statistics
+
+`getTableStats` answers an empty list (`src/lib/db/providers/platform/kubernetes/index.ts`), so the monitoring panels count no object per kind or namespace.
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** per-kind counts from the capped walk reach a monitoring panel, a sampled count marked as a floor, with tests.
+
+### D286. Package installs do not set the loopback flag for `kubectl proxy`
+
+The npx launcher and the desktop sidecar set `KUBERNETES_ALLOW_LOOPBACK_PLAINTEXT` when Studio listens on loopback (`bin/lib/launcher-utils.mjs`, `desktop/src-tauri/src/sidecar.rs`), but the deb and rpm wrapper (`packaging/linux/libredb-studio`), the Homebrew template (`packaging/homebrew/libredb-studio.rb.tmpl`) and the Windows launcher (`packaging/windows/launcher/launch.go`) do not, so a connection through `kubectl proxy` needs the flag set by hand there.
+
+Found 2026-10-10 while planning the Kubernetes provider.
+
+**Done when:** each of the three sets the flag under the same loopback rule, with a test per launcher.
+
+### D287. The Kubernetes connection test records no `Audit-Id`
+
+The API server names each request in its audit log with the `Audit-Id` response header, and Studio's `connection_test` audit event could carry it beside the Studio user and connection, so an operator can join the two logs; the text transport hands a provider no response header (`NodeResponse` in `src/lib/db/http/node-transport.ts`), so nothing records it.
+
+Found 2026-10-10 while planning the Kubernetes provider.
+
+**Done when:** the text transport hands back an optional, declared selection of response headers, absent by default, and the Kubernetes provider's Test Connection records `Audit-Id` on `connection_test`, with tests.
+
+### D288. `kubectl get -w` takes no `-o name`, `-o json` or `-o yaml`
+
+The bounded watch shows the list's Table columns and the window's events, and a window of names or documents is refused as not in v1 (`src/lib/db/providers/platform/kubernetes/console/watch.ts`).
+
+Found 2026-10-10 while planning the Kubernetes provider.
+
+**Done when:** a watch window shows one row per event with the object's name or its redacted document, under the document caps, with tests.
+
+### D289. `kubectl auth can-i --list` shows the server's rules uncompacted
+
+kubectl merges and splits the rules of a `SelfSubjectRulesReview` before printing them; the console shows one row per rule as the server answers it (`src/lib/db/providers/platform/kubernetes/console/auth.ts`).
+
+Found 2026-10-10 while planning the Kubernetes provider.
+
+**Done when:** the rows are compacted as kubectl compacts them, with tests from kubectl's own cases.
+
+### D290. The composed-SQL agent test can outrun bun's five-second hook timeout
+
+The file-level `beforeAll` in `tests/unit/lib/agent/composed-sql.test.ts` loads the DuckDB native addon, creates a database file and its fixture tables, and passes no timeout, so bun's default of 5000 ms bounds the whole setup.
+In one full coverage run on 2026-10-11, on the Kubernetes provider's branch, which does not touch that file, the hook timed out and the file failed with no test run.
+The file passed alone and alone with coverage three times that day, and 16 parallel coverage runs of it passed the same day, so it needs more load than that to fail again.
+It is the same shape as D153.
+
+**Done when:** the hook carries a timeout sized for a busy runner (bun's `beforeAll` takes one as its second argument), and the file passes repeated runs at the CI job's concurrency.
 
 ## Value interpolation
 
@@ -4524,6 +4649,22 @@ The S3 provider declares no `fieldPlaceholders.user` for that reason, since wide
 Found 2026-10-09 while designing the S3 provider.
 
 **Done when:** the User box draws a declared `fieldPlaceholders.user`, or the Databend declaration is removed, with a test that renders the dialog for Databend and asserts the User placeholder it shows.
+
+### U111. Kubernetes objects share one common view
+
+Every built-in kind opens the same YAML view and Describe grid: no kind-specific panel (a pod's containers and restarts, a deployment's rollout), no permission hint when a namespace is expanded, no namespace filter in the tree for a cluster with many namespaces, and Test Connection answers Studio's fixed success sentence rather than one naming the identity and the server version.
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** kind panels for pods, deployments, services and nodes, `SelfSubjectRulesReview` hints on expand, a namespace filter and a provider-composed Test Connection sentence exist, each with tests.
+
+### U112. The kubectl console has no jsonpath, custom columns, sort or completion
+
+`-o jsonpath`, `-o jsonpath-file`, `-o custom-columns`, `-o go-template` and `--sort-by` on `get` are refused as not in v1 (`src/lib/db/providers/platform/kubernetes/console/commands.ts`), and the editor completes no resource or flag name.
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** jsonpath and custom columns render through a bounded evaluator that runs no code, `--sort-by` sorts by the typed value rather than the server-formatted cell, and the editor completes resource names from the discovery cache, each with tests.
 
 ## Dependencies
 
@@ -6310,6 +6451,22 @@ Found 2026-10-07 while designing the Databend provider (design 5.7).
 Found 2026-10-09 while designing the S3 provider.
 
 **Done when:** an MCP metadata surface that lists buckets and never returns an object key is designed; `MCP_EXPOSABLE.s3` turns true for it; and `run_read_query` and agent execution serve a `queryReadOnly` that runs one console read command, with tests; cited in `docs/AGENT.md` beside B103.
+
+### B105. Kubernetes has no agent execution and no MCP surface
+
+`MCP_EXPOSABLE.kubernetes` is false and the provider implements no `queryReadOnly`, so agent execution of a workflow that sends statements and MCP `run_read_query` refuse it, while the operations workflow opens as on every engine; plan mode works, walking the session's namespace and `Cluster`, with Secret and Namespace names withheld (`docs/providers/kubernetes.md` section 9).
+
+Found 2026-10-10 while designing the Kubernetes provider.
+
+**Done when:** an MCP metadata surface that returns no value, label, annotation or Secret name is designed, and `run_read_query` serves the kubectl subset under its own read policy, with tests; cited in `docs/AGENT.md` beside B104.
+
+### B106. Kubernetes namespace names reach plan mode as container names
+
+Plan mode's inventory names the namespaces it walked and counts the ones it did not read, and those names reach the configured model; on a multi-tenant cluster they may name customers.
+
+Found 2026-10-10 while designing the Kubernetes provider; an open question of the design.
+
+**Done when:** the owner decides whether a provider may withhold container names from machine surfaces, and either a declaration does it with a test, or the item is closed as accepted and `docs/AGENT.md` says so.
 
 ## Passkey deferrals (#785)
 

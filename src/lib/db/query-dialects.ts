@@ -110,6 +110,28 @@ export const QUERY_DIALECTS: Readonly<Record<QueryDialect, DialectSpec>> = Objec
     offersCountQuery: false,
     offersSqlExport: false,
   }),
+  // Kubernetes: one statement of a read-only kubectl subset. Its grids are the API server's own columns, so no
+  // profile, model or count statement of its grammar applies, and neither SQL export format applies.
+  kubectl: Object.freeze({
+    tabType: "kubectl",
+    offersColumnProfiling: false,
+    offersCodeGeneration: false,
+    offersCountQuery: false,
+    offersSqlExport: false,
+    // A line pasted from a shell may carry kubectl's credential flags or a Secret's values, which the console refuses;
+    // query history keeps none of their values. Written here rather than imported, so this registry imports nothing
+    // from a provider.
+    historyMask: Object.freeze({
+      credentialFlags: Object.freeze([
+        "--token",
+        "--password",
+        "--client-key",
+        "--client-certificate",
+        "--from-literal",
+        "--docker-password",
+      ]),
+    }),
+  }),
 });
 
 /**
