@@ -1167,7 +1167,10 @@ export function generateSelectQuery(
       "\n",
     );
   }
-  const cols = columns.map((c) => `  ${quoteIdentifier(c.name, capabilities)}`).join(",\n") || "  *";
+  // Columns the engine refuses to project in a SELECT list (e.g. search mapped types like `flattened`, #1459)
+  // are omitted so the starter query runs; an index holding only unprojectable columns falls back to `*`.
+  const projectable = columns.filter((c) => c.projectable !== false);
+  const cols = projectable.map((c) => `  ${quoteIdentifier(c.name, capabilities)}`).join(",\n") || "  *";
   // Oracle
   if (capabilities.defaultPort === 1521) {
     return `SELECT\n${cols}\nFROM ${table}\nWHERE 1=1\nFETCH FIRST 100 ROWS ONLY${terminator(capabilities)}`;

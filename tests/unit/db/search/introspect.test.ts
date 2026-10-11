@@ -26,7 +26,8 @@
  * so the mapping is the only honest source.
  */
 import { describe, expect, test } from "bun:test";
-import { isSystemIndex, SEARCH_CONTAINER_TYPES } from "@/lib/db/providers/sql/search/introspect";
+import { isSystemIndex, SEARCH_CONTAINER_TYPES, toColumns } from "@/lib/db/providers/sql/search/introspect";
+import { ELASTICSEARCH_PRODUCT, OPENSEARCH_PRODUCT } from "@/lib/db/providers/sql/search/index";
 import type {
   SearchClusterHealth,
   SearchIndexInfo,
@@ -197,6 +198,20 @@ describe("the container decision", () => {
   });
 });
 
+describe("the unprojectable types decision (#1459)", () => {
+  // Measured on Elasticsearch 9.5.3 (flattened) and OpenSearch 3.9.0 (flat_object, unsigned_long, version):
+  // each product declares its own measured unprojectable mapping types.
+  test("Elasticsearch product declares exactly flattened as unprojectable", () => {
+    expect([...ELASTICSEARCH_PRODUCT.unprojectableTypes]).toEqual(["flattened"]);
+    expect(Object.isFrozen(ELASTICSEARCH_PRODUCT.unprojectableTypes)).toBe(true);
+  });
+
+  test("OpenSearch product declares flat_object, unsigned_long, and version as unprojectable", () => {
+    expect([...OPENSEARCH_PRODUCT.unprojectableTypes]).toEqual(["flat_object", "unsigned_long", "version"]);
+    expect(Object.isFrozen(OPENSEARCH_PRODUCT.unprojectableTypes)).toBe(true);
+  });
+});
+
 // ============================================================================
 // System indices
 // ============================================================================
@@ -224,6 +239,46 @@ describe("isSystemIndex", () => {
 // ============================================================================
 // Columns
 // ============================================================================
+
+describe("toColumns (#1459)", () => {
+  const fields: SearchMappingField[] = [
+    { path: "id", type: "keyword", isMultiField: false, hasSubfields: false },
+    { path: "blob", type: "flattened", isMultiField: false, hasSubfields: false },
+    { path: "obj", type: "flat_object", isMultiField: false, hasSubfields: false },
+    { path: "big", type: "unsigned_long", isMultiField: false, hasSubfields: false },
+    { path: "ver", type: "version", isMultiField: false, hasSubfields: false },
+    { path: "name", type: "text", isMultiField: false, hasSubfields: false },
+  ];
+
+  test("Elasticsearch: marks flattened as projectable: false, leaving unsigned_long and version projectable", () => {
+    const columns = toColumns(fields, ELASTICSEARCH_PRODUCT.unprojectableTypes);
+    expect(columns).toEqual([
+      { name: "big", type: "unsigned_long", nullable: true, isPrimary: false },
+      { name: "blob", type: "flattened", nullable: true, isPrimary: false, projectable: false },
+      { name: "id", type: "keyword", nullable: true, isPrimary: false },
+      { name: "name", type: "text", nullable: true, isPrimary: false },
+      { name: "obj", type: "flat_object", nullable: true, isPrimary: false },
+      { name: "ver", type: "version", nullable: true, isPrimary: false },
+    ]);
+  });
+
+  test("OpenSearch: marks flat_object, unsigned_long, and version as projectable: false", () => {
+    const columns = toColumns(fields, OPENSEARCH_PRODUCT.unprojectableTypes);
+    expect(columns).toEqual([
+      { name: "big", type: "unsigned_long", nullable: true, isPrimary: false, projectable: false },
+      { name: "blob", type: "flattened", nullable: true, isPrimary: false },
+      { name: "id", type: "keyword", nullable: true, isPrimary: false },
+      { name: "name", type: "text", nullable: true, isPrimary: false },
+      { name: "obj", type: "flat_object", nullable: true, isPrimary: false, projectable: false },
+      { name: "ver", type: "version", nullable: true, isPrimary: false, projectable: false },
+    ]);
+  });
+
+  test("defaults to an empty unprojectable list when omitted", () => {
+    const columns = toColumns(fields);
+    expect(columns.every((c) => c.projectable === undefined)).toBe(true);
+  });
+});
 
 // ============================================================================
 // Table shape

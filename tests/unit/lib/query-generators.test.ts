@@ -437,6 +437,54 @@ describe("generateSelectQuery", () => {
     expect(result).toContain("id");
     expect(result).toContain("name");
   });
+
+  // Issue #1459: Elasticsearch / OpenSearch unprojectable types
+  test("SQL leaves out columns with projectable: false (e.g. search flattened / flat_object, #1459)", () => {
+    const searchCaps = makeCaps({ defaultPort: 9200, statementTerminator: "none" });
+    const colsWithFlattened: ColumnSchema[] = [
+      { name: "id", type: "keyword", nullable: false, isPrimary: false },
+      { name: "blob", type: "flattened", nullable: true, isPrimary: false, projectable: false },
+      { name: "name", type: "text", nullable: true, isPrimary: false },
+    ];
+    const result = generateSelectQuery(["orders"], colsWithFlattened, searchCaps);
+    expect(result).toBe("SELECT\n  id,\n  name\nFROM orders\nWHERE 1=1\nLIMIT 100");
+    expect(result).not.toContain("blob");
+  });
+
+  test("SQL leaves out OpenSearch unprojectable types (flat_object, unsigned_long, version, #1459)", () => {
+    const searchCaps = makeCaps({ defaultPort: 9200, statementTerminator: "none", identifierQuoting: "backtick" });
+    const colsWithOpenSearchTypes: ColumnSchema[] = [
+      { name: "id", type: "keyword", nullable: false, isPrimary: false },
+      { name: "meta", type: "flat_object", nullable: true, isPrimary: false, projectable: false },
+      { name: "counter", type: "unsigned_long", nullable: true, isPrimary: false, projectable: false },
+      { name: "ver", type: "version", nullable: true, isPrimary: false, projectable: false },
+      { name: "title", type: "text", nullable: true, isPrimary: false },
+    ];
+    const result = generateSelectQuery(["orders"], colsWithOpenSearchTypes, searchCaps);
+    expect(result).toBe("SELECT\n  id,\n  title\nFROM orders\nWHERE 1=1\nLIMIT 100");
+    expect(result).not.toContain("meta");
+    expect(result).not.toContain("counter");
+    expect(result).not.toContain("ver");
+  });
+
+  test("SQL with all unprojectable columns falls back to SELECT * (#1459)", () => {
+    const searchCaps = makeCaps({ defaultPort: 9200, statementTerminator: "none" });
+    const allUnprojectable: ColumnSchema[] = [
+      { name: "blob", type: "flattened", nullable: true, isPrimary: false, projectable: false },
+    ];
+    const result = generateSelectQuery(["orders"], allUnprojectable, searchCaps);
+    expect(result).toBe("SELECT\n  *\nFROM orders\nWHERE 1=1\nLIMIT 100");
+  });
+
+  test("SQL an index without unprojectable fields is unchanged (#1459)", () => {
+    const searchCaps = makeCaps({ defaultPort: 9200, statementTerminator: "none" });
+    const regularCols: ColumnSchema[] = [
+      { name: "id", type: "keyword", nullable: false, isPrimary: false },
+      { name: "title", type: "text", nullable: true, isPrimary: false },
+    ];
+    const result = generateSelectQuery(["orders"], regularCols, searchCaps);
+    expect(result).toBe("SELECT\n  id,\n  title\nFROM orders\nWHERE 1=1\nLIMIT 100");
+  });
 });
 
 // ============================================================================

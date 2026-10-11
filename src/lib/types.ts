@@ -557,6 +557,17 @@ export interface ColumnSchema {
    * keeps a sampled column from every model and MCP surface, because its name was read out of the data.
    */
   provenance?: "sampled";
+  /**
+   * Whether this column can be named in a projection (a SELECT list).
+   *
+   * Search engines (Elasticsearch, OpenSearch) map types that their SQL surfaces refuse to project
+   * by name — e.g. `flattened` on Elasticsearch, or `flat_object`, `unsigned_long` and `version`
+   * on OpenSearch (#1459). Introspection lists the column so the schema tree is honest about the
+   * mapping, but sets this to `false` so starter query generators leave it out of the SELECT list.
+   *
+   * Absent means projectable (`true`), which is the case for ordinary columns across all engines.
+   */
+  projectable?: boolean;
 }
 
 export interface IndexSchema {

@@ -1713,11 +1713,10 @@ because the provider exposes no `cancelQuery` ([§3.8](#38-the-deadline-is-the-c
 - **`ssl.caCert` / `ssl.clientCert` / `ssl.rejectUnauthorized` are not honoured**, so a self-signed
   certificate fails verification — common on a secured cluster ([§4.3](#43-tls)).
 - **No connection string**, deliberately ([§4.2](#42-there-is-no-connection-string-and-that-is-deliberate)).
-- **A type the engine maps but its SQL surface cannot read is still listed as a column.** Measured:
-  `flattened` is refused with "Cannot use field [blob] with unsupported type [flattened]" while the
-  mapping declares it like any other field. The mapping does not say which types SQL supports, and
-  enumerating them would be a per-version list this code cannot verify — one that would hide fields a
-  future version reads perfectly well (the file docblock in [introspect.ts](../../src/lib/db/providers/sql/search/introspect.ts)).
+- **A type the engine maps but its SQL surface cannot read is still listed as a column.**
+  The column stays listed in the schema tree so the view reflects the index mapping faithfully.
+  Measured: Elasticsearch SQL refuses `flattened` with "Cannot use field [blob] with unsupported type [flattened]", so introspection marks it as unprojectable.
+  Generate Query omits it from the SELECT list so the starter statement runs (#1459).
 - **The whole result body is buffered** before it is parsed
   ([§3.1](#31-http-only--no-driver-and-what-that-costs)).
 

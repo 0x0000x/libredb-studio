@@ -1573,6 +1573,54 @@ describe("object surface", () => {
     expect((await provider.describeObject(["probe_pipeline"], "pipeline")).columns).toEqual([]);
   });
 
+  test("describing an index with flat_object, unsigned_long, or version marks them projectable: false (#1459)", async () => {
+    replyFor = (path) => {
+      if (path.startsWith("/_cat/indices")) {
+        return ok(
+          JSON.stringify([
+            {
+              health: "yellow",
+              status: "open",
+              index: "probe_unsupported",
+              uuid: "test-uuid",
+              pri: "1",
+              rep: "1",
+              "docs.count": "1",
+              "docs.deleted": "0",
+              "store.size": "100",
+              "pri.store.size": "100",
+            },
+          ]),
+        );
+      }
+      if (path === "/probe_unsupported/_mapping") {
+        return ok(
+          JSON.stringify({
+            probe_unsupported: {
+              mappings: {
+                properties: {
+                  id: { type: "keyword" },
+                  flat: { type: "flat_object" },
+                  big: { type: "unsigned_long" },
+                  ver: { type: "version" },
+                },
+              },
+            },
+          }),
+        );
+      }
+      return defaultReply(path, null);
+    };
+    const provider = await connectProvider();
+    const detail = await provider.describeObject(["probe_unsupported"], "index");
+    expect(detail.columns).toEqual([
+      { name: "big", type: "unsigned_long", nullable: true, isPrimary: false, projectable: false },
+      { name: "flat", type: "flat_object", nullable: true, isPrimary: false, projectable: false },
+      { name: "id", type: "keyword", nullable: true, isPrimary: false },
+      { name: "ver", type: "version", nullable: true, isPrimary: false, projectable: false },
+    ]);
+  });
+
   // --------------------------------------------------------------------------
   // describeObjects, the bulk column read (#789)
   // --------------------------------------------------------------------------

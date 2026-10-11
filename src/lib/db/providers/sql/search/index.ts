@@ -267,6 +267,21 @@ interface SearchProduct {
   readonly identifierQuoting: "double" | "backtick";
 
   /**
+   * Mapping types whose values this product's SQL surface refuses to project in a SELECT list (#1459).
+   *
+   * Measured on Elasticsearch 9.5.3: `flattened` fails with HTTP 400, "Cannot use field [blob] with
+   * unsupported type [flattened]". Elasticsearch's SQL data types page lists `unsigned_long` and `version`
+   * as supported.
+   *
+   * Measured on OpenSearch 3.9.0: `flat_object`, `unsigned_long` and `version` fail with
+   * "can't resolve Symbol(...) in type env".
+   *
+   * Introspection keeps these columns in the schema tree so the mapping is faithfully represented,
+   * but flags them with `projectable: false` so starter query generators leave them out.
+   */
+  readonly unprojectableTypes: readonly string[];
+
+  /**
    * The product's SQL surface, named for a MODEL rather than for the UI.
    *
    * Read by `ProviderLabels.statementLanguage`, which the agent's plan contract
@@ -285,20 +300,22 @@ interface SearchProduct {
   readonly statementLanguage: string;
 }
 
-const ELASTICSEARCH_PRODUCT: SearchProduct = Object.freeze({
+export const ELASTICSEARCH_PRODUCT: SearchProduct = Object.freeze({
   dialect: "elasticsearch",
   label: "Elasticsearch",
   acceptsOffsetClause: false,
   identifierQuoting: "double",
+  unprojectableTypes: Object.freeze(["flattened"]),
   statementLanguage:
     "Elasticsearch SQL, the product's own SQL endpoint - NOT the JSON query DSL, NOT an aggregation body, and NOT ES|QL",
 });
 
-const OPENSEARCH_PRODUCT: SearchProduct = Object.freeze({
+export const OPENSEARCH_PRODUCT: SearchProduct = Object.freeze({
   dialect: "opensearch",
   label: "OpenSearch",
   acceptsOffsetClause: true,
   identifierQuoting: "backtick",
+  unprojectableTypes: Object.freeze(["flat_object", "unsigned_long", "version"]),
   statementLanguage:
     "OpenSearch SQL, the SQL plugin's own dialect - NOT the JSON query DSL, NOT an aggregation body, and NOT PPL",
 });
@@ -1268,7 +1285,7 @@ abstract class SearchProvider extends SQLBaseProvider {
       }
 
       const columns = SEARCH_MAPPED_KINDS.includes(kind)
-        ? toColumns(await this.requireTransport().mapping(name, signal))
+        ? toColumns(await this.requireTransport().mapping(name, signal), this.product.unprojectableTypes)
         : [];
       return searchObjectDetail(path, columns);
     });
@@ -1302,7 +1319,11 @@ abstract class SearchProvider extends SQLBaseProvider {
   ): Promise<ColumnSchema[][]> {
     const transport = this.requireTransport();
     if (kind !== SEARCH_KIND_INDEX) {
-      return await Promise.all(chosen.map(async (object) => toColumns(await transport.mapping(object.name, signal))));
+      return await Promise.all(
+        chosen.map(async (object) =>
+          toColumns(await transport.mapping(object.name, signal), this.product.unprojectableTypes),
+        ),
+      );
     }
 
     const names = chosen.map((object) => object.name);
@@ -1317,7 +1338,7 @@ abstract class SearchProvider extends SQLBaseProvider {
       if (fields === undefined) {
         throw new QueryError(`${this.product.label} answered no mapping for the index ${name}`, this.type);
       }
-      return toColumns(fields);
+      return toColumns(fields, this.product.unprojectableTypes);
     });
   }
 

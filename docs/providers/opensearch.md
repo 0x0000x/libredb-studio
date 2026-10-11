@@ -1684,10 +1684,10 @@ because the provider exposes no `cancelQuery`
   here than for most providers because a default distribution ships a self-signed certificate
   ([§4.3](#43-tls)).
 - **No connection string**, deliberately ([§4.2](#42-there-is-no-connection-string-and-that-is-deliberate)).
-- **A type the engine maps but its SQL surface cannot read is still listed as a column**, because the
-  mapping does not say which types SQL supports, and enumerating them would be a per-version list this
-  code cannot verify
-  (the file docblock in [introspect.ts](../../src/lib/db/providers/sql/search/introspect.ts)).
+- **A type the engine maps but its SQL surface cannot read is still listed as a column.**
+  The column stays listed in the schema tree so the view reflects the index mapping faithfully.
+  Measured: OpenSearch SQL refuses `flat_object`, `unsigned_long` and `version` with "can't resolve Symbol(...) in type env", so introspection marks them as unprojectable.
+  Generate Query omits them from the SELECT list so the starter statement runs (#1459).
 - **The whole result body is buffered** before it is parsed
   ([§3.1](#31-http-only--no-driver-and-what-that-costs)).
 
