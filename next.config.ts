@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import packageJson from "./package.json";
 import { readBasePath } from "./src/lib/config/base-path";
+import { readDevAllowedOrigins } from "./src/lib/config/dev-origins";
 // Relative, not "@/": Next loads this file before any tsconfig path alias exists for it, and
 // src/lib/security/headers.ts is import-free by design precisely so a next.config can read it.
 import { securityHeaders, type SecurityHeaderOptions } from "./src/lib/security/headers";
@@ -205,6 +206,9 @@ const basePath = readBasePath(process.env.BASE_PATH);
 
 const nextConfig: NextConfig = {
   basePath,
+  // Dev only: hosts other than localhost that may load /_next dev resources, comma separated (a LAN name or address
+  // such as "devbox.local,192.0.2.10"). Empty by default, which keeps Next's own localhost-only default.
+  allowedDevOrigins: readDevAllowedOrigins(process.env.DEV_ALLOWED_ORIGINS),
   env: {
     NEXT_PUBLIC_APP_VERSION: packageJson.version,
     NEXT_PUBLIC_BASE_PATH: basePath,

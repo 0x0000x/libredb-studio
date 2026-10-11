@@ -3341,8 +3341,9 @@ That empty answer is what the browser reports as `ERR_INVALID_HTTP_RESPONSE`, an
 bootstrap does not survive it. The chain closes both ways: served by the same process at the same
 moment, `http://localhost:<port>/login` hydrates and `http://127.0.0.1:<port>/login` does not.
 
-Next 16 has a configuration key for exactly this and this repository sets none:
-`grep -rn 'allowedDevOrigins' src/ next.config.ts` returns nothing. The production path is
+Next 16 has a configuration key for exactly this and this repository sets it only from the
+`DEV_ALLOWED_ORIGINS` env var, empty by default: `grep -rn 'allowedDevOrigins' src/ next.config.ts`
+returns exactly one hit. The production path is
 unaffected, measured: `bun run build` plus `bun run start` hydrates at `127.0.0.1` and every part of
 #789's browser pass ran there.
 
