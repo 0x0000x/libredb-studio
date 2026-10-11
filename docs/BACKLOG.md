@@ -28,10 +28,10 @@ None of it is a GitHub issue.
 **Sections**
 
 - [SQL statement reading](#sql-statement-reading) — S2–S7 · 5
-- [Drivers and connections](#drivers-and-connections) — D1-D290, U17 · 193
+- [Drivers and connections](#drivers-and-connections) — D1-D291, U17 · 194
 - [Value interpolation](#value-interpolation) — V1
 - [Row editing](#row-editing) — R1–R3 · 3
-- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U112 · 103
+- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U113 · 104
 - [Dependencies](#dependencies) — P1-P9 · 7
 - [Documentation](#documentation) — DOC3-DOC21 · 18
 - [Release pipeline](#release-pipeline) — REL1-REL8 · 8
@@ -3060,6 +3060,14 @@ It is the same shape as D153.
 
 **Done when:** the hook carries a timeout sized for a busy runner (bun's `beforeAll` takes one as its second argument), and the file passes repeated runs at the CI job's concurrency.
 
+### D291. `kubectl logs TYPE/NAME` reads one of several pods without kubectl's "Found N pods" notice
+
+When `kubectl logs deploy/web` resolves to several pods and reads one, kubectl says so on stderr, as in `Found 3 pods, using pod/web-7764779776-6cmd9`.
+The console reads the same pod (`podsOf` in `src/lib/db/providers/platform/kubernetes/console/logs.ts` returns the first of the sorted pods unless `--all-pods` is given) and says nothing, so the reader does not learn that the other pods exist.
+Found 2026-10-11 in the adversarial review of the pod-logs change (#1667); it is older than that change.
+
+**Done when:** a `kubectl logs TYPE/NAME` that resolves to more than one pod without `--all-pods` carries the notice as a result warning in kubectl's wording, with tests in `tests/unit/db/kubernetes/console/logs.test.ts` and the `logs` bullet of `docs/providers/kubernetes.md` updated.
+
 ## Value interpolation
 
 ### V1. Query history records the placeholders, not the values that were bound
@@ -4665,6 +4673,14 @@ Found 2026-10-10 while designing the Kubernetes provider.
 Found 2026-10-10 while designing the Kubernetes provider.
 
 **Done when:** jsonpath and custom columns render through a bounded evaluator that runs no code, `--sort-by` sorts by the typed value rather than the server-formatted cell, and the editor completes resource names from the discovery cache, each with tests.
+
+### U113. A result cannot ask the grid for a wide column, so a log's LINE wraps narrow
+
+The results grid sizes every column from its header alone (`getHeaderFitColumnSize` in `src/components/results-grid/column-sizing.ts`, called from `src/components/ResultsGrid.tsx`), between 80 and 500 pixels, and `QueryResult` carries no width or weight hint a provider could set.
+So the Kubernetes `logs` grid gives LINE the width of TIME, POD and CONTAINER, and a long log line wraps into many short rows when wrapping is on.
+Found 2026-10-11 in a live test of the Kubernetes provider against a kubeadm 1.32 cluster.
+
+**Done when:** a result can name a column that takes the remaining width (or a declared weight), the grid honours it at the first render and on reset, the Kubernetes `logs` result names LINE, and a grid test pins both the hint and the unhinted default.
 
 ## Dependencies
 

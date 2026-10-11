@@ -18,7 +18,7 @@ It needs no driver and no Kubernetes library: requests go over Studio's shared `
 | Cluster-scoped kinds (nodes, namespaces, cluster roles) | The `Cluster` container |
 | A namespace | A container, one level deep |
 | A kind (`deployments`) | A folder, grouped as Workloads, Config, Network, Storage and Access Control |
-| An object (`deployment/web`) | A row named `web`, whose path carries its kind, opened as YAML |
+| An object (`deployment/web`) | A row named `web`, whose path carries its kind, opened as YAML; a pod's click shows its last 50 log lines |
 | A custom resource type | A row of the Custom Resources folder, whose List action runs `kubectl get` |
 | `kubectl get`, `describe`, `logs` and the rest | One statement per run in the editor |
 
@@ -277,6 +277,9 @@ What each answers:
 - `get -w` lists, then watches for a bounded window (10 s, or `--request-timeout`), with an EVENT column for the window's changes; it is not live, and running it again reads again.
 - `describe` answers section, field and value rows: the summary, one row per condition, one row per event.
 - `logs` reads the pod kubectl would choose for `TYPE/NAME`, and the default container its annotation names, else the first; without `--tail` it reads the last 500 lines and says that kubectl's default is every line.
+  When no container is named and the annotation names none, the result carries kubectl's own notice, `Defaulted container "app" out of: app, sidecar, setup (init)`, wherever the pod has more than one container or any init or ephemeral container (ephemeral ones read `(ephem)`), unless `--all-pods` reads every pod; an annotation naming no container of the pod adds `Default container name "X" not found in pod NAME`, as kubectl does.
+  Under `-l`, pods that default alike carry the notice once, where kubectl prints it once per pod.
+  Each LINE has its terminal escape sequences removed (colors, OSC hyperlinks, character set selections such as the `ESC ( B` that `tput sgr0` writes, and other `ESC` sequences), since the grid cannot draw what a terminal would; every other character, tabs included, stays as the server sent it.
 - `events` sorts by time as `kubectl events` does and shows the newest 1,000.
 - `events --types` with a single value also sends it to the server as a `type=` field selector, so the server narrows the events the 5,000 read limit counts; with both values no type selector is sent.
 - `explain` reads the server's OpenAPI v3 documents, cached per immutable URL.
@@ -312,8 +315,10 @@ The namespace list is the Namespaces field when set; otherwise the API's list; o
 | none | Events, Custom Resources | Nodes, Namespaces, Custom Resource Definitions, Custom Resources |
 
 A group with one kind in a container is not drawn, and its kind sits under the container.
-An object's row shows its name, and its path carries its kind, `deployment/web`, so two kinds' objects never collide; clicking it opens its YAML, with `managedFields` removed and a Secret's values gone.
-Describe is on every built-in object's row menu, Logs on a pod's, and List on a custom resource type's; each opens a new tab and runs.
+An object's row shows its name, and its path carries its kind, `deployment/web`, so two kinds' objects never collide.
+Clicking a pod's row (or Enter or Space on it) runs its Logs row action, `kubectl logs pod/NAME -n NAMESPACE --tail=50`, the way a click on a table previews 50 rows; a second click on the same pod returns to the tab the first opened, and the pod's YAML is View Source on its row menu.
+Clicking any other built-in object's row opens its YAML, with `managedFields` removed and a Secret's values gone.
+Describe is on every built-in object's row menu, Logs on a pod's, and List on a custom resource type's; each opens a new tab and runs, and the menu's Logs reads the same last 50 lines.
 A kind the identity may not list keeps its folder, locked with Studio's sentence; a kind the server does not serve says so.
 A folder lists the first 1,000 objects; past that its count is "1,000 or more", counted from the first 1,000 objects the tree lists; the console reads the rest.
 
@@ -390,6 +395,7 @@ A deploy tool may keep its own copy of the applied Secret in an annotation, so a
 | Bytes per `-o json` or `-o yaml` document | 1 MiB |
 | Objects per `-o json` or `-o yaml` statement | 500 |
 | Log lines without `--tail` | 500 |
+| Log lines a pod's click and its Logs row action read | 50 |
 | Log lines `--tail` may ask for | 5,000 |
 | Log lines per pod under `-l` without `--tail` | 10 |
 | Bytes per log stream | 1 MiB |
@@ -423,6 +429,7 @@ Not measured: an etcd-backed managed cluster, Rancher's proxy, OpenShift (its pr
 - A Secret's values cannot be revealed (D281).
 - One common view for every kind: no kind-specific panels, no permission hints on expand, no namespace filter, and Test Connection's fixed sentence (U111).
 - No `-o jsonpath`, `-o custom-columns` or `--sort-by`, and no completion in the editor (U112).
+- A `logs` grid's LINE column is as wide as TIME, POD and CONTAINER, because a result cannot ask the grid for a wide column (U113).
 - No Helm releases (D282), no credential plugins in any mode (D283), no host allowlist for egress (D284), and no per-kind statistics (D285).
 - The deb and rpm wrapper, the Homebrew formula and the Windows launcher do not set the loopback flag for `kubectl proxy` (D286).
 - `get -w` takes no `-o name`, `-o json` or `-o yaml` (D288), and `auth can-i --list` shows the server's rules without kubectl's compaction (D289).
