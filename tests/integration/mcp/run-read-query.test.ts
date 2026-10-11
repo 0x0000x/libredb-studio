@@ -346,7 +346,11 @@ describe("the deadline and the signal", () => {
   const TIMEOUT_LOG = "MCP run_read_query answered a provider failure as the timeout";
 
   test("pins today's behaviour, not a goal: a long SQLite statement blocks the process, so it is answered only after it ends, with the timeout answer, and a timer set beside it fires only after it too", async () => {
-    // docs/BACKLOG.md A1 records the fix: a worker that can be killed on deadline.
+    // This test pins the OLD blocking behaviour, so it forces the synchronous driver
+    // (LIBREDB_SQLITE_WORKER=0) locally: the statement blocks the process here, while
+    // production kills the child on the deadline instead.
+    const previousWorker = process.env.LIBREDB_SQLITE_WORKER;
+    process.env.LIBREDB_SQLITE_WORKER = "0";
     const original = SQLiteProvider.prototype.queryReadOnly;
     let statementSettledAt = 0;
     let timerFiredAt = 0;
@@ -384,10 +388,18 @@ describe("the deadline and the signal", () => {
     } finally {
       SQLiteProvider.prototype.queryReadOnly = original;
       warn.mockRestore();
+      if (previousWorker === undefined) delete process.env.LIBREDB_SQLITE_WORKER;
+      else process.env.LIBREDB_SQLITE_WORKER = previousWorker;
     }
   }, 60_000);
 
   test("a failure that settles after the deadline is the timeout answer, and its cause goes to the server log, redacted", async () => {
+    // The acquire opens the read-only profile, whose child-process open can take longer than
+    // the 500 ms deadline on a loaded CI runner and swallow the budget before the statement
+    // starts. Force the synchronous driver so the acquire is instant and the deadline is spent
+    // on the mocked statement, exactly as the subject demands.
+    const previousWorker = process.env.LIBREDB_SQLITE_WORKER;
+    process.env.LIBREDB_SQLITE_WORKER = "0";
     const original = SQLiteProvider.prototype.queryReadOnly;
     SQLiteProvider.prototype.queryReadOnly = async () => {
       // Holds the event loop past the 500 ms deadline, as a synchronous driver does, then fails.
@@ -412,6 +424,8 @@ describe("the deadline and the signal", () => {
     } finally {
       SQLiteProvider.prototype.queryReadOnly = original;
       warn.mockRestore();
+      if (previousWorker === undefined) delete process.env.LIBREDB_SQLITE_WORKER;
+      else process.env.LIBREDB_SQLITE_WORKER = previousWorker;
     }
   });
 
