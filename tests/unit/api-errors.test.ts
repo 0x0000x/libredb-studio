@@ -87,6 +87,13 @@ describe("createErrorResponse", () => {
     expect(body.retryable).toBe(true);
   });
 
+  test("a TimeoutError is a statement's deadline on every route: a connect's arrives as a ConnectionError", async () => {
+    const res = createErrorResponse(new TimeoutError("query took too long", "postgres", 30000), {
+      route: "api/db/test-connection",
+    });
+    expect((await res.json()).error).toBe("Query timed out. Please try a simpler query or increase timeout.");
+  });
+
   test("ConnectionError returns 503 with code CONNECTION_ERROR", async () => {
     const err = new ConnectionError("ECONNREFUSED", "postgres", "localhost", 5432);
     const res = createErrorResponse(err);

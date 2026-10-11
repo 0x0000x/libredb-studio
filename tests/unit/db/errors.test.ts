@@ -17,6 +17,8 @@ import {
   mapDatabaseError,
   describeOracleThinModeRefusal,
   describeOracleClientLoadFailure,
+  waitedSeconds,
+  connectPhase,
 } from "@/lib/db/errors";
 import { ApiErrorCode } from "@/lib/api/error-codes";
 
@@ -697,5 +699,60 @@ describe("describeOracleClientLoadFailure", () => {
     expect(message).toContain("/tmp/ic");
     expect(message).toContain("something else entirely");
     expect(message).not.toContain("NJS-045");
+  });
+});
+
+describe("waitedSeconds", () => {
+  test("tenths below 10 s, never fewer than 0.1", () => {
+    expect(waitedSeconds(0)).toBe("0.1 seconds");
+    expect(waitedSeconds(30)).toBe("0.1 seconds");
+    expect(waitedSeconds(300)).toBe("0.3 seconds");
+    expect(waitedSeconds(1500)).toBe("1.5 seconds");
+    expect(waitedSeconds(9940)).toBe("9.9 seconds");
+  });
+
+  test("the singular for one second", () => {
+    expect(waitedSeconds(1000)).toBe("1 second");
+    expect(waitedSeconds(1040)).toBe("1 second");
+  });
+
+  test("whole seconds from 10 s up", () => {
+    expect(waitedSeconds(9960)).toBe("10 seconds");
+    expect(waitedSeconds(10_000)).toBe("10 seconds");
+    expect(waitedSeconds(20_232)).toBe("20 seconds");
+  });
+});
+
+describe("connectPhase", () => {
+  const SENTENCE =
+    /^The connection got no answer after (\d+(?:\.\d)?) seconds?: check the address, the port, the network path and that the server is running\.$/;
+
+  test("a connect that returns returns", async () => {
+    await expect(connectPhase(async () => {})).resolves.toBeUndefined();
+  });
+
+  test("a deadline in the connect is a ConnectionError naming the wait, with the provider and the cause, never a query", async () => {
+    const deadline = new TimeoutError("The API server did not answer the request within 10 s.", "kubernetes", 10000);
+    const error = await connectPhase(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      throw deadline;
+    }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ConnectionError);
+    expect(error).not.toBeInstanceOf(TimeoutError);
+    const failure = error as ConnectionError;
+    const match = SENTENCE.exec(failure.message);
+    expect(match).not.toBeNull();
+    expect(Number(match?.[1])).toBeGreaterThanOrEqual(0.2);
+    expect(Number(match?.[1])).toBeLessThan(2);
+    expect(failure.provider).toBe("kubernetes");
+    expect(failure.cause).toBe(deadline);
+    expect(failure.message.toLowerCase()).not.toContain("query");
+  });
+
+  test("every other failure passes through as it was raised", async () => {
+    const refused = new ConnectionError("No answer from db.test:6443 after 10 seconds: check the address.", "qdrant");
+    const denied = new AuthenticationError("bad token", "kubernetes");
+    expect(await connectPhase(() => Promise.reject(refused)).catch((e: unknown) => e)).toBe(refused);
+    expect(await connectPhase(() => Promise.reject(denied)).catch((e: unknown) => e)).toBe(denied);
   });
 });
