@@ -20,7 +20,7 @@
 
 > 📖 **Full documentation, source, and issues:** <https://github.com/libredb/libredb-studio>
 
-Query **PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Databend, Apache Cassandra, Prometheus, InfluxDB, Apache Kafka, MQTT, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage and Kubernetes** from your browser, with AI query assistance, RBAC and OIDC SSO.
+Query **PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Databend, Apache Cassandra, Prometheus, InfluxDB, Apache Kafka, MQTT, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage and Kubernetes** from your browser, with AI query assistance, RBAC and OIDC SSO.
 
 ---
 
@@ -109,8 +109,8 @@ Every one of those tags is published on three bases, and the suffix is appended 
 
 ## Supported databases
 
-Thirty external engines share one interface.
-The thirty-first row is the embedded LibreDB store: it ships inside the image, not as a server you reach.
+Thirty-one external engines share one interface.
+The thirty-second row is the embedded LibreDB store: it ships inside the image, not as a server you reach.
 
 | Database | Driver | Highlights |
 | :--- | :--- | :--- |
@@ -121,7 +121,7 @@ The thirty-first row is the embedded LibreDB store: it ships inside the image, n
 | **SQL Server** | `mssql` | `OFFSET FETCH`, `sys.dm_*` DMVs, `DBCC CHECKDB`, Azure SQL auto-detect |
 | **SQLite** | `bun:sqlite` / `node:sqlite` | File-based or in-memory databases; the driver follows the runtime, with a `LIBREDB_SQLITE_DRIVER` override |
 | **libSQL** | none, HTTP | Full SQL IDE over the Hrana protocol against a libSQL server or Turso Cloud; SQLite's dialect across a network, with real per-table bytes from `dbstat` and an auth token instead of a password |
-| **DuckDB** | `@duckdb/node-api` (a native N-API addon) | Full SQL IDE on a DuckDB file or `:memory:` on the server this image runs on: `EXPLAIN (FORMAT JSON)` plans, `duckdb_*` introspection, real per-table bytes, cancellation through `interrupt()`. No slow-query or session panel, because DuckDB publishes neither. One process may hold the file |
+| **DuckDB** | `@duckdb/node-api` | Full SQL IDE on a DuckDB file or `:memory:` on the server this image runs on: `EXPLAIN (FORMAT JSON)` plans, `duckdb_*` introspection, real per-table bytes, cancellation through `interrupt()`. No slow-query or session panel (DuckDB has none). One process may hold the file |
 | **MongoDB** | `mongodb` | JSON query editor, find/aggregate/insert/update/delete |
 | **Redis** | `ioredis` | Command editor, non-blocking `SCAN` key browser, `INFO` monitoring, per-type command generation |
 | **Couchbase** | none, HTTP | SQL++ query editor, bucket/scope/collection browser, cluster health |
@@ -131,6 +131,7 @@ The thirty-first row is the embedded LibreDB store: it ships inside the image, n
 | **OpenSearch** | none, HTTP | The same read-only IDE over `_plugins/_sql`, from the same provider module; `LIMIT … OFFSET` paging works here |
 | **Trino** | none, HTTP | Full SQL IDE over the client protocol, every configured catalog in one tree, `EXPLAIN (FORMAT JSON)` plans, `system.runtime` monitoring and query cancellation |
 | **Databend** | none, HTTP | SQL IDE over its own query API, self-hosted or a Databend Cloud warehouse; `system.*` monitoring and `KILL QUERY`. No keys, so no inline row edits |
+| **BigQuery** | none, REST | GoogleSQL; EXPLAIN is a dry run |
 | **Apache Cassandra** | `cassandra-driver` (pure JS) | CQL editor over the native protocol, keyspace browser with partition and clustering keys marked, `system_views` monitoring. No row counts or sizes: Cassandra publishes only partition estimates and whole mebibytes, so neither is shown rather than shown wrong |
 | **Prometheus** | none, HTTP | PromQL editor, metric, rule and target browser |
 | **Apache Kafka** | `@platformatic/kafka` | Topic, group and broker browser, reads by offset or time |
@@ -143,7 +144,7 @@ The thirty-first row is the embedded LibreDB store: it ships inside the image, n
 | **Oxia** | `@grpc/grpc-js` | Read-only oxia client commands, shard map, key browser |
 | **S3-compatible object storage** | none, HTTP | Read-only AWS CLI commands, bucket and folder browser, object preview |
 | **Kubernetes** | none, HTTP | Read-only kubectl subset |
-| **MQTT** | `mqtt-packet` (parser only) | Read-only topic tree and message browser |
+| **MQTT** | `mqtt-packet` | Read-only topic tree browser |
 | **LibreDB** | `@libredb/libredb` | The embedded key-value store, for a database with nothing to install |
 
 **Read-only where the engine is.** Druid, Elasticsearch and OpenSearch have no `UPDATE` and no `CREATE TABLE` anywhere in their grammar, so inline editing and DDL are reported as unsupported instead of failing when used.
@@ -151,7 +152,7 @@ Prometheus, InfluxDB, Apache Kafka, MQTT, Oxia, S3-compatible object storage and
 
 ### Engines with no provider of their own
 
-Twenty-seven further engines speak the wire protocol of one of the thirty drivers above, so they connect through it unchanged: pick that driver in the connection dialog. Each was measured against a real instance, and how much worked is recorded per engine.
+Twenty-seven further engines speak the wire protocol of one of the thirty-one drivers above, so they connect through it unchanged: pick that driver in the connection dialog. Each was measured against a real instance, and how much worked is recorded per engine.
 
 | Engine | Connect as | Support |
 | :--- | :--- | :--- |

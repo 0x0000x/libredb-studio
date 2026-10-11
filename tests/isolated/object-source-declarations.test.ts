@@ -158,6 +158,7 @@ const SOURCE_DECLARATIONS: Readonly<Record<DatabaseType, readonly string[]>> = O
   oxia: ["shard/json", "key/json"],
   // Every kind has a source (design 2.4), Databend's own SQL text.
   databend: ["table/sql", "view/sql", "materialized_view/sql", "dynamic_table/sql"],
+  bigquery: [],
   // Both kinds have a source, JSON under the declared language: a bucket's parts and an object's metadata
   // and preview, serialised by the provider.
   s3: ["bucket/json", "object/json"],
@@ -223,6 +224,7 @@ const UNCONNECTED_SOURCE_KINDS: readonly string[] = CENSUS_TYPES.flatMap((type) 
  * the guard below asserts that the shipped checklist names every member of this list.
  */
 const CENSUS_ABSTAINERS: readonly DatabaseType[] = Object.freeze([
+  "bigquery",
   "druid",
   "neo4j",
   "influxdb",
@@ -292,9 +294,9 @@ describe("the fleet census of object source declarations", () => {
     // The population every assertion below iterates. If this were empty or short, each of those
     // loops would certify only the engines it happened to reach, so it is asserted first.
     expect([...CENSUS_TYPES].sort()).toEqual([...SHIPPED_DATABASE_TYPES].sort());
-    // EXTERNAL_DATABASE_TYPES.length (29 with db2, neo4j, milvus, qdrant, influxdb, influxdb3, oxia, databend, s3 and
+    // EXTERNAL_DATABASE_TYPES.length (30 with db2, neo4j, milvus, qdrant, influxdb, influxdb3, oxia, databend, bigquery, s3 and
     // kubernetes) plus the embedded store.
-    expect(CENSUS_TYPES).toHaveLength(31);
+    expect(CENSUS_TYPES).toHaveLength(32);
     expect(Object.keys(SOURCE_DECLARATIONS).sort()).toEqual([...SHIPPED_DATABASE_TYPES].sort());
   });
 
@@ -316,10 +318,10 @@ describe("the fleet census of object source declarations", () => {
     expect(rows.filter((row) => row.kind.hasSource === true)).toHaveLength(125);
     // neo4j added four kinds, none source-bearing, db2 five source-bearing kinds and four others, milvus and
     // qdrant one source-bearing kind each, influxdb and influxdb3 one kind each, neither source-bearing, oxia
-    // two source-bearing kinds, databend four source-bearing kinds, s3 two source-bearing kinds, and kubernetes 37
+    // two source-bearing kinds, databend four source-bearing kinds, bigquery three kinds, s3 two source-bearing kinds, and kubernetes 37
     // source-bearing kinds and its Custom Resources kind.
-    expect(rows.filter((row) => row.kind.hasSource !== true)).toHaveLength(34);
-    expect(rows).toHaveLength(159);
+    expect(rows.filter((row) => row.kind.hasSource !== true)).toHaveLength(37);
+    expect(rows).toHaveLength(162);
   });
 
   test("the MariaDB branch declares two more, which an unconnected provider cannot show", async () => {
@@ -434,8 +436,8 @@ describe("the fleet census of object source declarations", () => {
         throw new Error(`the half-declaration guard never reached ${extra}, so it does not cover the MariaDB branch`);
       }
     }
-    // 158 unconnected kinds plus the MariaDB branch's eight.
-    expect(rows).toHaveLength(167);
+    // 162 unconnected kinds plus the MariaDB branch's eight.
+    expect(rows).toHaveLength(170);
 
     const halfDeclared = rows
       .filter((row) => row.kind.sourceLanguage !== undefined && row.kind.hasSource !== true)

@@ -191,6 +191,11 @@ export interface SchemaTableItem {
    * a schema off the search path (#1397).
    */
   qualify?: boolean;
+  /**
+   * Whether a qualified insert is labelled with its address (`dataset.table`) rather than the bare name, so one name
+   * held by many containers reads as many tables. Set where tables need a container (BigQuery).
+   */
+  labelQualified?: boolean;
 }
 
 export interface SchemaColumnItem {
@@ -261,7 +266,10 @@ export function registerSQLCompletionProvider(
             ? segment
             : quoteSegment(segment);
       const tableItem = (table: SchemaTableItem, insertText: string, tableRange: Monaco.IRange) => ({
-        label: table.label,
+        // It still filters on the table's own name.
+        ...(table.labelQualified && insertText.includes(".") && insertText !== table.label
+          ? { label: [...(table.container ?? []), table.segment ?? table.label].join("."), filterText: table.label }
+          : { label: table.label }),
         kind: monaco.languages.CompletionItemKind.Class,
         insertText,
         range: tableRange,

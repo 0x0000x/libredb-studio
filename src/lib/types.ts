@@ -20,6 +20,7 @@ import type { VectorColumn } from "@/lib/db/vector/types";
 
 export type DatabaseType =
   | "postgres"
+  | "bigquery"
   | "mysql"
   | "sqlite"
   | "mongodb"
@@ -419,6 +420,11 @@ export interface DatabaseConnection {
    * no other engine.
    */
   tlsServerName?: string;
+  /**
+   * BigQuery only: where its jobs run (`EU`, `US`, `europe-west3`, ...). Absent, the provider takes the default
+   * dataset's location, else the one most datasets share. Absent and empty are one value. Read by no other engine.
+   */
+  location?: string;
   /**
    * Read no catalog when this connection opens.
    *

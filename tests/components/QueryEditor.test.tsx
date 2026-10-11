@@ -3358,4 +3358,32 @@ describe("QueryEditor completion addresses (#1397)", () => {
   test("with no reported default container nothing qualifies", () => {
     expect(registeredTables({ schemaContext: schema }).map((item) => item.qualify)).toEqual([false, false, undefined]);
   });
+
+  test("an engine whose bare names resolve nowhere qualifies every contained table when no default is known", () => {
+    const capabilities = { ...defaultCapabilities, tablesNeedContainer: true };
+    expect(registeredTables({ schemaContext: schema, capabilities }).map((item) => item.qualify)).toEqual([
+      true,
+      true,
+      undefined,
+    ]);
+  });
+
+  test("a known default container still decides, whatever the capability says", () => {
+    const capabilities = { ...defaultCapabilities, tablesNeedContainer: true };
+    expect(
+      registeredTables({ schemaContext: schema, capabilities, defaultContainer: ["public"] }).map(
+        (item) => item.qualify,
+      ),
+    ).toEqual([false, true, undefined]);
+  });
+
+  test("an engine whose tables need a container labels them by address", () => {
+    const capabilities = { ...defaultCapabilities, tablesNeedContainer: true };
+    expect(registeredTables({ schemaContext: schema, capabilities }).map((item) => item.labelQualified)).toEqual([
+      true,
+      true,
+      undefined,
+    ]);
+    expect(registeredTables({ schemaContext: schema }).some((item) => item.labelQualified)).toBe(false);
+  });
 });

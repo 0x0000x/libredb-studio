@@ -5,7 +5,7 @@ This document outlines the architectural patterns, tech stack, and system design
 ## System Overview
 
 LibreDB Studio is a hybrid, cloud-native database management tool that provides an IDE-like experience in the browser.
-It supports **31 database backends** via a Strategy Pattern abstraction: PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, ClickHouse, Apache Druid, Trino, Databend, Apache Cassandra, Elasticsearch, OpenSearch, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, MQTT, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage, Kubernetes, LibreDB.
+It supports **32 database backends** via a Strategy Pattern abstraction: PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, ClickHouse, Apache Druid, Trino, BigQuery, Databend, Apache Cassandra, Elasticsearch, OpenSearch, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, MQTT, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage, Kubernetes, LibreDB.
 The count is the `SHIPPED` record in [`src/lib/db/compatibility.ts`](../src/lib/db/compatibility.ts), which is exhaustive over `DatabaseType`; `elasticsearch` and `opensearch` are two ids served by one provider module, and `influxdb` and `influxdb3` are two ids served by one provider directory with a class each.
 
 It runs in two modes: as a **standalone Next.js app** and as an **embedded npm package** (`@libredb/studio`) consumed by libredb-platform. See [§4.6](#46-workspace-abstraction-npm-package-embedding).
@@ -61,6 +61,7 @@ graph TD
         SQL --> Search[(Elasticsearch / OpenSearch)]
         SQL --> Trino[(Trino)]
         SQL --> Databend[(Databend)]
+        SQL --> BigQuery[(BigQuery)]
         SQL --> Cassandra[(Apache Cassandra)]
         SQL --> LibSQL[(libSQL)]
         SQL --> DuckDB[(DuckDB)]
@@ -156,6 +157,7 @@ classDiagram
     SQLBaseProvider <|-- SearchProvider
     SQLBaseProvider <|-- TrinoProvider
     SQLBaseProvider <|-- DatabendProvider
+    SQLBaseProvider <|-- BigQueryProvider
     SQLBaseProvider <|-- CassandraProvider
     SQLBaseProvider <|-- LibSQLProvider
     SQLBaseProvider <|-- DuckDBProvider

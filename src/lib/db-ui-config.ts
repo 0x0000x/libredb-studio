@@ -27,6 +27,7 @@ import {
   InfluxDBIcon,
   OxiaIcon,
   DatabendIcon,
+  BigQueryIcon,
   S3Icon,
   MqttIcon,
   KubernetesIcon,
@@ -77,6 +78,8 @@ export interface DatabaseUIConfig {
     | "dataServers"
     // Databend only (design 6.1): the warehouse every statement runs on, one text box.
     | "warehouse"
+    // BigQuery only: the job location, one text box; empty means detected.
+    | "location"
     // S3-compatible object storage only: the signing region, one text box.
     | "region"
     // Kubernetes only: the server path prefix (Rancher's /k8s/clusters/<id>), the namespaces the tree lists, and the
@@ -130,6 +133,11 @@ export interface DatabaseUIConfig {
    * dialog offers the tunnel. Read through `offersSshTunnel`, never directly.
    */
   showSshTunnel?: false;
+  /**
+   * `false` where the engine's endpoint fixes its own TLS, so an SSL mode would be read by nothing. Absent
+   * means the dialog offers the panel. Read through `offersSslPanel`, never directly.
+   */
+  showSslPanel?: false;
   /**
    * The schemes the connection dialog's Host box takes as a whole address, split into Host and Port on paste
    * and at save (src/lib/connection-host-uri.ts), absent meaning the box takes a host alone, as it always has.
@@ -803,6 +811,29 @@ export const DB_UI_CONFIG: Record<DatabaseType, DatabaseUIConfig> = {
     fieldRules: DATABEND_FIELD_RULES,
     hostAcceptsUri: ["http", "https"],
   },
+  bigquery: {
+    icon: BigQueryIcon,
+    color: "text-hue-cyan-alt",
+    label: "BigQuery",
+    defaultPort: "",
+    showConnectionStringToggle: false,
+    connectionFields: ["database", "schema", "password", "location"],
+    fieldLabels: {
+      database: "Project ID",
+      schema: "Default dataset",
+      password: "Service-account key JSON or access token",
+      location: "Location",
+    },
+    // Always HTTPS to googleapis.com with the system trust store, and a tunnel would forward one address of
+    // several (the API, the token endpoint, the metadata server), so neither panel would be read.
+    showSshTunnel: false,
+    showSslPanel: false,
+    fieldPlaceholders: {
+      database: "my-gcp-project",
+      location: "detected (e.g. EU, US, europe-west3)",
+      password: "key JSON, a ya29… token, or empty for server credentials (if enabled)",
+    },
+  },
   s3: {
     // A generic bucket drawn for Studio, never a vendor's logo.
     icon: S3Icon,
@@ -986,6 +1017,11 @@ export function hostUriSchemes(type: DatabaseType): readonly HostUriScheme[] {
  */
 export function offersSshTunnel(type: DatabaseType): boolean {
   return DB_UI_CONFIG[type].showSshTunnel !== false;
+}
+
+/** Whether the dialog offers the SSL / TLS panel: false only where the entry declares `showSslPanel: false`. */
+export function offersSslPanel(type: DatabaseType): boolean {
+  return DB_UI_CONFIG[type].showSslPanel !== false;
 }
 
 /**

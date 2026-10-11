@@ -388,6 +388,26 @@ function continuesWord(sql: string, index: number): boolean {
   return before !== undefined && (IDENTIFIER_PART.test(before) || before === "$");
 }
 
+/**
+ * A triple-quoted literal (`'''…'''`, `"""…"""`), which runs to the next unescaped triple of the same quote. A backslash
+ * escapes the character after it, a line feed inside is ordinary text, and a lone or doubled quote does not close it.
+ */
+function readTripleQuoted(sql: string, index: number, quote: string, kind: SqlSpanKind): SqlSpan {
+  const closer = quote.repeat(3);
+  let i = index + 3;
+
+  while (i < sql.length) {
+    if (sql[i] === "\\") {
+      i += 2;
+      continue;
+    }
+    if (sql.startsWith(closer, i)) return { kind, end: i + 3, terminated: true };
+    i++;
+  }
+
+  return { kind, end: sql.length, terminated: false };
+}
+
 function readQuoted(
   sql: string,
   index: number,
@@ -540,6 +560,10 @@ export function readSqlSpan(sql: string, index: number, grammar: SqlGrammar = DE
   }
 
   const literalBackslash = grammar.backslashAlwaysEscapes ? "escapes" : "ambiguous";
+  // Before the single-quote readers: `'''` is a triple opener, never an empty string followed by a quote.
+  if (grammar.tripleQuotedStrings && (ch === "'" || ch === '"') && sql.startsWith(ch.repeat(3), index)) {
+    return readTripleQuoted(sql, index, ch, ch === "'" ? "string" : "quoted-identifier");
+  }
   if (ch === "'") return readQuoted(sql, index, "'", "string", literalBackslash);
   // `"` is a quoted identifier in every dialect this project supports except
   // MySQL with its default settings, where it is a string - and therefore takes
@@ -548,9 +572,11 @@ export function readSqlSpan(sql: string, index: number, grammar: SqlGrammar = DE
   if (ch === '"') return readQuoted(sql, index, '"', "quoted-identifier", literalBackslash);
   // Backticks are MySQL's identifier quotes. Without them a backtick-quoted CTE
   // name would read as undeterminable input and cost that statement its bound. No
-  // dialect gives a backslash meaning inside them, so one before the closing
-  // delimiter is simply part of the name.
-  if (ch === "`") return readQuoted(sql, index, "`", "quoted-identifier", "never");
+  // dialect but GoogleSQL gives a backslash meaning inside them, so one before the
+  // closing delimiter is simply part of the name.
+  if (ch === "`") {
+    return readQuoted(sql, index, "`", "quoted-identifier", grammar.backtickBackslashEscapes ? "escapes" : "never");
+  }
 
   // `[…]` quotes an identifier in SQL Server and SQLite, and everything between the
   // brackets is the NAME - `SELECT [a--b] FROM t` selects a column called `a--b`.

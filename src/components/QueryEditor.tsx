@@ -337,7 +337,12 @@ export const QueryEditor = forwardRef<QueryEditorRef, QueryEditorProps>(
             : {
                 container,
                 segment: path![path!.length - 1],
-                qualify: container.length > 0 && defaultKey !== undefined && JSON.stringify(container) !== defaultKey,
+                qualify:
+                  container.length > 0 &&
+                  (defaultKey === undefined
+                    ? capabilities?.tablesNeedContainer === true
+                    : JSON.stringify(container) !== defaultKey),
+                ...(capabilities?.tablesNeedContainer ? { labelQualified: true } : {}),
               }),
         });
 

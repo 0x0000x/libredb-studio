@@ -37,6 +37,7 @@ import {
   getDBConfig,
   isFileBased,
   offersSshTunnel,
+  offersSslPanel,
   readOnlyHint,
   takesConnectionField,
   type ConnectionField,
@@ -200,6 +201,8 @@ export function ConnectionModal({
     setDataServers,
     warehouse,
     setWarehouse,
+    location,
+    setLocation,
     region,
     setRegion,
     apiPath,
@@ -326,6 +329,7 @@ export function ConnectionModal({
   // `isX` branch above. The branches above stay the fallback, so an engine that declares nothing
   // reads below exactly as it did before the declaration existed.
   const uiConfig = getDBConfig(type);
+  const takesInsecureAuthConsent = takesConnectionField(type, "allowInsecureAuth");
   const databaseLabel = connectionFieldLabel(uiConfig, "database", `${databaseFieldLabel} Name`);
 
   const formContent = (
@@ -645,52 +649,54 @@ export function ConnectionModal({
                 </div>
               ) : (
                 <>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Globe strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
-                      <Label htmlFor="host" className="text-xs font-medium text-fg-muted">
-                        {connectionFieldLabel(uiConfig, "host", "Host & Instance")}
-                      </Label>
+                  {takesConnectionField(type, "host") && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Globe strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
+                        <Label htmlFor="host" className="text-xs font-medium text-fg-muted">
+                          {connectionFieldLabel(uiConfig, "host", "Host & Instance")}
+                        </Label>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <Input
+                          id="host"
+                          value={host}
+                          onChange={(e) => setHost(e.target.value, (e.nativeEvent as InputEvent).inputType)}
+                          onBlur={settleHost}
+                          onPaste={(e) => {
+                            if (takeHostAddress(e.clipboardData.getData("text/plain"))) e.preventDefault();
+                          }}
+                          onDrop={(e) => {
+                            if (takeHostAddress(e.dataTransfer.getData("text/plain"))) e.preventDefault();
+                          }}
+                          placeholder="localhost"
+                          autoComplete="off"
+                          aria-invalid={hostError === undefined ? undefined : true}
+                          aria-describedby={
+                            [describedByHint(uiConfig, "host"), hostError === undefined ? undefined : HOST_ERROR_ID]
+                              .filter((id) => id !== undefined)
+                              .join(" ") || undefined
+                          }
+                          className="md:col-span-3 h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs"
+                        />
+                        <Input
+                          id="port"
+                          value={port}
+                          onChange={(e) => setPort(e.target.value)}
+                          autoComplete="off"
+                          aria-describedby={describedByHint(uiConfig, "port")}
+                          className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
+                        />
+                      </div>
+                      {hostError !== undefined && (
+                        <p id={HOST_ERROR_ID} data-testid={HOST_ERROR_ID} role="alert" className="text-xs text-danger">
+                          {hostError}
+                        </p>
+                      )}
+                      <DeclaredFieldHint config={uiConfig} field="host" />
+                      <DeclaredFieldHint config={uiConfig} field="port" />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                      <Input
-                        id="host"
-                        value={host}
-                        onChange={(e) => setHost(e.target.value, (e.nativeEvent as InputEvent).inputType)}
-                        onBlur={settleHost}
-                        onPaste={(e) => {
-                          if (takeHostAddress(e.clipboardData.getData("text/plain"))) e.preventDefault();
-                        }}
-                        onDrop={(e) => {
-                          if (takeHostAddress(e.dataTransfer.getData("text/plain"))) e.preventDefault();
-                        }}
-                        placeholder="localhost"
-                        autoComplete="off"
-                        aria-invalid={hostError === undefined ? undefined : true}
-                        aria-describedby={
-                          [describedByHint(uiConfig, "host"), hostError === undefined ? undefined : HOST_ERROR_ID]
-                            .filter((id) => id !== undefined)
-                            .join(" ") || undefined
-                        }
-                        className="md:col-span-3 h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs"
-                      />
-                      <Input
-                        id="port"
-                        value={port}
-                        onChange={(e) => setPort(e.target.value)}
-                        autoComplete="off"
-                        aria-describedby={describedByHint(uiConfig, "port")}
-                        className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
-                      />
-                    </div>
-                    {hostError !== undefined && (
-                      <p id={HOST_ERROR_ID} data-testid={HOST_ERROR_ID} role="alert" className="text-xs text-danger">
-                        {hostError}
-                      </p>
-                    )}
-                    <DeclaredFieldHint config={uiConfig} field="host" />
-                    <DeclaredFieldHint config={uiConfig} field="port" />
-                  </div>
+                  )}
 
                   {/*
                     Only when the engine takes it, the same rule `buildConnection` writes it by,
@@ -881,6 +887,28 @@ export function ConnectionModal({
                         className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
                       />
                       <DeclaredFieldHint config={uiConfig} field="warehouse" />
+                    </div>
+                  )}
+
+                  {takesConnectionField(type, "location") && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Globe strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
+                        <Label htmlFor="location" className="text-xs font-medium text-fg-muted">
+                          {connectionFieldLabel(uiConfig, "location", "Location")}
+                        </Label>
+                      </div>
+                      <Input
+                        id="location"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder={connectionFieldPlaceholder(uiConfig, "location", "")}
+                        autoComplete="off"
+                        spellCheck={false}
+                        aria-describedby={describedByHint(uiConfig, "location")}
+                        className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
+                      />
+                      <DeclaredFieldHint config={uiConfig} field="location" />
                     </div>
                   )}
 
@@ -1192,100 +1220,108 @@ export function ConnectionModal({
             </div>
           )}
 
-          {/* SSL/TLS & SSH Panels - only for non-file-based providers, the SSH half only where offered */}
-          {!isFileBased(type) && (
+          {/* SSL/TLS & SSH Panels - only for non-file-based providers, each half only where offered */}
+          {!isFileBased(type) && (offersSslPanel(type) || offersSshTunnel(type) || takesInsecureAuthConsent) && (
             <div className="space-y-2">
-              {/* SSL/TLS Toggle */}
-              <button
-                type="button"
-                onClick={() => setShowSSL(!showSSL)}
-                className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-hairline hover:border-hairline-strong bg-panel text-xs font-medium text-fg-tertiary hover:text-fg transition-all"
-              >
-                <Lock strokeWidth={1.5} className="w-3.5 h-3.5 text-hue-emerald" />
-                <span>SSL / TLS</span>
-                {sslMode !== "disable" && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded text-[0.625rem] bg-hue-emerald-tint/10 text-hue-emerald border border-hue-emerald-tint/20">
-                    {sslMode.toUpperCase()}
-                  </span>
-                )}
-                <ChevronDown className={cn("w-3 h-3 ml-auto transition-transform", showSSL && "rotate-180")} />
-              </button>
-              <AnimatePresence>
-                {showSSL && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
+              {offersSslPanel(type) && (
+                <>
+                  {/* SSL/TLS Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setShowSSL(!showSSL)}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-hairline hover:border-hairline-strong bg-panel text-xs font-medium text-fg-tertiary hover:text-fg transition-all"
                   >
-                    <div className="p-3 rounded-lg border border-hue-emerald-tint/10 bg-hue-emerald-tint/5 space-y-3">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium text-fg-muted">SSL Mode</Label>
-                        <div className="flex flex-wrap gap-1.5">
-                          {(["disable", "require", "verify-system", "verify-ca", "verify-full"] as SSLMode[]).map(
-                            (mode) => (
-                              <button
-                                key={mode}
-                                type="button"
-                                onClick={() => setSSLMode(mode)}
-                                className={cn(
-                                  "px-2.5 py-1.5 rounded-md text-xs font-medium transition-all border",
-                                  sslMode === mode
-                                    ? "border-hue-emerald-tint/30 bg-hue-emerald-tint/10 text-hue-emerald"
-                                    : "border-transparent text-fg-muted hover:text-fg-secondary hover:bg-fill",
-                                )}
-                              >
-                                {mode}
-                              </button>
-                            ),
-                          )}
-                        </div>
-                        <p data-testid="ssl-mode-hint" className="text-xs text-fg-muted">
-                          {SSL_MODE_HINTS[sslMode]}
-                        </p>
-                      </div>
-                      {sslMode !== "disable" && (
-                        <div className="space-y-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-medium text-fg-muted">CA Certificate (PEM)</Label>
-                            <textarea
-                              value={caCert}
-                              onChange={(e) => setCaCert(e.target.value)}
-                              placeholder="-----BEGIN CERTIFICATE-----&#10;Paste CA cert content here...&#10;-----END CERTIFICATE-----"
-                              rows={3}
-                              className="w-full rounded-md bg-panel border border-hairline focus:border-hue-emerald-tint/50 text-xs font-mono text-fg-secondary p-2 resize-none placeholder:text-fg-subtle"
-                            />
+                    <Lock strokeWidth={1.5} className="w-3.5 h-3.5 text-hue-emerald" />
+                    <span>SSL / TLS</span>
+                    {sslMode !== "disable" && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded text-[0.625rem] bg-hue-emerald-tint/10 text-hue-emerald border border-hue-emerald-tint/20">
+                        {sslMode.toUpperCase()}
+                      </span>
+                    )}
+                    <ChevronDown className={cn("w-3 h-3 ml-auto transition-transform", showSSL && "rotate-180")} />
+                  </button>
+                  <AnimatePresence>
+                    {showSSL && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="p-3 rounded-lg border border-hue-emerald-tint/10 bg-hue-emerald-tint/5 space-y-3">
+                          <div className="space-y-2">
+                            <Label className="text-xs font-medium text-fg-muted">SSL Mode</Label>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(["disable", "require", "verify-system", "verify-ca", "verify-full"] as SSLMode[]).map(
+                                (mode) => (
+                                  <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => setSSLMode(mode)}
+                                    className={cn(
+                                      "px-2.5 py-1.5 rounded-md text-xs font-medium transition-all border",
+                                      sslMode === mode
+                                        ? "border-hue-emerald-tint/30 bg-hue-emerald-tint/10 text-hue-emerald"
+                                        : "border-transparent text-fg-muted hover:text-fg-secondary hover:bg-fill",
+                                    )}
+                                  >
+                                    {mode}
+                                  </button>
+                                ),
+                              )}
+                            </div>
+                            <p data-testid="ssl-mode-hint" className="text-xs text-fg-muted">
+                              {SSL_MODE_HINTS[sslMode]}
+                            </p>
                           </div>
-                          {(sslMode === "verify-ca" || sslMode === "verify-full") && (
-                            <>
+                          {sslMode !== "disable" && (
+                            <div className="space-y-3">
                               <div className="space-y-1.5">
-                                <Label className="text-xs font-medium text-fg-muted">Client Certificate (PEM)</Label>
+                                <Label className="text-xs font-medium text-fg-muted">CA Certificate (PEM)</Label>
                                 <textarea
-                                  value={clientCert}
-                                  onChange={(e) => setClientCert(e.target.value)}
-                                  placeholder="-----BEGIN CERTIFICATE-----&#10;Optional client cert...&#10;-----END CERTIFICATE-----"
+                                  value={caCert}
+                                  onChange={(e) => setCaCert(e.target.value)}
+                                  placeholder="-----BEGIN CERTIFICATE-----&#10;Paste CA cert content here...&#10;-----END CERTIFICATE-----"
                                   rows={3}
                                   className="w-full rounded-md bg-panel border border-hairline focus:border-hue-emerald-tint/50 text-xs font-mono text-fg-secondary p-2 resize-none placeholder:text-fg-subtle"
                                 />
                               </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-medium text-fg-muted">Client Private Key (PEM)</Label>
-                                <textarea
-                                  value={clientKey}
-                                  onChange={(e) => setClientKey(e.target.value)}
-                                  placeholder="-----BEGIN PRIVATE KEY-----&#10;Optional client key...&#10;-----END PRIVATE KEY-----"
-                                  rows={3}
-                                  className="w-full rounded-md bg-panel border border-hairline focus:border-hue-emerald-tint/50 text-xs font-mono text-fg-secondary p-2 resize-none placeholder:text-fg-subtle"
-                                />
-                              </div>
-                            </>
+                              {(sslMode === "verify-ca" || sslMode === "verify-full") && (
+                                <>
+                                  <div className="space-y-1.5">
+                                    <Label className="text-xs font-medium text-fg-muted">
+                                      Client Certificate (PEM)
+                                    </Label>
+                                    <textarea
+                                      value={clientCert}
+                                      onChange={(e) => setClientCert(e.target.value)}
+                                      placeholder="-----BEGIN CERTIFICATE-----&#10;Optional client cert...&#10;-----END CERTIFICATE-----"
+                                      rows={3}
+                                      className="w-full rounded-md bg-panel border border-hairline focus:border-hue-emerald-tint/50 text-xs font-mono text-fg-secondary p-2 resize-none placeholder:text-fg-subtle"
+                                    />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <Label className="text-xs font-medium text-fg-muted">
+                                      Client Private Key (PEM)
+                                    </Label>
+                                    <textarea
+                                      value={clientKey}
+                                      onChange={(e) => setClientKey(e.target.value)}
+                                      placeholder="-----BEGIN PRIVATE KEY-----&#10;Optional client key...&#10;-----END PRIVATE KEY-----"
+                                      rows={3}
+                                      className="w-full rounded-md bg-panel border border-hairline focus:border-hue-emerald-tint/50 text-xs font-mono text-fg-secondary p-2 resize-none placeholder:text-fg-subtle"
+                                    />
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           )}
                         </div>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
+              )}
 
               {/*
                 The consent to a cleartext password (#786), outside the accordion so it is seen while
@@ -1294,7 +1330,7 @@ export function ConnectionModal({
                 declared hint (InfluxDB spec R4), never a fallback; tests/unit/lib/db-ui-config.test.ts
                 holds every type that takes the field to declaring one.
               */}
-              {takesConnectionField(type, "allowInsecureAuth") && sslMode === "disable" && (
+              {takesInsecureAuthConsent && sslMode === "disable" && (
                 <div className="space-y-1 p-3 rounded-lg border border-warning-tint/10 bg-warning-tint/5">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input

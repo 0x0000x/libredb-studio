@@ -37,6 +37,21 @@ describe("resolve-connection", () => {
     expect(result.id).toBe("user-conn");
   });
 
+  it("strips a client's managed claim from an inline connection", async () => {
+    const conn = {
+      id: "user-bq",
+      name: "User BQ",
+      type: "bigquery",
+      database: "p",
+      managed: true,
+      location: "EU",
+      createdAt: new Date(),
+    } as DatabaseConnection;
+    const result = await resolveConnection({ connection: conn }, { role: "user", username: "test" });
+    expect(result.managed).toBe(false);
+    expect(result.location).toBe("EU");
+  });
+
   /*
    * The `seed:` namespace belongs to the operator's config, and an inline `connection` used to
    * be handed back verbatim, id included (GHSA-3wh2-8x78-jfw4 root cause 2). So a `user` account

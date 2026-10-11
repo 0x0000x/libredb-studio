@@ -176,6 +176,11 @@ const NO_COLUMN_MODIFICATION: Partial<Record<DatabaseType, { label: string; reas
     label: "Databend",
     reason: DATABEND_COLUMN_MODIFICATION_REASON,
   },
+  bigquery: {
+    label: "BigQuery",
+    reason:
+      "BigQuery widens a column with ALTER COLUMN ... SET DATA TYPE only along its coercion rules, and nothing else; write the change by hand.",
+  },
   // Not a table store at all (#1085): a metric is whatever scrapes and recording rules write
   // under its name, and the HTTP API declares no column anywhere. The sentence is the one
   // `NO_TABLE_DDL` below prints when it declines the whole diff.
@@ -354,6 +359,8 @@ const NO_TRANSACTION_WRAPPER: ReadonlySet<DatabaseType> = new Set<DatabaseType>(
   "influxdb3",
   "oxia",
   "databend",
+  // BigQuery runs a statement as its own job; BEGIN TRANSACTION exists only inside a multi-statement script.
+  "bigquery",
   "s3",
   "kubernetes",
   // No table DDL to wrap either (#1635): a broker keeps no schema.
@@ -395,11 +402,14 @@ const NO_PORTABLE_INDEX_DDL: Partial<Record<DatabaseType, string>> = {
     "ClickHouse: Cannot generate index DDL. The diff does not record the index kind, expression or granularity; write the index change by hand.",
   trino: "Trino: Cannot generate index DDL. Indexes belong to the connector's underlying system, not Trino SQL.",
   databend: DATABEND_INDEX_REFUSAL,
+  bigquery:
+    "BigQuery: Cannot generate index DDL. BigQuery has search and vector indexes only; write the index change by hand.",
 };
 const NO_FOREIGN_KEYS: Partial<Record<DatabaseType, string>> = {
   clickhouse: "ClickHouse",
   trino: "Trino",
   databend: "Databend",
+  bigquery: "BigQuery",
 };
 
 /**
@@ -411,6 +421,7 @@ const NO_FOREIGN_KEYS: Partial<Record<DatabaseType, string>> = {
 const NO_PRIMARY_KEY_CONSTRAINT: Partial<Record<DatabaseType, { label: string; reason: string }>> = {
   trino: { label: "Trino", reason: "Trino SQL has no primary-key constraint." },
   databend: { label: "Databend", reason: DATABEND_PRIMARY_KEY_REASON },
+  bigquery: { label: "BigQuery", reason: "BigQuery accepts a primary key only as PRIMARY KEY (...) NOT ENFORCED." },
 };
 
 // Object names are untrusted metadata. Quoting protects SQL identifiers, but a

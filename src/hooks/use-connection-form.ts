@@ -19,6 +19,7 @@ import {
   hostUriSchemes,
   isFileBased,
   offersSshTunnel,
+  offersSslPanel,
   type ConnectionField,
 } from "@/lib/db-ui-config";
 import type { ImportedContext, ImportedField, ImportedSsl } from "@/lib/connection-import";
@@ -91,6 +92,8 @@ const FIELD_OWNERSHIP: Record<keyof DatabaseConnection, FieldOwnership> = {
   dataServers: "edited",
   // Databend's Warehouse box owns it, so emptying it has to CLEAR it, as dataServers.
   warehouse: "edited",
+  // BigQuery's Location box owns it, so emptying it clears it and detection takes over again.
+  location: "edited",
   // S3's Region box owns it, so emptying it has to CLEAR it, as warehouse.
   region: "edited",
   // Kubernetes' API path, Namespaces and TLS server name boxes own them, so emptying one has to CLEAR it, as warehouse.
@@ -206,6 +209,7 @@ export const CONNECTION_FORM_DEFAULTS = {
   dataServers: "",
   // A leftover warehouse would resume, and bill, the previous connection's compute for the next one.
   warehouse: "",
+  location: "",
   // A leftover region would sign the next S3 connection's requests for the previous server's region, which it refuses.
   region: "",
   // A leftover API path would send the next Kubernetes connection's requests to another cluster behind the same proxy.
@@ -531,6 +535,7 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
    * provider checks it and names the field when it refuses it.
    */
   const [warehouse, setWarehouse] = useState(D.warehouse);
+  const [location, setLocation] = useState(D.location);
   /**
    * S3's signing region, as typed. Drawn only for an engine that takes the field; stored as typed, spaces included,
    * because the field rule and the provider check it and name the field when they refuse it.
@@ -593,6 +598,7 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
       allowInsecureAuth: setAllowInsecureAuth,
       dataServers: setDataServers,
       warehouse: setWarehouse,
+      location: setLocation,
       region: setRegion,
       apiPath: setApiPath,
       namespaces: setNamespaces,
@@ -648,6 +654,7 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
       apiPath: setApiPath,
       namespaces: setNamespaces,
       tlsServerName: setTlsServerName,
+      location: setLocation,
     }),
     [],
   );
@@ -751,6 +758,7 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
       // Overwritten for the same reason: a connection that names no warehouse must show an empty box, or the last one
       // edited is saved onto it.
       setWarehouse(editConnection.warehouse ?? "");
+      setLocation(editConnection.location ?? "");
       // Overwritten for the same reason: a connection that names no region must show an empty box, or the last one
       // edited is saved onto it.
       setRegion(editConnection.region ?? "");
@@ -942,7 +950,7 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
         editConnection?.color && (editConnection.environment ?? CONNECTION_FORM_DEFAULTS.environment) === environment
           ? editConnection.color
           : ENVIRONMENT_COLORS[environment],
-      ...(sslConfig ? { ssl: sslConfig } : {}),
+      ...(sslConfig && offersSslPanel(type) ? { ssl: sslConfig } : {}),
       // Only for an engine that offers the tunnel (#1088). A type switch keeps the SSH state, so a
       // tunnel switched on under another engine would otherwise reach a Kafka connection while its
       // panel, and so the one control that turns it off, is hidden. `sshTunnel` is form-owned, so
@@ -983,6 +991,7 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
       ...(addressedFields.has("dataServers") && dataServers.trim() !== "" ? { dataServers } : {}),
       // The dataServers rule: only for an engine that takes it, and only when something is typed.
       ...(addressedFields.has("warehouse") && warehouse.trim() !== "" ? { warehouse } : {}),
+      ...(addressedFields.has("location") && location.trim() !== "" ? { location: location.trim() } : {}),
       // Only for an engine that takes it, and whenever the box is not empty: unlike warehouse, a box of spaces is
       // written so the format rule refuses it, rather than signing for us-east-1 with no word.
       ...(addressedFields.has("region") && region !== "" ? { region } : {}),
@@ -1029,6 +1038,7 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
     allowInsecureAuth,
     dataServers,
     warehouse,
+    location,
     region,
     apiPath,
     namespaces,
@@ -1430,6 +1440,7 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
     "influxdb3",
     "oxia",
     "databend",
+    "bigquery",
     "s3",
     "kubernetes",
     "mqtt",
@@ -1527,6 +1538,8 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
     setDataServers,
     warehouse,
     setWarehouse,
+    location,
+    setLocation,
     region,
     setRegion,
     apiPath,

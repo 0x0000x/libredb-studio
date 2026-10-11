@@ -444,6 +444,7 @@ const GRAMMAR_COVERAGE: Record<DatabaseType, "established" | "default"> = {
   // Read off Databend's own lexer (`token.rs`) and parser, and the trailing clause measured on the pinned image (L3);
   // see the databend block below and DATABEND_GRAMMAR in `grammar.ts` for the source behind each fact.
   databend: "established",
+  bigquery: "established",
   s3: "default",
   // One kubectl statement, not SQL: no SQL grammar is established for it, and none is read.
   kubernetes: "default",
@@ -614,16 +615,15 @@ describe("backslashAlwaysEscapes", () => {
     expect(DEFAULT_SQL_GRAMMAR.backslashAlwaysEscapes).toBe(false);
   });
 
-  test("databend declares true", () => {
-    expect(resolveSqlGrammar("databend").backslashAlwaysEscapes).toBe(true);
+  test.each(["databend", "bigquery"] as const)("%s declares true", (type) => {
+    expect(resolveSqlGrammar(type).backslashAlwaysEscapes).toBe(true);
   });
 
-  test.each((Object.keys(GRAMMAR_COVERAGE) as DatabaseType[]).filter((type) => type !== "databend"))(
-    "%s declares false",
-    (type) => {
-      expect(resolveSqlGrammar(type).backslashAlwaysEscapes).toBe(false);
-    },
-  );
+  test.each(
+    (Object.keys(GRAMMAR_COVERAGE) as DatabaseType[]).filter((type) => type !== "databend" && type !== "bigquery"),
+  )("%s declares false", (type) => {
+    expect(resolveSqlGrammar(type).backslashAlwaysEscapes).toBe(false);
+  });
 });
 
 describe("every database type has a recorded grammar decision", () => {
@@ -698,6 +698,7 @@ const SQL_TEXT_COVERAGE: Record<DatabaseType, boolean> = {
   oxia: false,
   // SQL, and the statement text IS what the editor sends to `POST /v1/query`; the provider extends SQLBaseProvider.
   databend: true,
+  bigquery: true,
   // AWS CLI words split by POSIX shell rules, not SQL text.
   s3: false,
   // A kubectl statement is words split by POSIX shell rules, not SQL text.

@@ -64,6 +64,7 @@ const MOCK_CONNECTION_FIELDS: Record<string, string[]> = {
   oxia: ["host", "port", "password", "database", "dataServers", "allowInsecureAuth"],
   // The warehouse and the consent to a cleartext password are fields of Databend's own (design 6.1).
   databend: ["host", "port", "user", "password", "database", "warehouse", "allowInsecureAuth"],
+  bigquery: ["database", "schema", "password", "location"],
   // The signing region and the consent to plain HTTP are fields of S3's own.
   s3: ["host", "port", "user", "password", "database", "region", "allowInsecureAuth"],
   // No User: basic authentication is refused; the token is the password, the default namespace the database, and the
@@ -120,7 +121,8 @@ mock.module("@/lib/db-ui-config", () => ({
   takesConnectionField: (type: string, field: string) => mockFields(type).includes(field),
   connectionFieldRefusal: mockFieldRefusal,
   // Mirrors the real table: `kafka` is the one entry that declares `showSshTunnel: false`.
-  offersSshTunnel: (type: string) => type !== "kafka",
+  offersSshTunnel: (type: string) => type !== "kafka" && type !== "bigquery",
+  offersSslPanel: (type: string) => type !== "bigquery",
 }));
 
 import { CONNECTION_FORM_DEFAULTS, offersReadOnlyToggle, useConnectionForm } from "@/hooks/use-connection-form";
@@ -1973,6 +1975,7 @@ describe("useConnectionForm", () => {
     influxdb3: true,
     oxia: true,
     databend: true,
+    bigquery: true,
     s3: true,
     kubernetes: true,
     mqtt: true,

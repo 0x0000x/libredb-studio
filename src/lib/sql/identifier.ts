@@ -41,6 +41,10 @@ export function quoteIdentifier(name: string, dialect: DatabaseType | undefined)
     // newline or a NUL round-trip byte-equal through CREATE TABLE, INSERT and SELECT
     // under both dialects. A bare name would be folded to lower case there, which is why
     // the provider quotes every name rather than only the ones that need it.
+    // GoogleSQL quotes a name in backticks and escapes inside it with a backslash; a doubled
+    // backtick is not an escape there, it ends the name.
+    case "bigquery":
+      return `\`${name.replace(/\\/g, "\\\\").replace(/`/g, "\\`")}\``;
     case "databend":
     case "opensearch":
     case "mysql":

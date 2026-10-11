@@ -20,6 +20,7 @@ const EVERY_FORMAT: Record<ExplainFormat, true> = {
   "trino-json": true,
   "duckdb-json": true,
   "databend-text": true,
+  "bigquery-dryrun": true,
 };
 
 /**

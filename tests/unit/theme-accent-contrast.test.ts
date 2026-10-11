@@ -244,6 +244,8 @@ const HUES: ReadonlyArray<{ hue: string; light: string; lightAlt: string }> = [
  * leaves both minima where they were next to InfluxDB's `purple-alt` and `violet-alt`.
  * `red` joined with Databend: `hue-red` is Oracle's, and of the hues with no identity `-alt`, tried in the order
  * pink, red, amber, green, `pink-alt` made the light set tighter than the dark one and `red-alt` cleared every test.
+ * `cyan` joined with BigQuery, when every base hue was already an engine's: `cyan-alt`, which failed the light-set
+ * test when Milvus chose, clears every test against today's set.
  * `green` joined with S3-compatible object storage: `hue-green` is Kafka's, and of the hues with no identity `-alt`
  * (amber, pink, green, cyan), `green-alt` moved the light set's closest pair least (0.0337 to 0.0331, emerald-alt vs
  * green-alt) and left the dark one where it was.
@@ -268,6 +270,7 @@ const IDENTITY_ALTS = [
   "violet",
   "orange",
   "red",
+  "cyan",
   "green",
   "amber",
   "pink",

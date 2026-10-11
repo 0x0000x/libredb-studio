@@ -242,6 +242,7 @@ mock.module("@/lib/db-ui-config", () => ({
   takesConnectionField: (type: string, field: string) => mockFields(type).includes(field),
   // The real rule: false only where an entry declares `showSshTunnel: false`, which Kafka's does.
   offersSshTunnel: (type: string) => type !== "kafka",
+  offersSslPanel: () => true,
   // The modal reads its field copy through these; this table declares copy for Kafka alone, so
   // every other engine reads the modal's own words. See the same pair in ConnectionModal.test.tsx.
   connectionFieldLabel: (config: { fieldLabels?: Record<string, string> }, field: string, fallback: string) =>

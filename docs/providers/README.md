@@ -23,6 +23,7 @@ in lockstep with the code (see the tri-sync rule in [`../../CLAUDE.md`](../../CL
 | OpenSearch | `opensearch` | SQL (search) | none (HTTP: `_plugins/_sql` + REST) | SQL (OpenSearch SQL plugin) | [opensearch.md](./opensearch.md) |
 | Trino | `trino` | SQL (federated query engine) | none (HTTP: the client protocol, `POST /v1/statement`) | SQL (Trino) | [trino.md](./trino.md) |
 | Databend | `databend` | SQL (analytics) | none, HTTP over the shared `node:http(s)` transport (the query API, `POST /v1/query`) | SQL (Databend) | [databend.md](./databend.md) |
+| BigQuery | `bigquery` | SQL (analytics) | none, REST over the shared `node:https` transport (`jobs.query`); `jose` signs service-account tokens | SQL (GoogleSQL) | [bigquery.md](./bigquery.md) |
 | Apache Cassandra | `cassandra` | SQL (wide-column) | `cassandra-driver` (pure JS) | SQL-shaped (CQL) | [cassandra.md](./cassandra.md) |
 | Prometheus | `prometheus` | Time series | none (HTTP: the Prometheus HTTP API, `/api/v1/*`) | PromQL | [prometheus.md](./prometheus.md) |
 | Apache Kafka | `kafka` | Stream | `@platformatic/kafka` (pure TypeScript) | JSON (a read request) | [kafka.md](./kafka.md) |

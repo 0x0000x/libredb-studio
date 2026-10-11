@@ -47,6 +47,7 @@ const EXPECTED_CONTAINER_PATH_SHAPES: Readonly<
   influxdb: "exact",
   // Two levels, the catalog and the database, each path exactly as deep (design 2.4).
   databend: "exact",
+  bigquery: "exact",
   // No container level at all: buckets are object rows, so no path shape is declared.
   s3: "absent",
   kubernetes: "exact",
@@ -158,7 +159,7 @@ describe("the declaration follows the check (#1147)", () => {
     expect(unknownTypeIds(callerFiles)).toEqual([]);
     const callers = callerFiles.map(providerTypeId).sort();
     const declaring = TYPES.filter((type) => EXPECTED_CONTAINER_PATH_SHAPES[type] !== "absent").sort();
-    expect(callers).toHaveLength(20);
+    expect(callers).toHaveLength(21);
     expect(callers).toEqual(declaring);
   });
 });

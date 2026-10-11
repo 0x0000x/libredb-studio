@@ -31,6 +31,8 @@ export const EXPECTED_EDITABLE_KINDS: readonly (readonly [DatabaseType, string])
  * of it. Each one owes a section in its own provider doc naming which absence it is.
  */
 export const EXPECTED_EDIT_ABSTAINERS: readonly DatabaseType[] = Object.freeze([
+  // No kind declares `acceptsRowWrites` or `acceptsSourceEdits`: object edit is not implemented in this version.
+  "bigquery",
   "cassandra",
   "clickhouse",
   "couchbase",

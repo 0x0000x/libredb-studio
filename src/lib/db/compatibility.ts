@@ -30,6 +30,7 @@ import type { DatabaseType } from "@/lib/types";
  */
 const SHIPPED: Readonly<Record<DatabaseType, true>> = Object.freeze({
   postgres: true,
+  bigquery: true,
   mysql: true,
   sqlite: true,
   // libSQL (#424 Phase 5): its own provider, doc and integration test. A separate
@@ -140,6 +141,7 @@ export const SHIPPED_DATABASE_TYPES: readonly DatabaseType[] = Object.freeze(Obj
  */
 const EXTERNAL: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   postgres: true,
+  bigquery: true,
   mysql: true,
   sqlite: true,
   libsql: true,
@@ -224,6 +226,7 @@ export function isExternalDatabaseType(type: DatabaseType): boolean {
  */
 export const READ_ONLY_ENFORCED: Record<DatabaseType, boolean> = Object.freeze({
   postgres: false,
+  bigquery: false,
   mysql: false,
   sqlite: false,
   libsql: false,
@@ -300,6 +303,7 @@ export const READ_ONLY_ENFORCED: Record<DatabaseType, boolean> = Object.freeze({
  */
 export const READS_FILE_ACCESS_POSTURE: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   postgres: false,
+  bigquery: false,
   mysql: false,
   sqlite: true,
   libsql: false,
@@ -347,6 +351,7 @@ export const READS_FILE_ACCESS_POSTURE: Readonly<Record<DatabaseType, boolean>> 
  */
 export const MCP_EXPOSABLE: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   postgres: true,
+  bigquery: true,
   mysql: true,
   sqlite: true,
   libsql: true,
@@ -410,6 +415,7 @@ export const MCP_EXPOSABLE: Readonly<Record<DatabaseType, boolean>> = Object.fre
  */
 export const CONNECTION_FORM_URI_MODE: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   postgres: false,
+  bigquery: false,
   mysql: false,
   sqlite: false,
   libsql: true,
@@ -457,6 +463,7 @@ export const CONNECTION_FORM_URI_MODE: Readonly<Record<DatabaseType, boolean>> =
  */
 export const CONNECTION_STRING_ACCEPTED: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   postgres: true,
+  bigquery: false,
   mysql: true,
   // The provider's supportsConnectionString flag is false, yet it opens this field as the database file path:
   // sqlite.ts getDatabasePath, docs/providers/sqlite.md.

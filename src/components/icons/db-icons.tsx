@@ -742,6 +742,26 @@ export const KubernetesIcon: React.FC<IconProps> = ({ className, ...props }) => 
   </svg>
 );
 
+/** A magnifier over bars: a mark drawn for Studio, never Google's logo. */
+export const BigQueryIcon: React.FC<IconProps> = ({ className, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <circle cx="10.5" cy="10.5" r="6.5" />
+    <path d="m15.5 15.5 5 5" />
+    <path d="M8 12.5v-1.5" />
+    <path d="M10.5 12.5v-4" />
+    <path d="M13 12.5v-2.5" />
+  </svg>
+);
+
 /**
  * MQTT: a mark drawn for Studio, never a product's logo: a node with the arcs of a broadcast rising from it,
  * which is what a broker does in the plainest terms. Stroked on the house 24-unit grid like the others.

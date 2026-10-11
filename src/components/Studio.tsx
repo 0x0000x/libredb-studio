@@ -80,6 +80,8 @@ import {
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Database, Plus } from "lucide-react";
+import { DryRunBadge } from "@/components/studio/DryRunBadge";
+import { useDryRunEstimate } from "@/hooks/use-dry-run-estimate";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Button } from "@/components/ui/button";
 /*
@@ -142,6 +144,13 @@ export default function Studio() {
     metadata,
     schema: conn.schema,
   });
+
+  // BigQuery-style live scan estimate, only where EXPLAIN is a free dry run.
+  const dryRun = useDryRunEstimate(
+    conn.activeConnection,
+    tabMgr.currentTab.query,
+    metadata?.capabilities.explainFormat === "bigquery-dryrun" && tabMgr.currentTab.type === "sql",
+  );
 
   // 4. Transaction Control
   const txn = useTransactionControl({
@@ -1539,6 +1548,7 @@ export default function Studio() {
                                 defaultContainer={conn.defaultContainer}
                                 capabilities={metadata?.capabilities}
                               />
+                              <DryRunBadge estimate={dryRun} />
                             </div>
                           </>
                         ) : (

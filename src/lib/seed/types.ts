@@ -75,6 +75,7 @@ const SeedDatabaseType = z.enum([
   "influxdb3",
   "oxia",
   "databend",
+  "bigquery",
   "s3",
   "kubernetes",
   "mqtt",
@@ -185,6 +186,8 @@ export const SeedConnectionSchema = z
     // Declared for the reason skipObjectScan is: zod strips an undeclared key silently, and a seeded Databend Cloud
     // connection would lose the warehouse Cloud refuses to run without.
     warehouse: z.string().optional(),
+    // BigQuery only: the job location; absent, the provider detects it.
+    location: z.string().optional(),
     // S3-compatible object storage only: the signing region. Declared for the reason skipObjectScan is: zod strips an
     // undeclared key silently, and a seeded connection to a server with a region of its own would be refused for a
     // region the file did name.

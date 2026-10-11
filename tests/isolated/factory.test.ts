@@ -592,7 +592,7 @@ describe("createDatabaseProvider", () => {
   test("the factory error lists databend after trino, in the SQL block", async () => {
     const conn = makeConnection("not-an-engine");
     await expect(createDatabaseProvider(conn)).rejects.toThrow(
-      /Supported types: .*\bdruid, trino, databend, cassandra\b/,
+      /Supported types: .*\bdruid, trino, databend, bigquery, cassandra\b/,
     );
   });
 
@@ -945,6 +945,7 @@ describe("createDatabaseProvider", () => {
     }
 
     expect(cannotCancel.sort()).toEqual([
+      "bigquery",
       "cassandra",
       "couchbase",
       "db2",

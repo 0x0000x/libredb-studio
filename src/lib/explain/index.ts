@@ -11,6 +11,7 @@ import { druidNativeStrategy } from "./druid-native";
 import { trinoJsonStrategy } from "./trino-json";
 import { duckdbJsonStrategy } from "./duckdb-json";
 import { databendTextStrategy } from "./databend-text";
+import { bigqueryDryRunStrategy } from "./bigquery-dryrun";
 
 export type { ExplainMode, ExplainStrategy } from "./types";
 export type { ExplainPlanInput } from "./types";
@@ -30,6 +31,7 @@ const registry: Record<ExplainFormat, ExplainStrategy> = {
   "trino-json": trinoJsonStrategy,
   "duckdb-json": duckdbJsonStrategy,
   "databend-text": databendTextStrategy,
+  "bigquery-dryrun": bigqueryDryRunStrategy,
 };
 
 export function getExplainStrategy(format: ExplainFormat | undefined): ExplainStrategy | null {

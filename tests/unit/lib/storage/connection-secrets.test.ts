@@ -142,6 +142,8 @@ describe("the classification is exhaustive by construction", () => {
         // Databend's warehouse (design 6.1). A compute NAME from the Cloud console's DSN, which picks where a
         // statement runs and grants nothing, so `public`.
         "warehouse",
+        // BigQuery's job location: a region name, which grants nothing, so `public`.
+        "location",
         // Kubernetes' API path, namespace list and TLS server name: where requests go and what the tree draws, so
         // `public`; the token and the client key that authenticate them are classified as secrets.
         "apiPath",

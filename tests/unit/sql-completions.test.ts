@@ -871,3 +871,37 @@ describe("Completion addresses outside the default container (#1397)", () => {
     expect(labels).toEqual(["id", "user_id", "total"]);
   });
 });
+
+describe("Qualified table labels", () => {
+  const tableItems = (labelQualified?: boolean) =>
+    ["ds_a", "ds_b"].map((ds) => ({
+      label: "dim_keywords",
+      labelLower: "dim_keywords",
+      columnNames: "id",
+      container: [ds],
+      segment: "dim_keywords",
+      qualify: true,
+      ...(labelQualified === undefined ? {} : { labelQualified }),
+    }));
+  const tablesAt = (items: ReturnType<typeof tableItems>) => {
+    const monaco = createMockMonaco();
+    registerSQLCompletionProvider(monaco, createSchemaCache({ tableItems: items }), "bigquery");
+    const line = "SELECT * FROM dim";
+    return monaco
+      ._getProvider()!
+      .provideCompletionItems(createMockModel(line), createPosition(1, line.length + 1))
+      .suggestions.filter((item) => item.insertText.endsWith("dim_keywords"));
+  };
+
+  test("a qualified suggestion is labelled with its address and filters on its name", () => {
+    const items = tablesAt(tableItems(true));
+    expect(items.map((item) => item.label)).toEqual(["ds_a.dim_keywords", "ds_b.dim_keywords"]);
+    expect(items.map((item) => item.filterText)).toEqual(["dim_keywords", "dim_keywords"]);
+  });
+
+  test("without the flag the label stays the bare name", () => {
+    const items = tablesAt(tableItems());
+    expect(items.map((item) => item.label)).toEqual(["dim_keywords", "dim_keywords"]);
+    expect(items.every((item) => item.filterText === undefined)).toBe(true);
+  });
+});

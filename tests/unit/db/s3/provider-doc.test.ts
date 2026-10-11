@@ -1475,7 +1475,7 @@ describe("DOCKERHUB.md", () => {
 
 /** The chart description, exactly. */
 const CHART_DESCRIPTION =
-  "Web-based SQL IDE for cloud-native teams supporting thirty engines - PostgreSQL, MySQL, SQLite, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Apache Cassandra, libSQL, Prometheus, Apache Kafka, MQTT, etcd, Neo4j, Milvus, Qdrant, InfluxDB, InfluxDB 3, Oxia, Databend, S3-compatible object storage and Kubernetes";
+  "Web-based SQL IDE for cloud-native teams supporting thirty-one engines - PostgreSQL, MySQL, SQLite, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Apache Cassandra, libSQL, Prometheus, Apache Kafka, MQTT, etcd, Neo4j, Milvus, Qdrant, InfluxDB, InfluxDB 3, Oxia, Databend, S3-compatible object storage and Kubernetes";
 
 describe("the chart and the operator name S3 where an evaluator searches", () => {
   test("50. the description, the three keywords, the mirror and both CSV descriptions", () => {

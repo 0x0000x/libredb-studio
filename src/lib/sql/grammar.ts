@@ -187,6 +187,22 @@ export interface SqlGrammar {
    */
   readonly backslashAlwaysEscapes: boolean;
   /**
+   * Whether `'''…'''` and `"""…"""` are string literals that run to the next unescaped triple, newlines and lone
+   * quotes included. GoogleSQL's form, and the only dialect here with it; absent means false.
+   *
+   * It is a fact the text cannot settle: `'''a'b'''` is one literal where the doubling rule reads an empty string, a
+   * quote and a string, so a `;` or a `DROP` after the lone quote would be code under that reading.
+   */
+  readonly tripleQuotedStrings?: boolean;
+  /**
+   * Whether a backslash escapes the next character inside a backtick identifier (a\`b is one name). GoogleSQL's
+   * form; every other dialect doubles the backtick instead. Absent means false.
+   *
+   * It is a fact the text cannot settle: `a\` WHERE x = '` is one identifier here and an identifier plus code
+   * under the doubling reading, so a `;` after it would hide inside the name or run as a statement.
+   */
+  readonly backtickBackslashEscapes?: boolean;
+  /**
    * How a script is cut into the units the engine receives (E2E pass of 2026-10-03/04,
    * #1312). Before this fact existed every code `;` was a boundary in every dialect, so a
    * PL/SQL procedure, a SQLite trigger and a T-SQL batch were each cut at their inner `;`
@@ -703,6 +719,33 @@ const DATABEND_GRAMMAR: SqlGrammar = {
 };
 
 /**
+ * BigQuery (GoogleSQL), every fact measured on 2026-10-11 through `jobs.query` dry runs, which validate a statement
+ * without running or billing it.
+ */
+const BIGQUERY_GRAMMAR: SqlGrammar = {
+  // COMMENT: `SELECT 1 # x` and `SELECT 1 #> 2` both validate, so a `#` hides the rest of its line.
+  hash: "comment",
+  // A SUBSCRIPT: `SELECT [1,2][OFFSET(0)]` validates, and `SELECT 1 AS [a]` is `Unexpected "["`.
+  bracket: "subscript",
+  // FLAT: `SELECT /* a /* b */ 1` validates, and the same text with a trailing `*/` is `Unexpected "/"`.
+  blockComment: "flat",
+  // `SELECT q'{a}'` is a syntax error: the `q` is an identifier and `'{a}'` a stray string.
+  alternateQuoting: false,
+  // `SELECT 1 // x` is `Unexpected "/"`.
+  doubleSlashComment: false,
+  // `'it\'s'` and `"it\"s"` validate, a backslash before a line feed is "Illegal escaped newline", and a doubled
+  // quote is no escape: `'it''s'` is "concatenated string literals must be separated by whitespace or comments".
+  backslashAlwaysEscapes: true,
+  // `'''a'b''c'''`, `"""a"b""c"""` and a triple with a line feed inside all validate.
+  tripleQuotedStrings: true,
+  // `` `a\`b` `` is ONE identifier a`b, and a doubled backtick is a syntax error (dry runs, 2026-10-11).
+  backtickBackslashEscapes: true,
+  // A script (`BEGIN … END`) is sent whole as one job, which the shared splitter does not model.
+  script: DEFAULT_SQL_GRAMMAR.script,
+  trailingLimitClauses: DEFAULT_SQL_GRAMMAR.trailingLimitClauses,
+};
+
+/**
  * The established readings, one row per fact per dialect.
  *
  * A dialect absent from this table is at the compatibility default because its
@@ -861,6 +904,7 @@ const SQL_GRAMMARS: Partial<Record<DatabaseType, SqlGrammar>> = {
   cassandra: CASSANDRA_GRAMMAR,
   influxdb3: DATAFUSION_GRAMMAR,
   databend: DATABEND_GRAMMAR,
+  bigquery: BIGQUERY_GRAMMAR,
 };
 
 /**

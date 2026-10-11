@@ -608,7 +608,8 @@ export type ExplainFormat =
   | "druid-native"
   | "trino-json"
   | "duckdb-json"
-  | "databend-text";
+  | "databend-text"
+  | "bigquery-dryrun";
 
 /**
  * How deep an engine's container chain is, in the TYPE rather than only in a derivation.
@@ -1197,6 +1198,13 @@ export interface ProviderCapabilities {
    * reader would guess, and the next one would be added to a provider and forgotten here.
    */
   tablesAreDerivedGroupings?: boolean;
+  /**
+   * True when a bare table name resolves nowhere unless the connection names a default container, so a completion
+   * must insert the container too even when no default is known. BigQuery: a table is addressed `dataset.table`, and
+   * with no default dataset a bare name is an error. Absent means a bare name may resolve, which keeps the editor's
+   * rule: qualify only outside a KNOWN default container.
+   */
+  tablesNeedContainer?: boolean;
   /**
    * True when the engine admits exactly ONE open handle per database FILE, because
    * opening the file takes an exclusive lock: a second open of a file this process

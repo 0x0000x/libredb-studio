@@ -117,6 +117,8 @@ const LITERAL_ESCAPE: Record<DatabaseType, LiteralEscape> = {
   // is one quote and a backslash escapes the next character, so it is doubled first (design 5.1). The live round
   // trip of the escaping corpus, `INSERT ... VALUES` included, passed on the pinned image (L4).
   databend: "double-and-backslash",
+  // GoogleSQL escapes the quote as \\' and does not accept doubling.
+  bigquery: "backslash",
   // SQL++ spells its literals the way JSON does — `char ::= unicode-character |
   // '\' ( '\' | '"' | "'" | 'b' | 'f' | 'n' | 'r' | 't' | 'u' hex hex hex hex )`.
   // Doubling is not in that grammar, so a doubled quote is not one literal there.

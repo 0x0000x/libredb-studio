@@ -392,6 +392,7 @@ const BARE_TYPE_FAMILY: Record<string, InferredKind> = {
 const NOTHING_STANDS_ALONE: readonly string[] = [];
 
 const STANDS_ALONE: Record<DatabaseType, readonly string[]> = {
+  bigquery: NOTHING_STANDS_ALONE,
   postgres: [
     "character varying",
     "varchar",
@@ -728,6 +729,7 @@ function sqlTypeOf(column: string, rows: readonly Record<string, unknown>[], sou
 type BinaryLiteral = "standard-hex" | "zero-x" | "binary-hex" | "pg-bytea" | "hextoraw" | "unhex" | "text";
 
 const BINARY_LITERAL: Record<DatabaseType, BinaryLiteral> = {
+  bigquery: "text",
   postgres: "pg-bytea",
   // Measured on MySQL 26.7.0: `SELECT HEX(X'0102deadbeef')` answers `0102DEADBEEF` and
   // `SELECT LENGTH(X'')` answers 0, so MySQL is here rather than in `zero-x` even

@@ -27,12 +27,12 @@
 
 ## Overview
 
-LibreDB Studio provides a RESTful API for database management operations. The API supports PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage and Kubernetes.
+LibreDB Studio provides a RESTful API for database management operations. The API supports PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage and Kubernetes.
 
 ### Key Features
 
 - **JWT Authentication** - Secure token-based authentication stored in HTTP-only cookies
-- **Multi-Database Support** - Thirty engines: PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, MQTT, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage, Kubernetes
+- **Multi-Database Support** - Thirty-one engines: PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, MQTT, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage, Kubernetes
 - **AI-Powered Insights** - EXPLAIN explanations, query-safety analysis and schema docs, streamed
 - **Real-time Health Monitoring** - Database metrics and performance insights
 
@@ -2144,7 +2144,7 @@ The object is one shape on the wire. Fields the server reads from a request body
 change how a connection is opened — are the coordinates and credentials (`id`, `name`, `type`,
 `host`, `port`, `user`, `password`, `database`, `schema`, `connectionString`), plus `ssl`,
 `sshTunnel`, `serviceName` (Oracle), `instanceName` (MSSQL), `localDataCenter` (Cassandra),
-`authSource` (MongoDB), `saslMechanism` (Kafka), `allowInsecureAuth` (Db2, InfluxDB, InfluxDB 3, Oxia, Databend, S3, MQTT), `dataServers` (Oxia), `warehouse` (Databend), `region` (S3), `apiPath`, `namespaces` and `tlsServerName` (Kubernetes), `queryTimeout`, `agentUser`, `agentPassword`, `apiKeyId`/`apiKeySecret`
+`authSource` (MongoDB), `saslMechanism` (Kafka), `allowInsecureAuth` (Db2, InfluxDB, InfluxDB 3, Oxia, Databend, S3, MQTT), `dataServers` (Oxia), `warehouse` (Databend), `region` (S3), `apiPath`, `namespaces` and `tlsServerName` (Kubernetes), `location` (BigQuery), `queryTimeout`, `agentUser`, `agentPassword`, `apiKeyId`/`apiKeySecret`
 (Elasticsearch, #708), and `readOnly` (#1089). `color`, `environment`, `group`,
 `managed`, `seedId`, and `createdAt` are client-side bookkeeping that travel in the same object.
 
@@ -2179,6 +2179,7 @@ interface DatabaseConnection {
   apiPath?: string;     // Kubernetes only: a server path prefix every API request goes under, such as /k8s/clusters/c-1 behind a Rancher proxy; starts with / and names segments of letters, digits, dots, hyphens, underscores, tildes, colons or @, with no api, apis, proxy, namespaces, nodes, services, pods, openapi or version segment, no //, . or .. segment, %, query or fragment; one trailing / is removed, so / alone is no prefix
   namespaces?: string;  // Kubernetes only: the namespaces the object tree lists, at most 1,000 DNS-1123 labels separated by commas or spaces; when set, no namespace list call is made
   tlsServerName?: string; // Kubernetes only: the host name the API server's certificate is checked against and sent as SNI (kubeconfig tls-server-name)
+  location?: string;    // BigQuery only: where jobs run (EU, US, europe-west3, ...); absent, the provider detects it from the datasets. Not a secret
   skipObjectScan?: boolean; // read no catalog when this connection opens: zero reads on connect, so the editor is usable immediately and the object tree offers a load action instead of scanning (#765, an Oracle owner with 43,512 tables froze the browser on connect). It defers the CATALOG, not the walk: a connection that also declares `keyScan` keeps the sidebar's Objects / Keys switch, and the switch reads nothing, because the key panel mounts only when Keys is chosen and then takes the same bounded sample (#1169)
   readOnly?: boolean;      // refuse writes, value edits and maintenance before any request (#1089). Accepted only where the engine's provider enforces it: true anywhere else is refused at seed load and before any provider is built, and a value that is not a boolean is refused everywhere
   managed?: boolean;       // true = admin-controlled: not editable in the UI, secrets kept on the server
@@ -2189,7 +2190,7 @@ interface DatabaseConnection {
   apiKeySecret?: string;   // the pair's secret half; either alone (after trim) falls back to user/password rather than sending a key built from an empty half
 }
 
-type DatabaseType = 'postgres' | 'mysql' | 'sqlite' | 'libsql' | 'duckdb' | 'mongodb' | 'redis' | 'oracle' | 'db2' | 'mssql' | 'libredb' | 'couchbase' | 'clickhouse' | 'druid' | 'elasticsearch' | 'opensearch' | 'trino' | 'cassandra' | 'prometheus' | 'kafka' | 'etcd' | 'neo4j' | 'milvus' | 'qdrant' | 'influxdb' | 'influxdb3' | 'oxia' | 'databend' | 's3' | 'kubernetes' | 'mqtt';
+type DatabaseType = 'postgres' | 'mysql' | 'sqlite' | 'libsql' | 'duckdb' | 'mongodb' | 'redis' | 'oracle' | 'db2' | 'mssql' | 'libredb' | 'couchbase' | 'clickhouse' | 'druid' | 'elasticsearch' | 'opensearch' | 'trino' | 'bigquery' | 'cassandra' | 'prometheus' | 'kafka' | 'etcd' | 'neo4j' | 'milvus' | 'qdrant' | 'influxdb' | 'influxdb3' | 'oxia' | 'databend' | 's3' | 'kubernetes' | 'mqtt';
 type ConnectionEnvironment = 'production' | 'staging' | 'development' | 'local' | 'other';
 ```
 

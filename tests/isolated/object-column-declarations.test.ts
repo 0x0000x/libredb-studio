@@ -127,6 +127,7 @@ const EXPECTED_COLUMN_KINDS: Readonly<Record<DatabaseType, readonly string[]>> =
   oxia: [],
   // Four kinds, each with columns (design 2.4): a table, a view, a materialized view and a dynamic table.
   databend: ["table", "view", "materialized_view", "dynamic_table"],
+  bigquery: ["table", "view", "materialized_view"],
   // Neither kind has columns: a bucket and an object are listed and their Source read, and neither declares
   // `hasColumns`.
   s3: [],
@@ -216,9 +217,9 @@ describe("the fleet census of object column declarations", () => {
     // The population every assertion below iterates. If this were empty or short, each of those
     // loops would certify only the engines it happened to reach, so it is asserted first.
     expect([...CENSUS_TYPES].sort()).toEqual([...SHIPPED_DATABASE_TYPES].sort());
-    // EXTERNAL_DATABASE_TYPES.length (29 with db2, neo4j, milvus, qdrant, influxdb, influxdb3, oxia, databend, s3 and
+    // EXTERNAL_DATABASE_TYPES.length (30 with db2, neo4j, milvus, qdrant, influxdb, influxdb3, oxia, databend, bigquery, s3 and
     // kubernetes) plus the embedded store.
-    expect(CENSUS_TYPES).toHaveLength(31);
+    expect(CENSUS_TYPES).toHaveLength(32);
     expect(Object.keys(EXPECTED_COLUMN_KINDS).sort()).toEqual([...SHIPPED_DATABASE_TYPES].sort());
     // A row naming nothing would make its type-id's census pass on the empty set, so the design's
     // table has three such rows, and they are named here: every engine but Oxia, S3 and Kubernetes has at least one

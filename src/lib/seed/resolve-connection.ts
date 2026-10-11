@@ -69,7 +69,8 @@ export async function resolveConnection(
       });
       throw new SeedConnectionError(CUSTOM_CONNECTIONS_DISABLED_MESSAGE, 403, ApiErrorCode.CUSTOM_CONNECTIONS_DISABLED);
     }
-    return connection;
+    // `managed` is the operator's grant (BigQuery reads it to use server credentials).
+    return { ...connection, managed: false };
   }
 
   if (effectiveId) {

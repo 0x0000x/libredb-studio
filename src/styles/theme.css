@@ -189,6 +189,7 @@
   --studio-hue-teal-alt: #022f2e;
   --studio-hue-teal-tint: #00bba7;
   --studio-hue-cyan: #005f78;
+  --studio-hue-cyan-alt: #104e64;
   --studio-hue-cyan-tint: #00b8db;
   /*
    * Two identity hues carry a filled control of their own: Database Docs' "AI
@@ -322,6 +323,7 @@
   --studio-hue-teal-alt: #46ecd5;
   --studio-hue-teal-tint: #00bba7;
   --studio-hue-cyan: #00d3f2;
+  --studio-hue-cyan-alt: #53eafd;
   --studio-hue-cyan-tint: #00b8db;
   --studio-hue-teal-solid: #009689;
   --studio-hue-teal-solid-hover: #00bba7;
@@ -432,6 +434,7 @@
   --color-hue-teal-alt: var(--studio-hue-teal-alt);
   --color-hue-teal-tint: var(--studio-hue-teal-tint);
   --color-hue-cyan: var(--studio-hue-cyan);
+  --color-hue-cyan-alt: var(--studio-hue-cyan-alt);
   --color-hue-cyan-tint: var(--studio-hue-cyan-tint);
   --color-hue-fuchsia: var(--studio-hue-fuchsia);
   --color-hue-fuchsia-alt: var(--studio-hue-fuchsia-alt);

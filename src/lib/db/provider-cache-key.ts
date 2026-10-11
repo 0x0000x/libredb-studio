@@ -146,6 +146,8 @@ export async function providerCacheKey(
  *   servers receive the password and which warehouse Cloud resumes and bills, so a connection naming another
  *   warehouse must not be handed a provider whose requests name this one. The fingerprint does not frame it, and
  *   `connectionIdentity` leaves it out on purpose: it picks compute, not the catalog.
+ * - `location` decides where a BigQuery job runs, so a connection whose location moved must not be handed a
+ *   provider opened with the old one.
  * - `region` decides the scope every S3 request is signed for, so a connection naming another region must not be
  *   handed a provider whose signer uses this one. The fingerprint does not frame it and `connectionIdentity` leaves it
  *   out: it names a signing scope, not a server or a catalog.
@@ -175,6 +177,7 @@ async function credentialDigest(connection: DatabaseConnection): Promise<string>
     connection.allowInsecureAuth === true ? "insecure-auth" : "",
     connection.dataServers ?? "",
     connection.warehouse ?? "",
+    connection.location ?? "",
     connection.region ?? "",
     connection.namespaces ?? "",
     tunnel?.authMethod ?? "",

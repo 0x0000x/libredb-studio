@@ -125,6 +125,14 @@ describe("providerCacheKey frames the Databend warehouse a statement runs on", (
   });
 });
 
+describe("providerCacheKey frames the BigQuery location", () => {
+  test("identical connections share a key, and a changed location changes it", async () => {
+    const bq: DatabaseConnection = { ...base, type: "bigquery", location: "EU" };
+    expect(await providerCacheKey({ ...bq })).toBe(await providerCacheKey(bq));
+    expect(await providerCacheKey({ ...bq, location: "US" })).not.toBe(await providerCacheKey(bq));
+  });
+});
+
 describe("providerCacheKey frames the Elasticsearch API key pair", () => {
   test("two connections differing only in either half, or in having a pair at all, answer different keys", async () => {
     const paired = await providerCacheKey({ ...base, apiKeyId: "key-one", apiKeySecret: "secret-one" });
@@ -225,6 +233,7 @@ describe("providerCacheKey frames every public field that decides who a connecti
     ["allowInsecureAuth", { ...base, allowInsecureAuth: true }, base],
     ["dataServers", { ...base, dataServers: "a.internal:6648" }, { ...base, dataServers: "b.internal:6648" }],
     ["warehouse", { ...base, warehouse: "analytics" }, { ...base, warehouse: "etl" }],
+    ["location", { ...base, location: "EU" }, { ...base, location: "US" }],
     ["region", { ...base, region: "eu-central-1" }, { ...base, region: "us-east-1" }],
     ["namespaces", { ...base, namespaces: "shop" }, { ...base, namespaces: "web" }],
     [

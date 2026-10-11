@@ -321,6 +321,7 @@ interface MockFieldCopy {
   readonly fieldPlaceholders?: Readonly<Record<string, string>>;
   readonly fieldOptions?: Readonly<Record<string, readonly { readonly value: string; readonly label: string }[]>>;
   readonly showSshTunnel?: false;
+  readonly showSslPanel?: false;
   readonly readOnlyHint?: string;
 }
 
@@ -525,7 +526,8 @@ mock.module("@/lib/db-ui-config", () => ({
   }),
   takesConnectionField: (type: string, field: string) => mockFields(type).includes(field),
   // The real rule over the mirrored table: false only where an entry declares `showSshTunnel: false`.
-  offersSshTunnel: (type: string) => MOCK_FIELD_COPY[type]?.showSshTunnel !== false,
+  offersSshTunnel: (type: string) => ({ ...MOCK_FIELD_COPY[type], ...mockDeclaredCopy }).showSshTunnel !== false,
+  offersSslPanel: (type: string) => ({ ...MOCK_FIELD_COPY[type], ...mockDeclaredCopy }).showSslPanel !== false,
   // The real pair's rule, mirrored the way `isFileBased` below mirrors its own: the modal reads
   // its field copy through these two, and the real ones run in tests/unit/lib/db-ui-config.test.ts.
   connectionFieldLabel: (config: MockFieldCopy, field: string, fallback: string) =>
@@ -715,6 +717,17 @@ describe("ConnectionModal", () => {
     mockFormOverrides = { type: "postgres", sslMode: "disable" };
     rerender(React.createElement(ConnectionModal, createDefaultProps()));
     expect(queryByLabelText("Send the password without TLS")).toBeNull();
+  });
+
+  test("an engine that hides both the SSL/TLS and SSH panels still draws its consent to a cleartext password", () => {
+    mockFormOverrides = { type: "postgres", sslMode: "disable" };
+    mockDeclaredFields = { postgres: ["host", "port", "user", "password", "database", "allowInsecureAuth"] };
+    mockDeclaredCopy = { showSslPanel: false, showSshTunnel: false };
+    const { getByLabelText, queryByText } = render(React.createElement(ConnectionModal, createDefaultProps()));
+
+    expect(queryByText("SSL / TLS")).toBeNull();
+    expect(queryByText("SSH Tunnel")).toBeNull();
+    expect(getByLabelText("Send the password without TLS")).not.toBeNull();
   });
 
   test("the consent box draws the hint its type declares, and none where the type declares none", () => {
