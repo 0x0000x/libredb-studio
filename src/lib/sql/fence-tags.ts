@@ -124,6 +124,8 @@ const ENGINE_FENCE_TAGS: Readonly<Record<DatabaseType, true>> = Object.freeze({
   // A ```firestore block holds one statement of the console's read-only Admin SDK subset. No alias: `firebase` names a
   // platform of many products, and `js` and `javascript` name a language, not an engine.
   firestore: true,
+  // A ```rabbitmq block holds one JSON read request the editor runs as it is.
+  rabbitmq: true,
 });
 
 /**

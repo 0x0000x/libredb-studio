@@ -105,6 +105,7 @@ const EXPECTED: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   // One statement is one request, and its own `prepareQuery` hands the text on with `offset: 0`: a page is the
   // statement's own `.limit(n)` and `.startAfter(...)`, which the user writes (Firestore spec 3.4).
   firestore: false,
+  rabbitmq: false,
 });
 
 const TYPES = Object.keys(EXPECTED) as DatabaseType[];

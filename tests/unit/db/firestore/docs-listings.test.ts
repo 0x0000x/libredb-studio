@@ -41,7 +41,7 @@ describe("docs/providers/README.md", () => {
   });
 
   test("names Firestore among the providers split across modules", () => {
-    expect(index).toContain("S3, Kubernetes and Firestore are). The official product name");
+    expect(index).toContain("S3, Kubernetes, Firestore and RabbitMQ are). The official product name");
   });
 });
 
@@ -65,15 +65,17 @@ describe("docs/ADDING_A_PROVIDER.md", () => {
   });
 
   test("the driver-free ids count bigquery and firestore", () => {
-    expect(guide).toContain("eighteen shipped ids do:");
-    expect(guide).toContain("`databend`, `kubernetes`, `bigquery` and `firestore`");
+    expect(guide).toContain("nineteen shipped ids do:");
+    expect(guide).toContain("`databend`, `kubernetes`, `bigquery`, `firestore` and `rabbitmq`");
   });
 
   test("the QueryTab example and the queryDialect row name every member of their unions", () => {
     expect(guide).toContain(
-      "| 'influxql' | 'oxia' | 's3' | 'kubectl' | 'mqtt' | 'firestore';  // Add your type here if needed",
+      "| 'influxql' | 'oxia' | 's3' | 'kubectl' | 'mqtt' | 'firestore' | 'rabbitmq';  // Add your type here if needed",
     );
-    expect(guide).toContain("\\| 'oxia' \\| 's3' \\| 'mqtt' \\| 'firestore' \\| 'kubectl' \\| undefined`");
+    expect(guide).toContain(
+      "\\| 'oxia' \\| 's3' \\| 'mqtt' \\| 'firestore' \\| 'rabbitmq' \\| 'kubectl' \\| undefined`",
+    );
   });
 
   test("the no-driver answer names BigQuery and Firestore with their docs", () => {
@@ -135,7 +137,7 @@ describe("the READMEs and Docker Hub", () => {
     const couchbase = lines.findIndex((line) => line.startsWith("| **Couchbase** |"));
     expect(lines[couchbase + 1]).toBe("| **Firestore** | none, REST | Read-only Admin SDK query chain |");
     expect(hub).toContain(
-      "Firestore, Prometheus, InfluxDB, Apache Kafka, MQTT, Oxia, S3-compatible object storage and Kubernetes are read-only too",
+      "Firestore, Prometheus, InfluxDB, Apache Kafka, MQTT, RabbitMQ, Oxia, S3-compatible object storage and Kubernetes are read-only too",
     );
   });
 });

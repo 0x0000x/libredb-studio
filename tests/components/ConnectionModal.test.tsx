@@ -142,6 +142,7 @@ const mockSetApiPath = mock(() => {});
 const mockSetNamespaces = mock(() => {});
 const mockSetTlsServerName = mock(() => {});
 const mockSetRegion = mock(() => {});
+const mockSetAmqpPort = mock(() => {});
 const mockSetSaslMechanism = mock(() => {});
 
 let mockFormOverrides: Record<string, unknown> = {};
@@ -172,6 +173,8 @@ function getDefaultForm() {
     setTlsServerName: mockSetTlsServerName,
     region: "",
     setRegion: mockSetRegion,
+    amqpPort: "",
+    setAmqpPort: mockSetAmqpPort,
     readOnlyOffered: false,
     credentialWarning: undefined as string | undefined,
     host: "localhost",
@@ -301,6 +304,7 @@ const MOCK_CONNECTION_FIELDS: Record<string, string[]> = {
   databend: ["host", "port", "user", "password", "database", "warehouse", "allowInsecureAuth"],
   s3: ["host", "port", "user", "password", "database", "region", "allowInsecureAuth"],
   kubernetes: ["host", "port", "password", "database", "namespaces", "apiPath", "tlsServerName"],
+  rabbitmq: ["host", "port", "user", "password", "amqpPort", "apiPath", "allowInsecureAuth"],
 };
 /**
  * A field list one test declares on top of the mirrored table, reset before every test. The dataServers cases
@@ -506,6 +510,26 @@ const MOCK_FIELD_COPY: Record<string, MockFieldCopy> = {
     },
     readOnlyHint:
       "Kubernetes connections are read-only in this version, whether or not this is ticked: Studio sends the cluster no write.",
+  },
+  // Mirrored from the real entry; tests/unit/lib/db-ui-config.test.ts pins the real one.
+  rabbitmq: {
+    fieldLabels: {
+      host: "Host",
+      port: "Management port",
+      amqpPort: "AMQP port",
+      apiPath: "Path prefix",
+      allowInsecureAuth: "Send the password without TLS",
+    },
+    fieldPlaceholders: { amqpPort: "Empty: browse only" },
+    fieldHints: {
+      amqpPort:
+        "5672, or 5671 with TLS. Only for stream reads; leave empty to browse only. Test Connection checks the management API only; the AMQP port is checked on the first read.",
+      apiPath:
+        "The path the management API is served under, for management.path_prefix or a reverse proxy location, such as /rabbitmq. Empty for a direct connection.",
+      allowInsecureAuth:
+        "Sends the username and password in clear text to the management API and the AMQP port, where anyone on the path can read them. Prefer an SSL mode and the TLS ports 15671 and 5671.",
+    },
+    showSshTunnel: false,
   },
 };
 
@@ -1735,6 +1759,7 @@ describe("ConnectionModal", () => {
       "apiPath",
       "namespaces",
       "tlsServerName",
+      "amqpPort",
     ] as const;
 
     /** Each connection-field label a render draws, keyed by the input it names (`htmlFor`). */
@@ -1909,6 +1934,22 @@ describe("ConnectionModal", () => {
         },
         MOCK_FIELD_COPY.kubernetes.fieldHints ?? {},
       ],
+      // The Host row's two boxes under the words the provider's sentences use, and the AMQP port and Path prefix boxes;
+      // every declared hint, the consent box's among them, because the default form's SSL Mode is disable.
+      [
+        "rabbitmq",
+        "rabbitmq",
+        {},
+        {
+          host: "Host",
+          port: "Management port",
+          user: "Username",
+          password: "Password",
+          amqpPort: "AMQP port",
+          apiPath: "Path prefix",
+        },
+        MOCK_FIELD_COPY.rabbitmq.fieldHints ?? {},
+      ],
       ["sqlite", "sqlite", {}, FILE_PATH, {}],
       ["duckdb", "duckdb", {}, FILE_PATH, {}],
       ["libredb", "libredb", {}, FILE_PATH, {}],
@@ -1943,14 +1984,14 @@ describe("ConnectionModal", () => {
         "postgres",
         "postgres",
         {},
-        labelsFor("host", "user", "password", "database"),
+        labelsFor("host", "port", "user", "password", "database"),
         ["host", "port", "user", "password", "database"],
       ],
       [
         "mongodb",
         "mongodb",
         {},
-        labelsFor("host", "user", "password", "database", "authSource"),
+        labelsFor("host", "port", "user", "password", "database", "authSource"),
         ["host", "port", "user", "password", "database", "authSource"],
       ],
       [
@@ -1967,37 +2008,37 @@ describe("ConnectionModal", () => {
         "trino",
         "trino",
         {},
-        labelsFor("host", "user", "password", "database", "schema"),
+        labelsFor("host", "port", "user", "password", "database", "schema"),
         ["host", "port", "user", "password", "database", "schema"],
       ],
       [
         "cassandra",
         "cassandra",
         {},
-        labelsFor("host", "user", "password", "database", "localDataCenter"),
+        labelsFor("host", "port", "user", "password", "database", "localDataCenter"),
         ["host", "port", "user", "password", "database", "localDataCenter"],
       ],
-      ["libsql", "libsql", {}, labelsFor("host", "user", "password"), ["host", "port", "user", "password"]],
+      ["libsql", "libsql", {}, labelsFor("host", "port", "user", "password"), ["host", "port", "user", "password"]],
       [
         "elasticsearch",
         "elasticsearch",
         {},
-        labelsFor("host", "user", "password", "apiKeyId", "apiKeySecret"),
+        labelsFor("host", "port", "user", "password", "apiKeyId", "apiKeySecret"),
         ["host", "port", "user", "password", "apiKeyId", "apiKeySecret"],
       ],
       [
         "kafka",
         "kafka",
         {},
-        labelsFor("host", "user", "password", "saslMechanism"),
+        labelsFor("host", "port", "user", "password", "saslMechanism"),
         ["host", "port", "user", "password", "saslMechanism"],
       ],
-      ["etcd", "etcd", {}, labelsFor("host", "user", "password"), ["host", "port", "user", "password"]],
+      ["etcd", "etcd", {}, labelsFor("host", "port", "user", "password"), ["host", "port", "user", "password"]],
       [
         "s3",
         "s3",
         {},
-        labelsFor("host", "user", "password", "database", "region"),
+        labelsFor("host", "port", "user", "password", "database", "region"),
         ["host", "port", "user", "password", "database", "region", "allowInsecureAuth"],
       ],
       ["sqlite", "sqlite", {}, labelsFor("database"), ["database"]],
@@ -2202,7 +2243,7 @@ describe("ConnectionModal: Kubernetes' namespace list, API path and TLS server n
       expect(setter).toHaveBeenCalledWith(typed);
 
       for (const type of Object.keys(MOCK_CONNECTION_FIELDS)
-        .filter((t) => t !== "kubernetes")
+        .filter((t) => !MOCK_CONNECTION_FIELDS[t].includes(field))
         .concat("postgres")) {
         mockFormOverrides = { type };
         rerender(React.createElement(ConnectionModal, createDefaultProps()));
@@ -2210,6 +2251,65 @@ describe("ConnectionModal: Kubernetes' namespace list, API path and TLS server n
       }
     },
   );
+});
+
+describe("ConnectionModal: RabbitMQ's AMQP port and Path prefix", () => {
+  afterEach(() => {
+    cleanup();
+    mockFormOverrides = {};
+  });
+
+  test("draws the AMQP port box for rabbitmq only: labelled, hinted, numeric, with the browse-only placeholder", () => {
+    mockFormOverrides = { type: "rabbitmq", amqpPort: "5672" };
+    const { container, rerender } = render(React.createElement(ConnectionModal, createDefaultProps()));
+    const box = container.querySelector("#amqpPort") as HTMLInputElement;
+    expect(box.value).toBe("5672");
+    expect(box.placeholder).toBe("Empty: browse only");
+    expect(box.getAttribute("inputmode")).toBe("numeric");
+    expect(box.getAttribute("autocomplete")).toBe("off");
+    expect(box.getAttribute("aria-describedby")).toBe("amqpPort-hint");
+    expect(container.querySelector('label[for="amqpPort"]')?.textContent).toBe("AMQP port");
+    expect(container.querySelector('[data-testid="amqpPort-hint"]')?.textContent).toBe(
+      MOCK_FIELD_COPY.rabbitmq.fieldHints?.amqpPort,
+    );
+    fireEvent.change(box, { target: { value: "" } });
+    expect(mockSetAmqpPort).toHaveBeenCalledWith("");
+
+    for (const type of Object.keys(MOCK_CONNECTION_FIELDS)
+      .filter((t) => t !== "rabbitmq")
+      .concat("postgres")) {
+      mockFormOverrides = { type };
+      rerender(React.createElement(ConnectionModal, createDefaultProps()));
+      expect(container.querySelector("#amqpPort")).toBeNull();
+    }
+  });
+
+  test("names the Host row's two boxes Host and Management port, the words the provider's sentences use", () => {
+    mockFormOverrides = { type: "rabbitmq" };
+    const { container, rerender } = render(React.createElement(ConnectionModal, createDefaultProps()));
+    expect(container.querySelector('label[for="host"]')?.textContent).toBe("Host");
+    expect(container.querySelector('label[for="port"]')?.textContent).toBe("Management port");
+
+    // A port label is drawn only where one is declared, and the shipped table declares it for RabbitMQ alone.
+    for (const type of Object.keys(MOCK_CONNECTION_FIELDS)
+      .filter((t) => t !== "rabbitmq")
+      .concat("postgres")) {
+      mockFormOverrides = { type };
+      rerender(React.createElement(ConnectionModal, createDefaultProps()));
+      expect(container.querySelector('label[for="port"]')).toBeNull();
+    }
+  });
+
+  test("labels the shared API path box Path prefix, with RabbitMQ's hint, and draws no SSH tunnel panel", () => {
+    mockFormOverrides = { type: "rabbitmq", apiPath: "/rabbitmq" };
+    const { container, queryByText } = render(React.createElement(ConnectionModal, createDefaultProps()));
+    expect(container.querySelector('label[for="apiPath"]')?.textContent).toBe("Path prefix");
+    expect(container.querySelector('[data-testid="apiPath-hint"]')?.textContent).toBe(
+      MOCK_FIELD_COPY.rabbitmq.fieldHints?.apiPath,
+    );
+    expect((container.querySelector("#apiPath") as HTMLInputElement).value).toBe("/rabbitmq");
+    expect(queryByText("SSH Tunnel")).toBeNull();
+  });
 });
 
 describe("ConnectionModal: the Host box address and the credential warning", () => {

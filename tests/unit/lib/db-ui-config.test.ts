@@ -16,6 +16,8 @@ import {
   isFileBased,
   KUBERNETES_FIELD_HINTS,
   KUBERNETES_FIELD_RULES,
+  RABBITMQ_FIELD_HINTS,
+  RABBITMQ_FIELD_RULES,
   offersSshTunnel,
   offersSslPanel,
   readOnlyHint,
@@ -26,6 +28,8 @@ import {
   type DatabaseUIConfig,
 } from "@/lib/db-ui-config";
 import { SHOWCASE_DATABASE_ORDER, SHOWCASE_RANK, listShowcaseDatabases } from "@/lib/db-showcase";
+import { readAmqpPort, readPathPrefix } from "@/lib/db/providers/stream/rabbitmq/connection-options";
+import { AMQP_PORT_SHAPE } from "@/lib/db/providers/stream/rabbitmq/errors";
 import type { DatabaseConnection, DatabaseType } from "@/lib/types";
 import {
   buildDatabendConnectionOptions,
@@ -90,6 +94,7 @@ const ALL_TYPES: DatabaseType[] = [
   "kubernetes",
   "mqtt",
   "firestore",
+  "rabbitmq",
 ];
 
 describe("db-ui-config", () => {
@@ -302,7 +307,7 @@ describe("db-ui-config", () => {
       expect(offersSshTunnel("postgres")).toBe(true);
     });
 
-    test("only kafka's, bigquery's and firestore's connections refuse an SSH tunnel, and only because their entries declare it", () => {
+    test("only kafka's, bigquery's, firestore's and rabbitmq's connections refuse an SSH tunnel, and only because their entries declare it", () => {
       // Derived from the declaration rather than typed out: a tunnel forwards one address, and a
       // Kafka client reaches every broker at the address the broker advertises (docs/providers/kafka.md).
       for (const type of ALL_TYPES) {
@@ -312,7 +317,7 @@ describe("db-ui-config", () => {
         });
       }
       const refusing = ALL_TYPES.filter((type) => !offersSshTunnel(type));
-      expect(refusing.sort()).toEqual(["bigquery", "firestore", "kafka"]);
+      expect(refusing.sort()).toEqual(["bigquery", "firestore", "kafka", "rabbitmq"]);
       // A file-based engine still answers true: its panel is hidden by isFileBased instead.
       expect(offersSshTunnel("sqlite")).toBe(true);
     });
@@ -472,12 +477,13 @@ describe("db-ui-config", () => {
      * token is the password, and the connection layer it shares with the InfluxQL type refuses a user on it (InfluxDB
      * spec A.3). Oxia has no user name either, and its provider refuses a non-empty `config.user` with "Oxia has no
      * user name: clear User. A bearer token goes under Token." (SB1-4.3) Kubernetes has no user name either: basic
-     * authentication is refused, and its provider refuses a non-empty `config.user` naming the field. Listed by name,
-     * so the read stays visible.
+     * authentication is refused, and its provider refuses a non-empty `config.user` naming the field. RabbitMQ has no
+     * database: virtual hosts are discovered, and its provider refuses a non-empty `config.database` naming the field.
+     * Listed by name, so the read stays visible.
      */
     const READ_ONLY_TO_REFUSE: Readonly<Record<"user" | "database", readonly DatabaseType[]>> = {
       user: ["qdrant", "influxdb3", "oxia", "kubernetes"],
-      database: [],
+      database: ["rabbitmq"],
     };
 
     test("every field read only to refuse it is really read and really not offered", () => {
@@ -949,14 +955,14 @@ describe("declared connection-field copy (#1085)", () => {
     // The consent box draws the type's own sentence, with no fallback, so a type that takes the field and declares no
     // hint would draw an empty paragraph under the box (InfluxDB spec R4).
     const taking = ALL_TYPES.filter((type) => takesConnectionField(type, "allowInsecureAuth"));
-    expect(taking).toEqual(["db2", "influxdb", "influxdb3", "oxia", "databend", "s3", "mqtt"]);
+    expect(taking).toEqual(["db2", "influxdb", "influxdb3", "oxia", "databend", "s3", "mqtt", "rabbitmq"]);
     for (const type of taking) {
       const hint = connectionFieldHint(getDBConfig(type), "allowInsecureAuth");
       expect({ type, hint: typeof hint, empty: hint?.length === 0 }).toEqual({ type, hint: "string", empty: false });
     }
   });
 
-  test("only libsql, db2, prometheus, kafka, etcd, neo4j, milvus, qdrant, the two InfluxDB types, oxia, databend, bigquery, s3, kubernetes, mqtt and firestore declare field copy, so every other engine draws every label and hint it drew before", () => {
+  test("only libsql, db2, prometheus, kafka, etcd, neo4j, milvus, qdrant, the two InfluxDB types, oxia, databend, bigquery, s3, kubernetes, mqtt, firestore and rabbitmq declare field copy, so every other engine draws every label and hint it drew before", () => {
     const declared = Object.entries(DB_UI_CONFIG)
       .filter(([, config]) => config.fieldLabels !== undefined || config.fieldHints !== undefined)
       .map(([type]) => type);
@@ -978,6 +984,7 @@ describe("declared connection-field copy (#1085)", () => {
       "kubernetes",
       "mqtt",
       "firestore",
+      "rabbitmq",
     ]);
     // The control that the walk saw the whole table rather than nothing.
     expect(Object.keys(DB_UI_CONFIG).sort()).toEqual([...ALL_TYPES].sort());
@@ -1038,6 +1045,108 @@ describe("declared field rules (Databend design 6.3)", () => {
     // Each sentence names its field first and holds no value, so a refusal never repeats what was typed.
     expect(DATABEND_FIELD_RULES.user?.required).toStartWith("User ");
     expect(DATABEND_FIELD_RULES.warehouse?.format?.sentence).toStartWith("Warehouse ");
+  });
+
+  test("RabbitMQ's form rules accept exactly what the provider's rules accept, which the dialog cannot import", () => {
+    const config = getDBConfig("rabbitmq");
+    expect(config.fieldRules).toBe(RABBITMQ_FIELD_RULES);
+    expect(config.fieldHints).toBe(RABBITMQ_FIELD_HINTS);
+    expect(RABBITMQ_FIELD_RULES.amqpPort?.format?.sentence).toBe(AMQP_PORT_SHAPE);
+    expect(RABBITMQ_FIELD_RULES.apiPath?.format?.sentence).toStartWith("Path prefix ");
+    const accepts = (read: (value: string) => unknown, value: string): boolean => {
+      try {
+        read(value);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const ports = ["1", "5672", "5671", "9999", "10000", "59999", "64999", "65499", "65529", "65535"];
+    const notPorts = ["0", "00", "05672", "65536", "65540", "70000", "123456", "-1", "+1", "1e3", " 1", "56 72", "x"];
+    for (const value of [...ports, ...notPorts]) {
+      expect({ value, dialog: RABBITMQ_FIELD_RULES.amqpPort?.format?.pattern.test(value) }).toEqual({
+        value,
+        dialog: accepts(readAmqpPort, value),
+      });
+    }
+    const prefixes = [
+      "/",
+      "/rabbitmq",
+      "/rabbitmq/",
+      "/a/b-c",
+      "/apis",
+      "/v1/api-x",
+      "/.a",
+      "/a..",
+      "/~u:@!$&'()*+,;=",
+      "/A_b.c",
+    ];
+    const notPrefixes = [
+      "rabbitmq",
+      "//",
+      "/a//b",
+      "/rabbitmq//",
+      "/.",
+      "/..",
+      "/a/./b",
+      "/api",
+      "/x/api",
+      "/api/",
+      "/a%2F",
+      "/a?b",
+      "/a#b",
+      "/a b",
+      "/é",
+    ];
+    for (const value of [...prefixes, ...notPrefixes]) {
+      expect({ value, dialog: RABBITMQ_FIELD_RULES.apiPath?.format?.pattern.test(value) }).toEqual({
+        value,
+        dialog: accepts(readPathPrefix, value),
+      });
+    }
+  });
+
+  test("RabbitMQ labels its port as the management port, offers no tunnel, and states its read-only mode", () => {
+    const config = getDBConfig("rabbitmq");
+    expect(config).toMatchObject({
+      label: "RabbitMQ",
+      defaultPort: "15672",
+      color: "text-hue-lime-alt",
+      showSshTunnel: false,
+      showConnectionStringToggle: false,
+      hostAcceptsUri: ["http", "https"],
+    });
+    expect(config.connectionFields).toEqual([
+      "host",
+      "port",
+      "user",
+      "password",
+      "amqpPort",
+      "apiPath",
+      "allowInsecureAuth",
+    ]);
+    expect(connectionFieldLabel(config, "allowInsecureAuth", "x")).toBe("Send the password without TLS");
+    expect(connectionFieldHint(config, "allowInsecureAuth")).toStartWith(
+      "Sends the username and password in clear text to the management API and the AMQP port",
+    );
+    expect(connectionFieldLabel(config, "port", "Port")).toBe("Management port");
+    // The field the provider's sentences call Host, not the dialog's "Host & Instance".
+    expect(connectionFieldLabel(config, "host", "Host & Instance")).toBe("Host");
+    // The shared Host row draws a port label only where one is declared, so no other engine's dialog gains one.
+    expect(
+      (Object.keys(DB_UI_CONFIG) as DatabaseType[]).filter(
+        (type) => DB_UI_CONFIG[type].fieldLabels?.port !== undefined,
+      ),
+    ).toEqual(["rabbitmq"]);
+    expect(connectionFieldLabel(config, "amqpPort", "x")).toBe("AMQP port");
+    expect(connectionFieldLabel(config, "apiPath", "x")).toBe("Path prefix");
+    expect(connectionFieldPlaceholder(config, "amqpPort", "5672")).toBe("Empty: browse only");
+    expect(connectionFieldHint(config, "amqpPort")).toBe(
+      "5672, or 5671 with TLS. Only for stream reads; leave empty to browse only. Test Connection checks the management API only; the AMQP port is checked on the first read.",
+    );
+    expect(connectionFieldHint(config, "port")).toBe("15671 with TLS; 443 when a TLS proxy serves the management API");
+    expect(connectionFieldHint(config, "host")).toContain("A path such as /rabbitmq goes in Path prefix.");
+    expect(readOnlyHint(config)).toContain("read-only whether or not this is ticked");
   });
 
   test("Kubernetes' form rules are the provider's patterns and sentences, which the dialog cannot import", () => {
@@ -1118,11 +1227,11 @@ describe("declared field rules (Databend design 6.3)", () => {
     );
   });
 
-  test("only databend, s3 and kubernetes declare field rules, so no other engine's Test Connection or Save is checked", () => {
+  test("only databend, s3, kubernetes and rabbitmq declare field rules, so no other engine's Test Connection or Save is checked", () => {
     const declaring = Object.entries(DB_UI_CONFIG)
       .filter(([, config]) => config.fieldRules !== undefined)
       .map(([type]) => type);
-    expect(declaring).toEqual(["databend", "s3", "kubernetes"]);
+    expect(declaring).toEqual(["databend", "s3", "kubernetes", "rabbitmq"]);
     for (const type of ALL_TYPES.filter((candidate) => !declaring.includes(candidate))) {
       expect(
         connectionFieldRefusal(
@@ -1390,6 +1499,9 @@ describe("db-showcase", () => {
         // Behind BigQuery and ahead of libSQL: the document database a Google Cloud team runs beside its databases,
         // so only libSQL and the embedded store move, as they did for BigQuery.
         "firestore",
+        // Behind Firestore and ahead of libSQL (#1656): the message broker a team runs beside its databases, so only
+        // libSQL and the embedded store move, as they did for Firestore.
+        "rabbitmq",
         "libsql",
         "libredb",
       ]);
@@ -1416,7 +1528,7 @@ describe("db-showcase", () => {
 });
 
 describe("Host box addresses and credential warnings", () => {
-  test("only milvus, qdrant, the two InfluxDB types, databend, s3 and kubernetes declare hostAcceptsUri, so every other Host box takes a host alone", () => {
+  test("only milvus, qdrant, the two InfluxDB types, databend, s3, kubernetes and rabbitmq declare hostAcceptsUri, so every other Host box takes a host alone", () => {
     expect(ALL_TYPES.filter((type) => hostUriSchemes(type).length > 0)).toEqual([
       "milvus",
       "qdrant",
@@ -1425,6 +1537,7 @@ describe("Host box addresses and credential warnings", () => {
       "databend",
       "s3",
       "kubernetes",
+      "rabbitmq",
     ]);
   });
 

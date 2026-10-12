@@ -28,12 +28,12 @@ None of it is a GitHub issue.
 **Sections**
 
 - [SQL statement reading](#sql-statement-reading) — S2–S7 · 5
-- [Drivers and connections](#drivers-and-connections) — D1-D306, U17 · 207
+- [Drivers and connections](#drivers-and-connections) — D1-D316, U17 · 216
 - [Value interpolation](#value-interpolation) — V1
 - [Row editing](#row-editing) — R1–R3 · 3
-- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U117 · 107
+- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U123 · 113
 - [Dependencies](#dependencies) — P1-P9 · 7
-- [Documentation](#documentation) — DOC3-DOC22 · 19
+- [Documentation](#documentation) — DOC3-DOC24 · 21
 - [Release pipeline](#release-pipeline) — REL1-REL8 · 8
 - [Chart configuration surface](#chart-configuration-surface) — N1 · 1
 - [Security Phase 1 deferrals](#security-phase-1-deferrals) — H1–H14 · 4
@@ -41,9 +41,9 @@ None of it is a GitHub issue.
 - [Security Phase 3 deferrals](#security-phase-3-deferrals) — K4-K8 · 5
 - [Security scanner triage](#security-scanner-triage) — SCAN1 · 1
 - [Agent M1 deferrals (#328)](#agent-m1-deferrals-328) — A2–A8 · 6
-- [Agent M2 deferrals (#329)](#agent-m2-deferrals-329) — B2-B107 · 43
+- [Agent M2 deferrals (#329)](#agent-m2-deferrals-329) — B2-B110 · 46
 - [Passkey deferrals (#785)](#passkey-deferrals-785) — PK1-PK9 · 8
-- [MCP server deferrals (#246)](#mcp-server-deferrals-246)
+- [MCP server deferrals (#246)](#mcp-server-deferrals-246) — MCP1-MCP3 · 3
 
 ---
 
@@ -1160,8 +1160,8 @@ test pins the behaviour that was chosen.
 
 ### D85. The `@/lib/auth` mock is hand-copied across a layer, untyped, and already misses four exports
 
-`grep -rl 'mock.module("@/lib/auth"' tests/` returns exactly 52 hits, re-measured 2026-10-12.
-Eighteen of them spread the real module and replace one function (`{ ...realAuth, getSession: mockGetSession }`, the agent routes' pattern).
+`grep -rl 'mock.module("@/lib/auth"' tests/` returns exactly 53 hits, re-measured 2026-10-12.
+Nineteen of them spread the real module and replace one function (`{ ...realAuth, getSession: mockGetSession }`, the agent routes' pattern).
 Thirty-one write out the same five-key object - `getSession`, `signJWT`, `verifyJWT`, `login`, `logout` - down to the same `mock(async () => "mock-token")` for a token nothing reads, and one of those thirty-one is `tests/helpers/object-edit-route-harness.ts`, a shared harness that could have been the factory and copied the stub instead.
 The remaining three write a shorter stub of their own, two with two keys and one with a single `getSession`.
 
@@ -3177,6 +3177,82 @@ Found 2026-10-12 while designing the Firestore provider.
 
 **Done when:** with `BIGQUERY_EMULATOR_HOST` set, no token source is built and no credential is read, requests carry a fixed placeholder bearer, a connection that carries a credential is refused with a sentence naming the variable, and tests show that no request reaches the token endpoint or the metadata server.
 
+### D308. Kafka parses a JSON payload with no depth bound
+
+`src/lib/db/providers/stream/kafka/decode.ts` hands a value that looks like JSON to `JSON.parse` with no nesting bound, so a deeply nested record value likely makes the query route's `NextResponse.json` throw on Node 24, as a RabbitMQ payload did before its provider bounded the depth.
+This is inferred from the shared pattern and not measured on Kafka.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** a Kafka record value nested deeper than a named bound is shown in its base64 or text form rather than parsed, with a test that sends one through the query route on Node 24 and Bun.
+
+### D309. Kafka declares `READ_ONLY_ENFORCED: false` by default, not by reason
+
+`READ_ONLY_ENFORCED.kafka` is false although the provider has no write path, which reads as a decision while it is an older provider's default; the RabbitMQ, S3 and Kubernetes rows declare true for the same reason Kafka could.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** `READ_ONLY_ENFORCED.kafka` is true with the S3 and Kubernetes comment wording, or the row says why it is false, with the capability test updated.
+
+### D310. Kubernetes runs its access reviews and namespace listing on every background cache miss
+
+The Kubernetes provider's `connect()` runs its self-review calls and the namespace listing, so every background provider build pays them, not only a user's Test Connection.
+`testConnectionWarnings?()` now gives a provider a place that only Test Connection calls.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** the checks that only a person needs to see move to `testConnectionWarnings()`, `connect()` keeps what every build needs, and a route-sequence test pins both.
+
+### D311. Two MQTT error sentences interpolate runtime or library text
+
+`src/lib/db/providers/keyvalue/mqtt/session.ts` builds `The broker could not be reached: ${error.message}` and `The broker sent a packet we cannot read: ${String(value)}`, so a runtime's or the parser's own words reach the user and the query history.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** both sentences are fixed text chosen by error code or case, with a test that a sentinel in the underlying error never reaches the route's answer.
+
+### D312. MQTT raises network failures and timeouts as `QueryError`
+
+`session.ts` raises a refused connection, a reset and a timeout as `QueryError`, which the API answers with 400 and no `retryable`, where a `ConnectionError` answers 503 retryable and a `TimeoutError` its own status.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** each network failure is a `ConnectionError` and each timeout a `TimeoutError`, with the route's status and `retryable` pinned per case.
+
+### D313. MQTT shows a payload that is not UTF-8 with replacement characters
+
+`src/lib/db/providers/keyvalue/mqtt/objects.ts` decodes a payload with `fatal: false`, so bytes that are not UTF-8 become U+FFFD with no base64 form and no notice.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** a payload that does not decode as UTF-8 is shown in a base64 form with a notice, with a test on invalid bytes.
+
+### D314. Two readers of `allowInsecureAuth` omit MQTT
+
+The `allowInsecureAuth` docblock in `src/lib/types.ts` and the comment in `src/lib/db/provider-cache-key.ts` list the engines that read the consent and leave MQTT out, while `docs/API_DOCS.md` and `docs/SEED_CONNECTIONS.md` include it; RabbitMQ's clause, added to all of them, does not fix MQTT's.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** every line that lists the readers names MQTT, held by a test that compares the lists with the types that declare the field.
+
+### D315. The API replaces every provider's timeout sentence with one shared sentence
+
+`createErrorResponse` in `src/lib/api/errors.ts` answers every `TimeoutError` with "Query timed out. Please try a simpler query or increase timeout.", so a provider's phase-specific sentence, such as RabbitMQ's "No answer from {host}:{port} within {n} s.", never reaches the user; 19 provider files write such sentences today.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** the route passes a provider's own `TimeoutError` message through for every provider, in a shared PR with a route test per class.
+
+### D316. The package does not export the object source part predicates
+
+`@libredb/studio` exports the `ObjectSourcePart` type (`src/exports/types.ts`) but neither `isSourcePartStatement` nor `isSourcePartUnavailable` (`src/lib/db/object-kinds.ts`), so an embedder that renders an object source itself cannot narrow a part to its statement or its refusal without copying the two predicates.
+The refusal predicate has never been exported.
+The statement predicate was kept unexported on purpose when the statement part was added, so that the package surface grows only by the owner's decision, not as a side effect of that change.
+
+Found 2026-10-12 in an external review of the object source statement change; pre-existing for the refusal predicate.
+
+**Done when:** the owner decides whether the package exports the predicates, and either both are exported from `src/exports/` with a test that imports them from the built package entry and the `attw` check passing, or this entry is closed as accepted.
+
 ## Value interpolation
 
 ### V1. Query history records the placeholders, not the values that were bound
@@ -4773,7 +4849,8 @@ Found 2026-10-11 in a live test of the Kubernetes provider against a kubeadm 1.3
 ### U114. Test Connection puts every caution after "The server reported:", on one line
 
 `cautionSentence` in `src/hooks/use-connection-form.ts` shows the cautions of a successful Test Connection as "The server reported: " followed by every caution joined by "; ".
-The prefix is true of a server's own notice (`connectWarnings()`, #1401), and false of a caution the provider computed itself, such as a probe result from `testConnectionWarnings()` or the route's own sentence when that method rejects: the dialog attributes Studio's words to the server.
+The prefix is true of a server's own notice (`connectWarnings()`, #1401), and false of a caution the provider computed itself, such as a probe result from `testConnectionWarnings()`, the route's own sentence when that method rejects, or a sentence a provider writes into `connectWarnings()` itself: the dialog attributes Studio's words to the server.
+RabbitMQ does both: its `connectWarnings()` says that AMQP port is empty, and it is the one provider that implements `testConnectionWarnings()`, so a browse-only RabbitMQ connection reads "Connected. The server reported: AMQP port is empty, ..." with up to three more cautions on the same line.
 Joining every caution into one line also makes several long cautions hard to read.
 The prefix is shared by every provider, so changing it changes every provider's dialog, and it was left as it is when `testConnectionWarnings()` was added.
 
@@ -4804,6 +4881,60 @@ On an engine whose keys are also folders, such as a Firestore document with subc
 Found 2026-10-12 while designing the Firestore provider.
 
 **Done when:** the panel counts a row that is both a key and a folder once, the level route's count rule says how such a pair is counted, and the Keys panel tests cover an engine whose every key is a folder.
+
+### U118. The row detail pretty-prints any depth, which throws past depth 5,160 in Chromium
+
+`RowDetailSheet` (`src/components/results-grid/RowDetailSheet.tsx`) renders a cell with `JSON.stringify(value, null, 2)`, whose cost grows with the square of the depth and which throws a `RangeError` past depth 5,160 in Chromium, for every provider that returns deep JSON.
+RabbitMQ shows a payload deeper than 64 levels in its base64 form so the shared classifier never hands it over, and keeps its headers to depth 8; other providers have no such bound.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** `classifyValue` and `renderDetail` bound the depth they render for every provider, with a component test that opens and copies a depth-6,000 value.
+
+### U119. The results grid renders any object shaped like a Node Buffer as binary
+
+`src/lib/export/binary.ts` and `src/components/results-grid/renderers/classify.ts` treat an object cell with `type: "Buffer"` and a `data` array as binary hex and hide its other members, so a JSON payload or header that happens to have that shape is shown as bytes.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** only a value the provider marks as binary renders as hex, and a test pins a Buffer-shaped JSON object rendering as JSON; the RabbitMQ integration test's `st-buffer-shape` case, which pins today's `binary`, then expects `json`.
+
+### U120. Every connection select lists every container of a one-level engine
+
+The connection-select inventory read in `src/hooks/use-connection-manager.ts` scopes containers only at depth 2, so a one-level engine lists every container on each select: 1 + min(V, 1,000) management GETs for a RabbitMQ broker with V virtual hosts, the embedded workspace included; `skipObjectScan` is the per-connection control.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** the owner decides whether the read honours `agentWalkScope` at depth 1, and either a shared change scopes it with a route-sequence test, or this entry is closed as accepted and the provider docs say so.
+
+### U121. The object source view's muted text is not muted in an embedded host without shadcn variables
+
+`src/components/object-source/ObjectSourceView.tsx` colours its secondary text with `text-muted-foreground`, and the package's `styles.css` defines no `--muted-foreground` (`src/styles/theme.css` has no such variable), so in a host that brings no shadcn variables of its own that text takes the body colour.
+An embedded browser pass measured it as rgb(24, 24, 27), the body text, while the view's warning colour, which the package does define, resolved.
+It is older than the object source statement change, which adds one more sentence in that colour.
+
+Found 2026-10-12 in an embedded browser pass of the object source statement change; pre-existing.
+
+**Done when:** the view's secondary text is muted in an embedded host that brings no shadcn variables, by a colour the package's own stylesheet defines, with a test that the packaged stylesheet defines every colour variable the view's classes read, and an embedded browser pass that measures it.
+
+### U122. A Source tab names an object by its dotted path, so an empty segment shows as "/."
+
+`sourceTab` in `src/hooks/use-tab-manager.ts` names the tab and its header `Source: ` plus the object's path joined with dots, not the label the tree draws.
+On RabbitMQ the default exchange's name is the empty string, so its tab reads `/.` while the tree labels it `(AMQP default)`, and a queue's tab reads `/.q-quorum-payments`.
+
+Found 2026-10-12 in a browser pass of the RabbitMQ provider.
+
+**Done when:** a Source tab names an object whose own segment is empty, or whose container is `/`, in words a reader can match to the tree row it was opened from, with a test over the default exchange's path and a browser pass.
+
+### U123. Switching the part of a read-only multi-part source saves the next part's text as the previous part's draft
+
+On a source with several parts and no editable one, such as a RabbitMQ queue (Queue, Counts, Bindings, Consumers), clicking from one part to the next writes a draft into `libredb_source_drafts_v1` (`SOURCE_DRAFTS_KEY`, `src/lib/storage/local-storage.ts`) under the part being left, holding the text of the part being opened: the queue part held the Counts JSON, Counts held Bindings, Bindings held Consumers.
+The tab is then marked "(unsaved edit)" although nothing was edited; after a reload every part shows its own fresh read, so no wrong text is shown, only the false mark and the stored drafts.
+`src/components/object-source/ObjectSourceView.tsx` is shared code.
+
+Found 2026-10-12 in a browser pass of the RabbitMQ provider, reproduced with scripted clicks.
+
+**Done when:** switching parts of a source writes no draft unless the user edited the part, a draft is stored under the part it was typed in, and a component test clicks through four read-only parts and finds no draft and no unsaved mark.
 
 ## Dependencies
 
@@ -5231,6 +5362,23 @@ The guide's two driver-free counts are DOC20's.
 Found 2026-10-12 while designing the Firestore provider; pre-existing.
 
 **Done when:** the guide's checklist names each of these guards beside the step that trips it, or a test derives the checklist's guard list from the files that read `DatabaseType`, so the next guard added is named too.
+
+### DOC23. `docs/providers/README.md` went without an MQTT row, and no guard caught it
+
+The provider table had no MQTT row from the MQTT provider's merge until the Firestore provider's change added one, and the modules note still names no MQTT.
+No test compares the table with the shipped type ids.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** the modules note names MQTT and a test holds the table's type ids equal to `SHIPPED_DATABASE_TYPES`.
+
+### DOC24. Two docs undercount what `readme:check` gates
+
+`docs/ADDING_A_PROVIDER.md` says `readme:check` gates "the seven translations" and lists seven, omitting `README_ko.md`, which `scripts/readme-check.mjs` gates as the eighth; the script's own docblock speaks of "Three invariants" and "all three files" while it lists four invariants over nine files.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** both texts name the eight translations and the four invariants, with the guide's list read from the script's `LOCALIZED` array by a test.
 
 ## Release pipeline
 
@@ -6610,6 +6758,32 @@ Found 2026-10-12 while designing the Firestore provider.
 
 **Done when:** an MCP metadata surface that reads no document is designed, `MCP_EXPOSABLE.firestore` turns true for it, and `run_read_query` and agent execution serve a `queryReadOnly` that runs one console statement under a per-run read bound, with tests; cited in `docs/AGENT.md` beside B106.
 
+### B108. RabbitMQ has no agent execution and no MCP `run_read_query`
+
+`MCP_EXPOSABLE.rabbitmq` is true for the metadata tools, and the provider implements no `queryReadOnly`, so agent execution of a workflow that sends statements and MCP `run_read_query` refuse it; plan mode works, walking the virtual host `/` only (`docs/providers/rabbitmq.md` section 8).
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** a stream read request is designed as an agent statement with its own read policy and bounds, `queryReadOnly` serves it, and `run_read_query` and agent execution run it, with tests; cited in `docs/AGENT.md` beside B105.
+
+### B109. The schema docs route puts database-written names in the prompt without the untrusted-content fence
+
+`POST /api/ai/describe-schema` (`src/app/api/ai/describe-schema/route.ts`) places the schema text the client built, which holds names anyone with write access to the database or broker chose, in the prompt with no untrusted-content fence, for every provider; the Docs tab posts it.
+The route has no tools, so the exposure is a spoofed document on the user's own screen, not an action.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** the route fences the names as plan mode and MCP do (`src/lib/agent/untrusted-content.ts`), with a test that a table named as an instruction is found only inside the fence.
+
+### B110. The answer card counts every inventoried object under the engine's entity noun
+
+The inventory chip of `src/components/agent/AnswerCard.tsx` prints the capture's object count with `capture.noun`, the engine's entity noun, so on an engine whose inventory holds several kinds the chip names them all by one kind.
+A RabbitMQ plan run's chip read "41 streams read" while the capture held 17 streams, 6 queues and 18 exchanges.
+
+Found 2026-10-12 in a plan-mode pass of the RabbitMQ provider.
+
+**Done when:** the chip names objects of several kinds as what they are, by kind or by a neutral noun, with a test over a capture that holds three kinds.
+
 ## Passkey deferrals (#785)
 
 Each was decided when passkey sign-in was designed, not overlooked.
@@ -6700,3 +6874,20 @@ Two tests belong to this work and are written first:
 Under a `basePath`, the root `/.well-known/` path cannot be served by a route inside the app; a redirect, a rewrite to an absolute URL or a proxy in front can serve it, and a live test pins the one chosen.
 
 **Done when:** an authorization server issues tokens audience-bound to the canonical MCP URL, `/api/mcp` validates them, the metadata document and the challenge pointer exist, and the two tests above pass.
+
+### MCP2. `inspect_schema` reports a capped listing as complete
+
+`src/lib/mcp/tools/inspect-schema.ts` builds its page from `listObjects` alone and never reads `KindCount.sampledFrom`, so a listing the provider capped is reported with `total_tables` equal to the cap and `has_more` false, and a named object outside it is not found: Kafka's topics above 2,000 today, RabbitMQ's streams above 500.
+A unit test of the RabbitMQ provider pins today's answer at 501 streams, so the fix moves a known test.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** `inspect_schema` reports a sampled count as a floor with `has_more` true and says how to reach an object outside the sample, for every provider, in a shared change.
+
+### MCP3. `inspect_schema` matches a named container case-insensitively
+
+`chooseContainer` compares names lower-cased, so on a RabbitMQ broker with virtual hosts `Billing` and `billing` a call naming `billing` reads whichever is listed first; Kubernetes namespaces are lower case, so it never mattered before.
+
+Found 2026-10-12 while designing the RabbitMQ provider.
+
+**Done when:** the chooser prefers an exact match and falls back to the case-insensitive one only when no exact match exists, for every provider, with a test on two names that differ by case.

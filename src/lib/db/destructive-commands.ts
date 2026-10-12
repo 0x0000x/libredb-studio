@@ -530,6 +530,9 @@ export const NON_SQL_DESTRUCTIVE_VOCABULARY: Readonly<Partial<Record<DatabaseTyp
     refuse: (text) => firestoreRefusal(text) ?? undefined,
     maxTextBytes: FIRESTORE_LIMITS.maxConsoleBytes,
   },
+  // RabbitMQ (#1656): a read request reads a stream's messages and nothing else, so no destructive verb exists to read
+  // and nothing is posted for an AI analysis.
+  rabbitmq: { operations: new Set<string>(), read: () => [], decidesAlone: true, safetyAnalysis: false },
   kubernetes: {
     operations: KUBERNETES_DESTRUCTIVE_OPERATIONS,
     read: readKubernetesOperations,

@@ -76,6 +76,7 @@ const MOCK_CONNECTION_FIELDS: Record<string, string[]> = {
   mqtt: ["host", "port", "user", "password", "database", "allowInsecureAuth"],
   // The project, the database and one credential; no host, port, user or connection string (Firestore spec 4.1).
   firestore: ["database", "schema", "password"],
+  rabbitmq: ["host", "port", "user", "password", "amqpPort", "apiPath", "allowInsecureAuth"],
 };
 const mockFields = (type: string): string[] =>
   MOCK_CONNECTION_FIELDS[type] ?? ["host", "port", "user", "password", "database"];
@@ -1982,6 +1983,7 @@ describe("useConnectionForm", () => {
     kubernetes: true,
     mqtt: true,
     firestore: true,
+    rabbitmq: true,
   };
 
   test("dbTypes offers every database type a connection can carry", () => {

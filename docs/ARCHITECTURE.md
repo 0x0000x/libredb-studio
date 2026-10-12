@@ -5,7 +5,7 @@ This document outlines the architectural patterns, tech stack, and system design
 ## System Overview
 
 LibreDB Studio is a hybrid, cloud-native database management tool that provides an IDE-like experience in the browser.
-It supports **33 database backends** via a Strategy Pattern abstraction: PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, Firestore, ClickHouse, Apache Druid, Trino, BigQuery, Databend, Apache Cassandra, Elasticsearch, OpenSearch, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, MQTT, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage, Kubernetes, LibreDB.
+It supports **34 database backends** via a Strategy Pattern abstraction: PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, Firestore, ClickHouse, Apache Druid, Trino, BigQuery, Databend, Apache Cassandra, Elasticsearch, OpenSearch, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, MQTT, RabbitMQ, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage, Kubernetes, LibreDB.
 The count is the `SHIPPED` record in [`src/lib/db/compatibility.ts`](../src/lib/db/compatibility.ts), which is exhaustive over `DatabaseType`; `elasticsearch` and `opensearch` are two ids served by one provider module, and `influxdb` and `influxdb3` are two ids served by one provider directory with a class each.
 
 It runs in two modes: as a **standalone Next.js app** and as an **embedded npm package** (`@libredb/studio`) consumed by libredb-platform. See [§4.6](#46-workspace-abstraction-npm-package-embedding).
@@ -74,6 +74,7 @@ graph TD
         TimeSeries --> Prometheus[(Prometheus)]
         TimeSeries --> InfluxDB[(InfluxDB / InfluxDB 3)]
         Stream --> Kafka[(Apache Kafka)]
+        Stream --> RabbitMQ[(RabbitMQ)]
         Graph --> Neo4j[(Neo4j)]
         Vector --> Milvus[(Milvus)]
         Vector --> Qdrant[(Qdrant)]
@@ -146,6 +147,7 @@ classDiagram
     BaseDatabaseProvider <|-- QdrantProvider
     BaseDatabaseProvider <|-- S3Provider
     BaseDatabaseProvider <|-- KubernetesProvider
+    BaseDatabaseProvider <|-- RabbitMQProvider
     BaseDatabaseProvider <|-- LibreDBProvider
 
     SQLBaseProvider <|-- PostgresProvider

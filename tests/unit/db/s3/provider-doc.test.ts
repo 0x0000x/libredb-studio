@@ -1467,7 +1467,7 @@ describe("DOCKERHUB.md", () => {
     expect(SHIPPED_DATABASE_TYPES).toHaveLength(EXTERNAL_DATABASE_TYPES.length + 1);
     expect(hub).toContain(`The ${ordinal(SHIPPED_DATABASE_TYPES.length)} row is the embedded LibreDB store`);
     expect(hub).toContain(
-      "Prometheus, InfluxDB, Apache Kafka, MQTT, Oxia, S3-compatible object storage and Kubernetes are read-only too",
+      "Prometheus, InfluxDB, Apache Kafka, MQTT, RabbitMQ, Oxia, S3-compatible object storage and Kubernetes are read-only too",
     );
     expect(hub).toContain(`of one of the ${word(EXTERNAL_DATABASE_TYPES.length)} drivers above`);
   });
@@ -1672,8 +1672,9 @@ describe("docs/providers/README.md", () => {
     expect(lines[influxdb3 + 1]).toBe(PROVIDERS_INDEX_ROW);
     expect(lines[influxdb3 + 2].startsWith("| Kubernetes | `kubernetes` |")).toBe(true);
     expect(lines[influxdb3 + 3].startsWith("| MQTT | `mqtt` |")).toBe(true);
-    expect(lines[influxdb3 + 4].startsWith("| LibreDB | `libredb` |")).toBe(true);
-    expect(index).toContain("Qdrant, InfluxDB, Oxia, Databend, S3, Kubernetes and Firestore are)");
+    expect(lines[influxdb3 + 4].startsWith("| RabbitMQ | `rabbitmq` |")).toBe(true);
+    expect(lines[influxdb3 + 5].startsWith("| LibreDB | `libredb` |")).toBe(true);
+    expect(index).toContain("Qdrant, InfluxDB, Oxia, Databend, S3, Kubernetes, Firestore and RabbitMQ are)");
     for (const fixture of S3_FIXTURES) {
       const row = lines.find((line) =>
         line.startsWith(`| S3-compatible object storage, ${fixture.name} | \`${fixture.service}\` |`),
@@ -1710,7 +1711,7 @@ describe("the architecture, provider, editor and guide docs", () => {
       `${word(EXTERNAL_DATABASE_TYPES.length)} external engines, plus the embedded LibreDB store`,
     );
     expect(claude).toContain(
-      "`oxia`, `milvus`, `qdrant`, `s3`, `kubernetes`, `libredb`) extend `BaseDatabaseProvider` directly",
+      "`oxia`, `milvus`, `qdrant`, `s3`, `kubernetes`, `rabbitmq`, `libredb`) extend `BaseDatabaseProvider` directly",
     );
     const architecture = read("docs/ARCHITECTURE.md");
     expect(architecture).toContain(`It supports **${ids} database backends**`);
@@ -1747,7 +1748,7 @@ describe("the architecture, provider, editor and guide docs", () => {
     );
     expect(optimization).toContain(`holds exactly those ${word(nonSql)},`);
     expect(provider.getCapabilities().supportsResultPagination).toBe(false);
-    expect(optimization).toContain("Fifteen providers cannot serve page two.");
+    expect(optimization).toContain("Sixteen providers cannot serve page two.");
     expect(optimization).toContain("Qdrant, Oxia and S3-compatible object storage answer it with page one.");
     expect(optimization).toContain("The S3 row names no operation and, like the Oxia row, is the gate's whole answer:");
     expect(optimization).toContain(
@@ -1774,9 +1775,9 @@ describe("the architecture, provider, editor and guide docs", () => {
     );
     // The thirteen HTTP-only and built-in ids the paragraph names, plus s3 and kubernetes, which reach their servers over
     // node:https.
-    expect(flat(guide)).toContain("Fifteen shipped type-ids need no driver:");
+    expect(flat(guide)).toContain("Sixteen shipped type-ids need no driver:");
     expect(flat(guide)).toContain(
-      "S3-compatible object storage over the S3 REST API, signed by Studio's own SigV4 code ([s3.md](./providers/s3.md)), and Kubernetes over the API server's REST API ([kubernetes.md](./providers/kubernetes.md)).",
+      "S3-compatible object storage over the S3 REST API, signed by Studio's own SigV4 code ([s3.md](./providers/s3.md)), Kubernetes over the API server's REST API ([kubernetes.md](./providers/kubernetes.md)), and RabbitMQ over its management HTTP API, with stream reads through the provider's own AMQP 0-9-1 client ([rabbitmq.md](./providers/rabbitmq.md)).",
     );
   });
 });
@@ -1937,7 +1938,7 @@ describe("the agent docs count the type-ids and name S3 where they list engines"
     expect(flow).toContain(
       "- On S3-compatible object storage the grounding carries bucket names only, never an object key, a prefix, a size or any object content (objects are listed by the Keys panel, not by the object walk).",
     );
-    expect(flow).toContain("On the twenty-three engines that declare no foreign keys at all");
+    expect(flow).toContain("On the twenty-four engines that declare no foreign keys at all");
     expect(flow).toContain(
       "Qdrant, Oxia, Databend, S3-compatible object storage and Kubernetes) this block carries no relations",
     );
@@ -1965,11 +1966,14 @@ describe("the complete engine lists outside the agent docs", () => {
     expect(read("README_ko.md")).toContain(
       "InfluxDB 3 (SQL), Oxia, S3-compatible object storage, Kubernetes에 연결할 수 있으며",
     );
-    // The newest-engine history names Firestore as the newest in README.md, MQTT one step back, Kubernetes before
-    // that, S3 before Kubernetes and Databend before S3; the translations still name MQTT as the newest. The chain is a claim about ORDER, so each link is pinned at both
-    // ends: an engine added without moving the head leaves the previous head claiming a title it no longer holds,
-    // which is exactly what this change did to Kubernetes until the `not` assertions below were added.
-    expect(readme).toContain("Firestore is the newest: the Admin SDK query chain");
+    // The newest-engine history names RabbitMQ as the newest in README.md, Firestore one step back, MQTT before
+    // Firestore, Kubernetes before MQTT, S3 before Kubernetes and Databend before S3; the translations still name MQTT
+    // as the newest. The chain is a claim about ORDER, so each link is pinned at both ends: an engine added without
+    // moving the head leaves the previous head claiming a title it no longer holds, which is exactly what this change
+    // did to Kubernetes until the `not` assertions below were added.
+    expect(readme).toContain("RabbitMQ is the newest: the management API browses");
+    expect(readme).not.toContain("Firestore is the newest");
+    expect(readme).toContain("Firestore came before RabbitMQ: the Admin SDK query chain");
     expect(readme).not.toContain("MQTT is the newest");
     expect(readme).toContain("MQTT came before Firestore: one subscription reads");
     expect(readme).not.toContain("Kubernetes is the newest");
@@ -2011,10 +2015,12 @@ describe("the complete engine lists outside the agent docs", () => {
     );
     expect(provider.getCapabilities().supportsInlineRowEdit).toBe(false);
     const guide = read("docs/ADDING_A_PROVIDER.md");
-    expect(guide).toContain("'oxia' | 'databend' | 's3' | 'kubernetes' | 'bigquery' | 'mqtt' | 'firestore';");
     expect(guide).toContain(
-      "'oxia' | 'databend' | 's3' | 'kubernetes' | 'bigquery' | 'mqtt' | 'firestore' | 'cockroachdb';",
+      "'oxia' | 'databend' | 's3' | 'kubernetes' | 'bigquery' | 'mqtt' | 'firestore' | 'rabbitmq';",
     );
-    expect(guide).toContain("· oxia · databend · s3 · kubernetes · mqtt · firestore · libredb");
+    expect(guide).toContain(
+      "'oxia' | 'databend' | 's3' | 'kubernetes' | 'bigquery' | 'mqtt' | 'firestore' | 'rabbitmq' | 'cockroachdb';",
+    );
+    expect(guide).toContain("· oxia · databend · s3 · kubernetes · mqtt · firestore · rabbitmq · libredb");
   });
 });

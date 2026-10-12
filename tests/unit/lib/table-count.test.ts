@@ -102,6 +102,7 @@ const EXPECTED_COUNT: Readonly<Record<DatabaseType, string | null>> = Object.fre
   mqtt: null,
   // One aggregation statement of the console's subset, which the user runs from the tab it is written into.
   firestore: 'db.collection("Order\\"Items").count()',
+  rabbitmq: null,
 });
 
 async function censusCapabilities(type: DatabaseType): Promise<ProviderCapabilities> {

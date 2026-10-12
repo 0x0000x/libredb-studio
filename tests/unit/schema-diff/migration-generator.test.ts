@@ -1114,6 +1114,7 @@ describe("generateMigrationSQL: SQLite's grammar declares a foreign key only ins
     kubernetes: "engine-has-no-foreign-key",
     mqtt: "engine-has-no-foreign-key",
     firestore: "engine-has-no-foreign-key",
+    rabbitmq: "engine-has-no-foreign-key",
   };
 
   for (const [dialectId, entry] of Object.entries(GRAMMAR)) {
@@ -1265,6 +1266,11 @@ const MODIFIED_COLUMN_COVERAGE: Record<
   firestore: {
     label: "Firestore",
     reason: "A document store keeps no schema, so there is no column definition to change.",
+  },
+  // Not a table store (#1656): a stream holds messages, and the columns a read shows are the fixed shape of a message.
+  rabbitmq: {
+    label: "RabbitMQ",
+    reason: "A stream holds messages, not rows with declared columns, so there is no column definition to change.",
   },
 };
 
@@ -1549,6 +1555,7 @@ describe("generateMigrationSQL: dialects that cannot modify a column", () => {
           "kubernetes",
           "mqtt",
           "firestore",
+          "rabbitmq",
         ].includes(dialect)
       ) {
         expect(sql).toContain(`-- ${expected.label}: Cannot generate table DDL.`);
@@ -1621,6 +1628,7 @@ const TRANSACTION_WRAPPER_COVERAGE: Record<DatabaseType, "BEGIN;" | "BEGIN TRANS
   kubernetes: false, // one kubectl statement, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
   mqtt: false, // one JSON read request, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
   firestore: false, // one read-only query chain, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
+  rabbitmq: false, // one JSON read request, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
 };
 
 // Both creation and modification paths must use the same wrapper policy.
@@ -1660,6 +1668,7 @@ describe("generateMigrationSQL: transaction wrapper by dialect", () => {
             "kubernetes",
             "mqtt",
             "firestore",
+            "rabbitmq",
           ].includes(dialect)
         ) {
           expect(sql).toMatch(/^CREATE TABLE /m);

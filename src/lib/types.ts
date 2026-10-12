@@ -172,7 +172,13 @@ export type DatabaseType =
   // read requests of its closed request table. The connection's Database field is the project id, Schema the
   // database id (empty for `(default)`), and Password a service-account key, an ADC JSON or an access token; empty,
   // the credential comes from an emulator server or an operator-seeded server identity.
-  | "firestore";
+  | "firestore"
+  // RabbitMQ (#1656), one broker read only: virtual hosts, streams, queues and exchanges from the management HTTP API,
+  // and a bounded, non-destructive read of a stream's messages over AMQP 0-9-1 by a client of this repository's own
+  // (`src/lib/db/providers/stream/rabbitmq/`). Never takes a message from a queue and never writes to the broker. The
+  // connection's Port is the management port, `amqpPort` the AMQP port of stream reads (empty means browse only), and
+  // `apiPath` the management API's path prefix.
+  | "rabbitmq";
 
 export type ConnectionEnvironment = "production" | "staging" | "development" | "local" | "other";
 
@@ -375,8 +381,10 @@ export interface DatabaseConnection {
    * for its password, which it refuses to send with no TLS to a host that is not loopback unless this is `true`.
    * S3-compatible object storage reads it for the connection itself: the secret access key signs and is never
    * sent, but listings and previews are, so a connection with no TLS to a host that is not loopback and outside
-   * a tunnel is refused unless this is `true`, signed or unsigned. Read by no other engine: each of those either
-   * encrypts the password itself or follows its own driver's default.
+   * a tunnel is refused unless this is `true`, signed or unsigned. RabbitMQ reads it for both endpoints, the
+   * management API and the AMQP port: a password without TLS to a host that is not this machine is refused on both
+   * unless this is `true`. Read by no other engine: each of those either encrypts the password itself or follows its
+   * own driver's default.
    */
   allowInsecureAuth?: boolean;
   /**
@@ -406,12 +414,15 @@ export interface DatabaseConnection {
    */
   region?: string;
   /**
-   * Kubernetes only: a server path prefix every API request is sent under, such as `/k8s/clusters/c-1` behind a
-   * Rancher proxy. It starts with `/` and names segments of letters, digits, dots, hyphens, underscores, tildes, colons
-   * or `@`, with no `api`, `apis`, `proxy`, `namespaces`, `nodes`, `services`, `pods`, `openapi` or `version` segment,
-   * no `//`, `.` or `..` segment, `%`, query or fragment; the provider refuses anything else before any request. One
-   * trailing `/` is removed, so `/` alone is no prefix. It picks which cluster answers behind one host and port, so it
-   * is part of the connection's identity. Absent and empty are one value. Read by no other engine.
+   * Kubernetes and RabbitMQ: a server path prefix every API request is sent under, each with its own rule, which the
+   * provider applies before any request. Kubernetes: such as `/k8s/clusters/c-1` behind a Rancher proxy; it starts
+   * with `/` and names segments of letters, digits, dots, hyphens, underscores, tildes, colons or `@`, with no `api`,
+   * `apis`, `proxy`, `namespaces`, `nodes`, `services`, `pods`, `openapi` or `version` segment, no `//`, `.` or `..`
+   * segment, `%`, query or fragment. RabbitMQ, labelled Path prefix: the management API's path, for
+   * `management.path_prefix` or a reverse proxy location such as `/rabbitmq`; it starts with `/` and takes a plain
+   * path with no `%`, `?` or `#`, no empty, `.` or `..` segment, and no segment `api`. For both, one trailing `/` is
+   * removed, so `/` alone is no prefix. It picks which cluster or broker answers behind one host and port, so it is part
+   * of the connection's identity. Absent and empty are one value. Read by no other engine.
    */
   apiPath?: string;
   /**
@@ -432,9 +443,7 @@ export interface DatabaseConnection {
    * dataset's location, else the one most datasets share. Absent and empty are one value. Read by no other engine.
    */
   location?: string;
-  /**
-   * An AMQP 0-9-1 port, digits only. Read by no engine yet.
-   */
+  /** RabbitMQ only: the AMQP 0-9-1 port of stream reads; empty means browse only. Read by no other engine. */
   amqpPort?: string;
   /**
    * Read no catalog when this connection opens.
@@ -845,7 +854,8 @@ export interface QueryTab {
     | "s3"
     | "kubectl"
     | "mqtt"
-    | "firestore";
+    | "firestore"
+    | "rabbitmq";
   viewMode?: "results" | "explain" | "history" | "saved";
   explainPlan?: unknown;
   // Pagination state

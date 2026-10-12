@@ -211,6 +211,8 @@ export function ConnectionModal({
     setNamespaces,
     tlsServerName,
     setTlsServerName,
+    amqpPort,
+    setAmqpPort,
     connectionString,
     setConnectionString,
     mongoConnectionMode,
@@ -331,6 +333,19 @@ export function ConnectionModal({
   const uiConfig = getDBConfig(type);
   const takesInsecureAuthConsent = takesConnectionField(type, "allowInsecureAuth");
   const databaseLabel = connectionFieldLabel(uiConfig, "database", `${databaseFieldLabel} Name`);
+  // The port box shares the Host row's label; an engine that declares a port label of its own gets it drawn above the
+  // box, and every other engine's row stays as it was.
+  const portLabel = connectionFieldLabel(uiConfig, "port", "");
+  const portBox = (
+    <Input
+      id="port"
+      value={port}
+      onChange={(e) => setPort(e.target.value)}
+      autoComplete="off"
+      aria-describedby={describedByHint(uiConfig, "port")}
+      className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
+    />
+  );
 
   const formContent = (
     <>
@@ -665,7 +680,7 @@ export function ConnectionModal({
                           {connectionFieldLabel(uiConfig, "host", "Host & Instance")}
                         </Label>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <div className={cn("grid grid-cols-1 md:grid-cols-4 gap-3", portLabel !== "" && "items-end")}>
                         <Input
                           id="host"
                           value={host}
@@ -687,14 +702,16 @@ export function ConnectionModal({
                           }
                           className="md:col-span-3 h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs"
                         />
-                        <Input
-                          id="port"
-                          value={port}
-                          onChange={(e) => setPort(e.target.value)}
-                          autoComplete="off"
-                          aria-describedby={describedByHint(uiConfig, "port")}
-                          className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
-                        />
+                        {portLabel === "" ? (
+                          portBox
+                        ) : (
+                          <div className="space-y-2">
+                            <Label htmlFor="port" className="text-xs font-medium text-fg-muted">
+                              {portLabel}
+                            </Label>
+                            {portBox}
+                          </div>
+                        )}
                       </div>
                       {hostError !== undefined && (
                         <p id={HOST_ERROR_ID} data-testid={HOST_ERROR_ID} role="alert" className="text-xs text-danger">
@@ -950,8 +967,9 @@ export function ConnectionModal({
                   )}
 
                   {/*
-                    Kubernetes' namespace list, API path and TLS server name, each drawn where the engine takes the
-                    field, the way the warehouse is. The provider checks each and names the field when it refuses it.
+                    Kubernetes' namespace list, API path (RabbitMQ's Path prefix) and TLS server name, each drawn where
+                    the engine takes the field, the way the warehouse is. The provider checks each and names the field
+                    when it refuses it.
                   */}
                   {takesConnectionField(type, "namespaces") && (
                     <div className="space-y-2">
@@ -974,6 +992,32 @@ export function ConnectionModal({
                     </div>
                   )}
 
+                  {/*
+                    RabbitMQ's AMQP port, the one port stream reads use, drawn where the engine takes the field. Its
+                    placeholder says what an empty box means, because a greyed port number would read as a default.
+                  */}
+                  {takesConnectionField(type, "amqpPort") && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Server strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
+                        <Label htmlFor="amqpPort" className="text-xs font-medium text-fg-muted">
+                          {connectionFieldLabel(uiConfig, "amqpPort", "AMQP port")}
+                        </Label>
+                      </div>
+                      <Input
+                        id="amqpPort"
+                        value={amqpPort}
+                        onChange={(e) => setAmqpPort(e.target.value)}
+                        placeholder={connectionFieldPlaceholder(uiConfig, "amqpPort", "")}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        spellCheck={false}
+                        aria-describedby={describedByHint(uiConfig, "amqpPort")}
+                        className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
+                      />
+                      <DeclaredFieldHint config={uiConfig} field="amqpPort" />
+                    </div>
+                  )}
                   {takesConnectionField(type, "apiPath") && (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 mb-1">

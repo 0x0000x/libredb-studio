@@ -31,6 +31,7 @@ import {
   S3Icon,
   MqttIcon,
   FirestoreIcon,
+  RabbitMQIcon,
   KubernetesIcon,
 } from "@/components/icons/db-icons";
 import type { DatabaseConnection, DatabaseType } from "@/lib/types";
@@ -71,9 +72,9 @@ export interface DatabaseUIConfig {
     // `fieldOptions` below declares.
     | "saslMechanism"
     // Db2 (#786), both InfluxDB types (InfluxDB spec I7), Oxia for its token, Databend for its password, and
-    // S3-compatible object storage for the connection itself: the consent to connect without TLS, drawn as a checkbox
-    // while SSL Mode is disable, under the sentence the type declares in `fieldHints`. The provider refuses a
-    // connection with no TLS unless it is set.
+    // S3-compatible object storage for the connection itself, and MQTT and RabbitMQ for their passwords: the consent
+    // to connect without TLS, drawn as a checkbox while SSL Mode is disable, under the sentence the type declares in
+    // `fieldHints`. The provider refuses a connection with no TLS unless it is set.
     | "allowInsecureAuth"
     // Oxia only (O6): a cluster's data-server addresses, one text box.
     | "dataServers"
@@ -83,8 +84,8 @@ export interface DatabaseUIConfig {
     | "location"
     // S3-compatible object storage only: the signing region, one text box.
     | "region"
-    // Kubernetes only: the server path prefix (Rancher's /k8s/clusters/<id>), the namespaces the tree lists, and the
-    // TLS server name, three text boxes.
+    // Kubernetes: the server path prefix (Rancher's /k8s/clusters/<id>), which RabbitMQ also takes as its Path prefix,
+    // and, Kubernetes only, the namespaces the tree lists and the TLS server name, three text boxes.
     | "apiPath"
     | "namespaces"
     | "tlsServerName"
@@ -106,7 +107,7 @@ export interface DatabaseUIConfig {
   fieldHints?: Partial<Record<ConnectionField, string>>;
   /**
    * The connection dialog's placeholder for a field, where this engine's example differs from the dialog's own.
-   * Read through `connectionFieldPlaceholder`; the `database` and `region` boxes read it.
+   * Read through `connectionFieldPlaceholder`; the `database`, `location`, `region` and `amqpPort` boxes read it.
    */
   fieldPlaceholders?: Partial<Record<ConnectionField, string>>;
   /**
@@ -298,6 +299,41 @@ export const KUBERNETES_FIELD_HINTS: Readonly<Partial<Record<ConnectionField, st
   apiPath: "Optional: a path every request goes under, such as /k8s/clusters/c-m-abc12 for a cluster behind Rancher.",
   tlsServerName:
     "Optional: the name the API server's certificate is checked against, when it differs from Host (kubeconfig tls-server-name).",
+});
+
+/**
+ * RabbitMQ's form checks, in the provider's own sentences. The provider module is server code the dialog cannot
+ * import, so each pattern is a copy of `readAmqpPort` and `readPathPrefix` in
+ * src/lib/db/providers/stream/rabbitmq/connection-options.ts, and tests/unit/lib/db-ui-config.test.ts holds each copy to
+ * the provider's rule over the same values. The provider names the exact Path prefix shape it refuses; the dialog's
+ * one pattern names all of them at once.
+ */
+export const RABBITMQ_FIELD_RULES: Readonly<Partial<Record<ConnectionField, ConnectionFieldRule>>> = Object.freeze({
+  amqpPort: {
+    format: {
+      pattern: /^(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/,
+      sentence: "AMQP port must be a whole number from 1 to 65535, such as 5672. Nothing was sent.",
+    },
+  },
+  apiPath: {
+    format: {
+      pattern: /^(?:\/|(?:\/(?!api(?:\/|$))(?!\.{1,2}(?:\/|$))[A-Za-z0-9._~!$&'()*+,;=:@-]+)+\/?)$/,
+      sentence:
+        "Path prefix starts with / and takes a plain path such as /rabbitmq: no empty, . or .. segment, no %, ? or #, and no segment named api. Nothing was sent.",
+    },
+  },
+});
+
+/** The sentences the connection dialog draws under RabbitMQ's fields, exported so the docs can be held to them. */
+export const RABBITMQ_FIELD_HINTS: Readonly<Partial<Record<ConnectionField, string>>> = Object.freeze({
+  host: "A host name, or a pasted https:// management address. A path such as /rabbitmq goes in Path prefix. An amqp:// or amqps:// URL is not taken here: enter its host, its port as AMQP port, and its user and password in their own fields.",
+  port: "15671 with TLS; 443 when a TLS proxy serves the management API",
+  amqpPort:
+    "5672, or 5671 with TLS. Only for stream reads; leave empty to browse only. Test Connection checks the management API only; the AMQP port is checked on the first read.",
+  apiPath:
+    "The path the management API is served under, for management.path_prefix or a reverse proxy location, such as /rabbitmq. Empty for a direct connection.",
+  allowInsecureAuth:
+    "Sends the username and password in clear text to the management API and the AMQP port, where anyone on the path can read them. Prefer an SSL mode and the TLS ports 15671 and 5671.",
 });
 
 export const DB_UI_CONFIG: Record<DatabaseType, DatabaseUIConfig> = {
@@ -972,6 +1008,36 @@ export const DB_UI_CONFIG: Record<DatabaseType, DatabaseUIConfig> = {
     readOnlyHint:
       "Firestore connections are read-only whether or not this is ticked, and not by a setting: this provider builds only the read requests of its closed request table, and none of them writes.",
   },
+  rabbitmq: {
+    // A mark drawn for Studio, never the project's own logo.
+    icon: RabbitMQIcon,
+    // Every base hue and every other identity `-alt` is an engine's, Firestore's `lime` among them, so `lime-alt`
+    // joined the identity steps with this entry (tests/unit/theme-accent-contrast.test.ts measures it).
+    color: "text-hue-lime-alt",
+    label: "RabbitMQ",
+    // The management API's port; 15671 with TLS.
+    defaultPort: "15672",
+    // Host and Management port hold the management API. An amqp:// URL is not taken: its parts go in their own fields.
+    showConnectionStringToggle: false,
+    // One tunnel carries one port, and the management API and AMQP use two, so the provider refuses a tunnel.
+    showSshTunnel: false,
+    hostAcceptsUri: ["http", "https"],
+    connectionFields: ["host", "port", "user", "password", "amqpPort", "apiPath", "allowInsecureAuth"],
+    fieldLabels: {
+      host: "Host",
+      port: "Management port",
+      amqpPort: "AMQP port",
+      apiPath: "Path prefix",
+      allowInsecureAuth: "Send the password without TLS",
+    },
+    // A greyed port number would read as a default the field does not have.
+    fieldPlaceholders: { amqpPort: "Empty: browse only" },
+    fieldHints: RABBITMQ_FIELD_HINTS,
+    fieldRules: RABBITMQ_FIELD_RULES,
+    // The dialog's own sentence says the mode can be turned off, which is false here.
+    readOnlyHint:
+      "RabbitMQ connections are read-only whether or not this is ticked: Studio sends the broker GET requests and stream reads only, never a publish or a take.",
+  },
   libredb: {
     icon: LibreDBIcon,
     color: "text-hue-violet",
@@ -1069,8 +1135,8 @@ export function offersSslPanel(type: DatabaseType): boolean {
  * The fallback is the caller's because the dialog's own words are not one table: the `database`
  * field alone reads "Database Name", "Database File Path" or "Database Name (optional override)"
  * by the mode the form is in, and the per-type branches still choose several. `port` shares the
- * host row's label and draws none of its own, so a label declared for it has nowhere to appear;
- * a hint declared for it does.
+ * host row's label, so the dialog draws one for it only where one is declared: an engine that
+ * declares none keeps the row it always had.
  */
 export function connectionFieldLabel(config: DatabaseUIConfig, field: ConnectionField, fallback: string): string {
   return config.fieldLabels?.[field] ?? fallback;

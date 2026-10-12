@@ -383,6 +383,18 @@
   "selectQuery": "db.collection(\"Order\\\"Items\").limit(100)",
   "countQuery": "db.collection(\"Order\\\"Items\").count()"
  },
+ "rabbitmq": {
+  "queryLanguage": "json",
+  "queryDialect": "rabbitmq",
+  "tabType": "rabbitmq",
+  "monacoLanguage": "json",
+  "offersColumnProfiling": false,
+  "offersCodeGeneration": false,
+  "offersCountQuery": false,
+  "tableQuery": "{\"vhost\": \"c0\", \"stream\": \"Order\\\"Items\", \"from\": \"last\", \"limit\": 50}",
+  "selectQuery": "{\"vhost\": \"c0\", \"stream\": \"Order\\\"Items\", \"from\": \"first\", \"limit\": 50}",
+  "countQuery": null
+ },
  "libredb": {
   "queryLanguage": "json",
   "queryDialect": "libredb",

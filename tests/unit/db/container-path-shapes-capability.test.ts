@@ -55,6 +55,7 @@ const EXPECTED_CONTAINER_PATH_SHAPES: Readonly<
   mqtt: "absent",
   // No container level at all: collections are object rows and deeper paths are Keys panel levels.
   firestore: "absent",
+  rabbitmq: "exact",
   libredb: "exact",
   duckdb: "prefixes",
   mssql: "prefixes",
@@ -162,7 +163,7 @@ describe("the declaration follows the check (#1147)", () => {
     expect(unknownTypeIds(callerFiles)).toEqual([]);
     const callers = callerFiles.map(providerTypeId).sort();
     const declaring = TYPES.filter((type) => EXPECTED_CONTAINER_PATH_SHAPES[type] !== "absent").sort();
-    expect(callers).toHaveLength(21);
+    expect(callers).toHaveLength(22);
     expect(callers).toEqual(declaring);
   });
 });

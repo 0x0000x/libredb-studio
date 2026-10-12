@@ -450,6 +450,7 @@ const GRAMMAR_COVERAGE: Record<DatabaseType, "established" | "default"> = {
   kubernetes: "default",
   mqtt: "default",
   firestore: "default",
+  rabbitmq: "default",
 };
 
 /**
@@ -707,6 +708,7 @@ const SQL_TEXT_COVERAGE: Record<DatabaseType, boolean> = {
   mqtt: false,
   // A JavaScript-shaped query chain, not SQL text.
   firestore: false,
+  rabbitmq: false,
 };
 
 describe("readsSqlText", () => {

@@ -1009,6 +1009,7 @@ const NON_SQL_DIALECTS: ReadonlySet<DatabaseType> = new Set<DatabaseType>([
   "kubernetes",
   "mqtt",
   "firestore",
+  "rabbitmq",
 ]);
 
 /**

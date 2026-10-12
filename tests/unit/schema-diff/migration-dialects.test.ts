@@ -51,6 +51,7 @@ const COLUMN_GRAMMAR: Record<DatabaseType, [string, string] | null> = {
   kubernetes: null,
   mqtt: null,
   firestore: null,
+  rabbitmq: null,
 };
 
 describe("migration dialect regressions (#284)", () => {

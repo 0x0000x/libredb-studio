@@ -227,7 +227,7 @@ const HUES: ReadonlyArray<{ hue: string; light: string; lightAlt: string }> = [
 ];
 
 /**
- * The fifteen hues where two engines share a hue and are held apart only by step, so
+ * The seventeen hues where two engines share a hue and are held apart only by step, so
  * the `-alt` is a distinct IDENTITY and has to join the separation set. Pinned by
  * `tests/unit/lib/db-ui-config.test.ts`, which asserts every engine colour differs.
  * `fuchsia` joined with Neo4j: of the hues with no identity `-alt` yet, only
@@ -263,6 +263,8 @@ const HUES: ReadonlyArray<{ hue: string; light: string; lightAlt: string }> = [
  * `lime` joined with Firestore as a base hue in HUES, not as an `-alt` here: every base hue and every `-alt` step was
  * already an engine's, and of the hues Tailwind ships, lime-800 clears AA in light (4.67) and leaves both closest
  * identity pairs where they were (0.0205 in light, 0.0160 in dark).
+ * `lime` joined with RabbitMQ (#1656), the last hue with no identity `-alt`: every base hue and every other `-alt`
+ * step was an engine's once Firestore took `lime`, and `lime-alt` clears every test below.
  */
 const IDENTITY_ALTS = [
   "blue",
@@ -281,6 +283,7 @@ const IDENTITY_ALTS = [
   "green",
   "amber",
   "pink",
+  "lime",
 ] as const;
 
 /**
