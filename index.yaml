@@ -4,6 +4,103 @@ entries:
   - annotations:
       artifacthub.io/category: database
       artifacthub.io/changes: |
+        - "Name Snowflake, the SQL warehouse read over its SQL API v2, in the description and the keywords"
+      artifacthub.io/containsSecurityUpdates: "false"
+      artifacthub.io/images: |
+        - name: libredb-studio
+          image: ghcr.io/libredb/libredb-studio:0.18.3
+          platforms:
+            - linux/amd64
+            - linux/arm64
+      artifacthub.io/license: MIT
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/libredb/libredb-studio#readme
+        - name: Container Image
+          url: https://github.com/libredb/libredb-studio/pkgs/container/libredb-studio
+        - name: Source
+          url: https://github.com/libredb/libredb-studio
+      artifacthub.io/prerelease: "false"
+    apiVersion: v2
+    appVersion: 0.18.3
+    created: "2026-10-12T23:17:27.534014416Z"
+    dependencies:
+    - condition: postgresql.enabled
+      name: postgresql
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.x.x
+    description: Web-based SQL IDE for cloud-native teams supporting thirty-four engines
+      - PostgreSQL, MySQL, SQLite, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis,
+      Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino,
+      BigQuery, Snowflake, Apache Cassandra, libSQL, Prometheus, Apache Kafka, MQTT,
+      RabbitMQ, etcd, Neo4j, Milvus, Qdrant, InfluxDB, InfluxDB 3, Oxia, Databend,
+      S3-compatible object storage and Kubernetes
+    digest: f549cf17390f998039c0383959e31fc369adff746d0e3aa4360d1dda32cd8440
+    home: https://github.com/libredb/libredb-studio
+    icon: https://raw.githubusercontent.com/libredb/libredb-studio/main/public/logo.svg
+    keywords:
+    - sql
+    - ide
+    - database
+    - postgresql
+    - mysql
+    - mongodb
+    - redis
+    - sqlite
+    - oracle
+    - mssql
+    - couchbase
+    - clickhouse
+    - druid
+    - elasticsearch
+    - opensearch
+    - trino
+    - cassandra
+    - libsql
+    - turso
+    - duckdb
+    - prometheus
+    - promql
+    - kafka
+    - etcd
+    - db2
+    - ibm-db2
+    - neo4j
+    - cypher
+    - victoriametrics
+    - redpanda
+    - milvus
+    - qdrant
+    - influxdb
+    - influxql
+    - influxdb3
+    - oxia
+    - databend
+    - s3
+    - object-storage
+    - minio
+    - kubernetes
+    - bigquery
+    - snowflake
+    - mqtt
+    - firestore
+    - rabbitmq
+    - amqp
+    - web-ide
+    kubeVersion: '>=1.26.0-0'
+    maintainers:
+    - name: cevheri
+      url: https://github.com/cevheri
+    name: libredb-studio
+    sources:
+    - https://github.com/libredb/libredb-studio
+    type: application
+    urls:
+    - https://github.com/libredb/libredb-studio/releases/download/libredb-studio-0.1.90/libredb-studio-0.1.90.tgz
+    version: 0.1.90
+  - annotations:
+      artifacthub.io/category: database
+      artifacthub.io/changes: |
         - "Name RabbitMQ, the broker read over its management API and AMQP 0-9-1, in the description and the keywords"
       artifacthub.io/containsSecurityUpdates: "false"
       artifacthub.io/images: |
@@ -6017,4 +6114,4 @@ entries:
     urls:
     - https://github.com/libredb/libredb-studio/releases/download/libredb-studio-0.1.0/libredb-studio-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-12T15:54:29.854149462Z"
+generated: "2026-10-12T23:17:27.529556679Z"
