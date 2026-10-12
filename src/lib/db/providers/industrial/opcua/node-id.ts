@@ -75,7 +75,7 @@ export function pathKey(segments: readonly string[]): string {
 export function pathSegments(key: string): string[] {
   if (key === "") return [];
   const segments = key.split(OPCUA_PATH_SEPARATOR).map(unescapeSegment);
-  while (segments.length > 0 && segments[segments.length - 1] === "") segments.pop();
+  while (segments.length > 0 && segments.at(-1) === "") segments.pop();
   return segments;
 }
 
@@ -96,14 +96,14 @@ export function pathSegments(key: string): string[] {
  *    (Part 6 5.2.2.9) and a numeric identifier a UInt32, so both have an end.
  * The GUID is the five-group form Part 6 5.1.12 writes, 8-4-4-4-12, not 36 characters of anything.
  */
-const GUID = String.raw`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`;
+const GUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
 /** 0 to 65535, and 0 to 4294967295, written as patterns because this is one regular expression. */
 const UINT16 = String.raw`(?:0|[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])`;
 const UINT32 = String.raw`(?:0|[1-9]\d{0,8}|[1-3]\d{9}|4[01]\d{8}|42[0-8]\d{7}|429[0-3]\d{6}|4294[0-8]\d{5}|42949[0-5]\d{4}|429496[0-6]\d{3}|4294967[01]\d{2}|42949672[0-8]\d|429496729[0-5])`;
 // `[\s\S]` and not `.`, because a String identifier is any non-empty string and `.` stops at a
 // newline: `s=` with a newline in it is a node id Part 6 allows and this refused.
 const NODE_ID = new RegExp(
-  `^(?:ns=${UINT16};|nsu=[^;]+;(?:ns=${UINT16};)?)?(?:i=${UINT32}|s=[\\s\\S]+|g=${GUID}|b=[A-Za-z0-9+/=]+)$`,
+  String.raw`^(?:ns=${UINT16};|nsu=[^;]+;(?:ns=${UINT16};)?)?(?:i=${UINT32}|s=[\s\S]+|g=${GUID}|b=[A-Za-z0-9+/=]+)$`,
 );
 
 /** True for a node id this provider can send. */

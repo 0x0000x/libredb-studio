@@ -2,7 +2,7 @@
  * What a connection is, and every refusal it makes before anything is dialled (#1677 section 4).
  */
 import { describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { getDataDir } from "@/lib/data-dir";
 import { DatabaseConfigError } from "@/lib/db/errors";
 import { TUNNEL_FAR_END } from "@/lib/types";
@@ -113,7 +113,7 @@ describe("the PKI root and the client's own identity", () => {
   test("no PKI variable falls back to Studio's own data directory, absolute", () => {
     const read = readConnection(connection({}), {});
     expect(read.pkiRoot).toBe(resolve(getDataDir(), OPCUA_PKI_DIRECTORY));
-    expect(read.pkiRoot.startsWith("/")).toBe(true);
+    expect(isAbsolute(read.pkiRoot)).toBe(true);
   });
 
   test("a certificate without its key is refused", () => {

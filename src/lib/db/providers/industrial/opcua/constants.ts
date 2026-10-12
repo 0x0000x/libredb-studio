@@ -31,6 +31,17 @@ export const OPCUA_SCHEME = "opc.tcp:" as const;
 export const OPCUA_OBJECTS_FOLDER = "i=85" as const;
 
 /**
+ * The security policy URI that means no protection at all, which the GetEndpoints dial always uses.
+ *
+ * AN IDENTIFIER, NOT AN ADDRESS, and the `http` in it is the OPC Foundation's spelling rather than a
+ * choice this code makes: Part 7 names each policy by a URI under `http://opcfoundation.org/UA/`,
+ * nothing ever dereferences it, and a server compares the bytes. Writing `https` here would simply
+ * stop matching any server. It lives here, in one place, because two copies of a protocol constant
+ * are two chances to mistype one.
+ */
+export const OPCUA_POLICY_NONE = "http://opcfoundation.org/UA/SecurityPolicy#None" as const;
+
+/**
  * The reference type a level listing follows, with its subtypes: HierarchicalReferences, `i=33`.
  *
  * Measured on the documented OPC PLC fixture: following this and its subtypes reaches 6,769 nodes

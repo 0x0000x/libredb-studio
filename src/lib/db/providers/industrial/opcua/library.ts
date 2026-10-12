@@ -52,7 +52,7 @@ import {
   type HistoryReadResult,
   type UserIdentityInfo,
 } from "node-opcua-client";
-import { OPCUA_LIMIT_NODES, OPCUA_READ_ATTRIBUTES } from "./constants";
+import { OPCUA_LIMIT_NODES, OPCUA_POLICY_NONE, OPCUA_READ_ATTRIBUTES } from "./constants";
 import type { OpcuaDataValue, OpcuaEndpoint, OpcuaReadOnlyClient, OpcuaServerLimits } from "./client";
 import type { OpcuaConnectionOptions } from "./connection";
 import { openReadOnlySession, OPCUA_TRANSPORT_SETTINGS, type OpcuaLibraryBridge } from "./session";
@@ -113,9 +113,6 @@ async function certificateStore(root: string): Promise<OPCUACertificateManager> 
   return manager;
 }
 
-/** The policy URI that means no protection at all, which the GetEndpoints dial always uses. */
-const POLICY_NONE = "http://opcfoundation.org/UA/SecurityPolicy#None";
-
 /**
  * A client for one dial, in one security mode and one policy.
  *
@@ -173,7 +170,7 @@ export const OPCUA_LIBRARY_BRIDGE: OpcuaLibraryBridge = {
     // it cannot be secured by one. Measured: None with the connection's own policy answered
     // BadSecurityChecksFailed, and the server logged BadCertificateInvalid, "the sender's
     // certificate was not specified".
-    const client = await clientFor(options, MessageSecurityMode.None, POLICY_NONE);
+    const client = await clientFor(options, MessageSecurityMode.None, OPCUA_POLICY_NONE);
     try {
       await client.connect(options.endpointUrl);
       const endpoints = await client.getEndpoints();
@@ -212,7 +209,7 @@ export const OPCUA_LIBRARY_BRIDGE: OpcuaLibraryBridge = {
   openSession: async (options) => {
     // The policy of the endpoint the session chose, which `session.ts` resolved from GetEndpoints:
     // a mode without its policy matches no endpoint (see `clientFor`).
-    const client = await clientFor(options, SECURITY_MODES[options.mode], options.policyUri ?? POLICY_NONE);
+    const client = await clientFor(options, SECURITY_MODES[options.mode], options.policyUri ?? OPCUA_POLICY_NONE);
     await client.connect(options.endpointUrl);
     let session: ClientSession;
     try {

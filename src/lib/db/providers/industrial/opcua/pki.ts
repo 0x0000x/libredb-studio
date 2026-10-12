@@ -28,7 +28,7 @@
  * and key itself, which is what a mounted secret is for. Two replicas sharing one mounted key present
  * one identity to the server's administrator, rather than one per pod to be trusted one by one.
  */
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { getDataDir } from "@/lib/data-dir";
 import { DatabaseConfigError } from "@/lib/db/errors";
 import { OPCUA_TYPE } from "./constants";
@@ -73,7 +73,14 @@ export function pkiRoot(environment: Readonly<Record<string, string | undefined>
    * PKI lands beside it - in the image, under the mounted `/app/data`.
    */
   if (root === undefined || root === "") return resolve(getDataDir(), OPCUA_PKI_DIRECTORY);
-  if (!root.startsWith("/")) {
+  /*
+   * `isAbsolute`, NOT `startsWith("/")`, and the difference is measured: on Windows the cross-platform
+   * run refused `C:\Users\RUNNER~1\AppData\Local\Temp\...` as relative, so an operator there could
+   * not point the variable at any ordinary directory. `path.isAbsolute` answers per platform, which
+   * is the question being asked - a path that does not need the process's working directory to mean
+   * what it says.
+   */
+  if (!isAbsolute(root)) {
     throw new DatabaseConfigError(
       `${OPCUA_PKI_ROOT_ENV} is an absolute path, and this one is relative: ${root}. A relative path would ` +
         "resolve against whatever directory the server happened to start in.",

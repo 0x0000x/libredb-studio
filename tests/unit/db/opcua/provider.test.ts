@@ -6,6 +6,7 @@
  * cannot write, would be lying by omission.
  */
 import { describe, expect, test } from "bun:test";
+import { isAbsolute } from "node:path";
 import { DatabaseConfigError, QueryError } from "@/lib/db/errors";
 import type {
   OpcuaDataValue,
@@ -160,7 +161,7 @@ describe("connecting", () => {
     );
     await expect(withoutVariable.connect()).rejects.toThrow(/BadConnectionClosed|connection closed/);
     expect(reached).toHaveLength(1);
-    expect(reached[0]?.startsWith("/")).toBe(true);
+    expect(isAbsolute(reached[0] ?? "")).toBe(true);
 
     const relative = new OpcuaProvider(
       connection(),

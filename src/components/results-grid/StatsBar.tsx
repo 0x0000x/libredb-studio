@@ -207,6 +207,20 @@ export function StatsBar({
       ? `${result.fields.length - hiddenCount} of ${result.fields.length} columns`
       : `${result.fields.length} columns`;
   const warningDetail = warnings.map(describeWarning).join("\n");
+  /*
+   * ONE ROW PER WARNING, KEYED UNIQUELY, which neither of the two obvious keys is. The index alone
+   * re-labels a surviving row when an earlier warning is dropped. The sentence alone COLLIDES: a
+   * driver can emit the same notice twice (Postgres keeps every notice verbatim and nothing here
+   * de-duplicates them), and two identical keys make React reuse one row's DOM for the other. So the
+   * key is the sentence, and the repeats carry which repeat they are.
+   */
+  const warningRows = warnings
+    .map((warning) => describeWarning(warning))
+    .reduce<{ key: string; sentence: string }[]>((rows, sentence) => {
+      const seen = rows.filter((row) => row.sentence === sentence).length;
+      rows.push({ key: seen === 0 ? sentence : `${sentence} #${seen + 1}`, sentence });
+      return rows;
+    }, []);
   /** Whether the warning sentences are drawn under the bar; the chip shuts them. */
   const [warningsOpen, setWarningsOpen] = useState(true);
 
@@ -481,8 +495,8 @@ export function StatsBar({
       </div>
       {warnings.length > 0 && warningsOpen && (
         <ul data-testid="stats-warnings" className="px-4 pb-2 space-y-1 text-warning leading-relaxed">
-          {warnings.map((warning, index) => (
-            <li key={index}>{describeWarning(warning)}</li>
+          {warningRows.map((row) => (
+            <li key={row.key}>{row.sentence}</li>
           ))}
         </ul>
       )}

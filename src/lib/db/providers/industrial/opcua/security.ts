@@ -13,7 +13,7 @@
  */
 import { DatabaseConfigError } from "@/lib/db/errors";
 import { isLoopbackHost } from "@/lib/db/http/endpoint";
-import { OPCUA_SCHEME, OPCUA_TYPE } from "./constants";
+import { OPCUA_POLICY_NONE, OPCUA_SCHEME, OPCUA_TYPE } from "./constants";
 import type { OpcuaEndpoint } from "./client";
 
 /** The three security modes a connection may ask for. */
@@ -89,9 +89,6 @@ export function effectiveTokenPolicy(endpoint: OpcuaEndpoint, kind: OpcuaIdentit
   return token.securityPolicyUri ?? endpoint.securityPolicyUri;
 }
 
-/** The policy URI that means no protection at all. */
-const POLICY_NONE = "http://opcfoundation.org/UA/SecurityPolicy#None";
-
 /**
  * The refusal for a credential that would cross the network unprotected, or undefined.
  *
@@ -108,7 +105,7 @@ export function plaintextIdentityRefusal(options: {
   if (options.kind === "anonymous") return undefined;
   if (options.tunnelled || isLoopbackHost(options.host)) return undefined;
   const channelProtects = options.mode === "SignAndEncrypt";
-  const tokenProtects = options.effectivePolicy !== null && options.effectivePolicy !== POLICY_NONE;
+  const tokenProtects = options.effectivePolicy !== null && options.effectivePolicy !== OPCUA_POLICY_NONE;
   if (channelProtects || tokenProtects) return undefined;
   return (
     "This connection would send its password to a host that is not this machine with nothing encrypting it: " +

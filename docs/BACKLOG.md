@@ -31,7 +31,7 @@ None of it is a GitHub issue.
 - [Drivers and connections](#drivers-and-connections) — D1-D316, U17 · 216
 - [Value interpolation](#value-interpolation) — V1
 - [Row editing](#row-editing) — R1–R3 · 3
-- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U129 · 119
+- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U131 · 121
 - [Dependencies](#dependencies) — P1-P9 · 7
 - [Documentation](#documentation) — DOC3-DOC24 · 21
 - [Release pipeline](#release-pipeline) — REL1-REL8 · 8
@@ -39,7 +39,7 @@ None of it is a GitHub issue.
 - [Security Phase 1 deferrals](#security-phase-1-deferrals) — H1–H14 · 4
 - [Security Phase 2 deferrals](#security-phase-2-deferrals) — C3–C11 · 6
 - [Security Phase 3 deferrals](#security-phase-3-deferrals) — K4-K8 · 5
-- [Security scanner triage](#security-scanner-triage) — SCAN1 · 1
+- [Security scanner triage](#security-scanner-triage) — SCAN1-SCAN2 · 2
 - [Agent M1 deferrals (#328)](#agent-m1-deferrals-328) — A2–A8 · 6
 - [Agent M2 deferrals (#329)](#agent-m2-deferrals-329) — B2-B110 · 46
 - [Passkey deferrals (#785)](#passkey-deferrals-785) — PK1-PK9 · 8
@@ -5010,6 +5010,28 @@ Found 2026-10-12 by the browser pass of the OPC UA provider.
 
 **Done when:** the Docs tab says what the Objects tree says for such an engine, or is not offered there, with a test over an engine whose kinds are all `enumeratedBy: "key-browser"`.
 
+### U130. The OPC UA certificate pin is compared against a different dial's certificate than the session uses
+
+The pin (`serverCertificateThumbprint`) is computed in `src/lib/db/providers/industrial/opcua/library.ts` from the certificate returned by this provider's OWN `GetEndpoints` dial, which is built with `MessageSecurityMode.None` and the None policy, and it is compared once in `session.ts` before the session opens.
+The certificate the session then uses does not come from that reply. `node-opcua` performs a second, independent discovery inside `connect` whenever the mode is not None (`client_base_impl.js`, `fetchServerCertificate` to `__findEndpoint`), and that TmpClient carries no security mode or policy either.
+Nothing binds the two dials, so a host answering the typed address can serve the genuine certificate on the pin dial and a different one on the channel dial, and the pin matches.
+
+This grants no access on its own: the strict certificate manager still pushes the session's certificate through `checkCertificate`, which answers `BadCertificateUntrusted` for anything the administrator's trust list does not hold, so the trust list remains the gate.
+What is wrong is the promise. `connection.ts` already says of the None mode that the check "catches an honest certificate rotation and nothing an attacker does"; the same is true on Sign and SignAndEncrypt, where the pin IS enforced, and only the provider doc said so.
+Found 2026-10-12 by an audit of CodeQL alert 660, which was looking at something else (see SCAN2).
+Not measured against a server that answers the two dials differently.
+
+**Done when:** the pin is compared against the certificate the open session actually negotiated rather than against the discovery reply, with a test that a differing second certificate refuses.
+
+### U131. The OPC UA screenshot walkthrough waits by the clock rather than on a condition
+
+`e2e/opcua-screens.spec.ts` holds fifteen `page.waitForTimeout` calls between 500ms and 8s, which SonarCloud reports as `typescript:S2925` ("Replace this fixed wait with a synchronization on an observable condition") on exactly those fifteen lines, and which is the shape that makes a spec slow when it passes and flaky when it does not.
+The #1719 E2E run put two specs under "flaky", `e2e/mqtt-provider.spec.ts` and `e2e/session-expired.spec.ts`, and neither is this one: `e2e/opcua-provider.spec.ts` was one of the two FAILED, on a stale assertion since fixed.
+So the cost here is the shape rather than a failure already observed in it.
+The waits stand in for a walk settling, which has no single observable the spec can currently await.
+
+**Done when:** every fixed wait in that spec is replaced by a wait on an observable condition, or the panel exposes a settled marker the spec can await.
+
 ## Dependencies
 
 ### P1. The desktop shell's `glib` advisory has no reachable fix while Tauri v2 targets GTK 3
@@ -5924,6 +5946,24 @@ Not fixed there: it needs a new audit reason, a security control count change an
 
 A scanner finding that is open, is not failing a required check, and needs a written ruling before it can be dismissed or fixed.
 CodeQL alerts anchor to a source location, so moving the code re-reports them and a dismissal made against the wrong location does not hold.
+
+### SCAN2. CodeQL alert 660 and SonarCloud S4790, SHA-1 in the OPC UA certificate thumbprint, ruled not a weakness
+
+`js/weak-cryptographic-algorithm`, security severity high, open against `refs/pull/1719/merge` at `src/lib/db/providers/industrial/opcua/library.ts:78`, and the same line as `typescript:S4790` on SonarCloud.
+CodeQL's text: "A broken or weak cryptographic algorithm depends on sensitive data from an access to serverCertificate."
+
+The line computes the SHA-1 thumbprint of the server's DER certificate, which `session.ts` then compares against the operator's pin.
+
+Both halves of the stated consequence were measured on 2026-10-12 and neither holds.
+The hashed DER is not sensitive: an OPC UA server publishes it to any unauthenticated caller in its `GetEndpoints` reply (Part 4 5.5.4), and this repository already classifies the derived thumbprint as `public` in `src/lib/storage/connection-secrets.ts`.
+And no hash attack is needed to defeat the pin, because the pin is compared against the discovery dial's certificate rather than the session's, which U130 records; where the pin does bind, the property an attacker would need is second-preimage resistance, which is unbroken for SHA-1, not the collision resistance that SHAttered 2017 and Leurent and Peyrin 2020 broke.
+Changing the algorithm would also not remove the deployment's dependence on SHA-1: `node-opcua-pki` keys its own trust list on a SHA-1 fingerprint with no comparison of the stored bytes, so the library's trust decision is SHA-1 either way.
+
+Two SonarCloud `typescript:S5332` findings on the same provider ("Using http protocol is insecure") are the OPC Foundation's own policy URI, `http://opcfoundation.org/UA/SecurityPolicy#None`, which is an identifier nothing dereferences and which a server compares as bytes; `https` there would stop matching every server. It is now declared once, in `constants.ts`, with that reason.
+
+Neither check is required on `main`, and `main` itself carries open high-severity CodeQL alerts and a failing SonarCloud gate, so this does not block.
+
+**Done when:** alert 660 carries a written dismissal on the ground above, filed against the merged location on `main`, and the `S5332` finding on the one remaining declaration of that URI is marked as the protocol identifier it is.
 
 ### SCAN1. CodeQL alert 536, polynomial ReDoS in the MCP error redactor, needs a ruling
 

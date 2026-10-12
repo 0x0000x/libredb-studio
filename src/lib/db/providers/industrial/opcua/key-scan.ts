@@ -265,7 +265,7 @@ export function levelScope(pattern: string): {
    * filter box answered "this folder is empty" for a folder that is not, which is the one failure
    * this whole function exists to prevent.
    */
-  if (path.includes(`${OPCUA_PATH_SEPARATOR}${OPCUA_PATH_SEPARATOR}`) || segments.some((segment) => segment === "")) {
+  if (path.includes(`${OPCUA_PATH_SEPARATOR}${OPCUA_PATH_SEPARATOR}`) || segments.includes("")) {
     throw new DatabaseConfigError(
       `A node path holds no empty step: ${JSON.stringify(pattern)} has a separator with nothing between it and ` +
         "the next one. Type the path with one separator between names.",

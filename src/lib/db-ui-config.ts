@@ -1053,8 +1053,9 @@ export const DB_UI_CONFIG: Record<DatabaseType, DatabaseUIConfig> = {
     // address space can carry without borrowing the mark of an engine beside it.
     color: "text-hue-slate",
     label: "OPC UA",
-    // The IANA-registered port for opc.tcp, and the one every server measured listened on. It is
-    // shown for orientation only: the address is the endpoint URL, which carries its own port.
+    // The IANA-registered port for opc.tcp, and the one every server measured listened on. NOTHING
+    // SHOWS IT TO A READER: `connectionFields` names no port, so the dialog draws no port box, and the
+    // address is the endpoint URL, which carries its own. It is here for a seeded connection to read.
     defaultPort: "4840",
     // No URI toggle, because the endpoint URL IS the address: host and port are read from it, so
     // there is one place a reader can be wrong and one place to correct.

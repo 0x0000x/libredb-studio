@@ -469,6 +469,38 @@ export function sentPattern(text: string, shape: KeyScanShape = UNDECLARED): str
 }
 
 /**
+ * The row's own label, which is the one of its three names that depends on how the engine lists.
+ *
+ * FOUR NAMED ARMS RATHER THAN ONE NESTED CONDITIONAL, because a reader checking any one of them
+ * should not have to hold the other three. In order:
+ *  1. a leaf, which says its own segment where it has one and its full name otherwise;
+ *  2. a levels folder whose OWN SEGMENT IS EMPTY, which therefore falls back to its full name - not
+ *     the ordinary levels folder, which never reaches here;
+ *  3. a row that is a key AND a folder, again only where its own segment is empty;
+ *  4. EVERY OTHER FOLDER, which is both the ordinary levels folder with a segment of its own - the
+ *     common OPC UA and S3 row, `2026/` - and the folder a walk inferred from a glob, `2026/*`.
+ *
+ * A SEGMENT THAT IS EMPTY IS NOT A LABEL, so such a row keeps its full name under `levels` too: a key
+ * whose name ENDS in the separator has an empty last segment (the key `sales/` inside the folder
+ * `sales/`), and a row drawn from it would be blank. `ownSegment` is what keeps the rule above - no
+ * row's three names are empty but the empty key's own - true.
+ */
+function keyRowLabel(options: {
+  readonly node: KeyTreeNode;
+  readonly folder: boolean;
+  readonly levels: boolean;
+  readonly name: string;
+  readonly marker: string;
+}): string {
+  const { node, folder, levels, name, marker } = options;
+  const ownSegment = levels && node.segment !== "";
+  if (!folder) return ownSegment ? node.segment : name;
+  if (levels && !ownSegment) return `${name}${marker}`;
+  if (node.isKey && !ownSegment) return name;
+  return `${node.segment}${marker}`;
+}
+
+/**
  * The three names a row gives its node, in the declared separator (spec 4.6): the label drawn on it,
  * its title, and the name its twisty's `aria-label` announces.
  *
@@ -498,6 +530,7 @@ export function sentPattern(text: string, shape: KeyScanShape = UNDECLARED): str
  * instead. No row's three names are empty but the empty key's own, which only Redis can hold and whose
  * label this rule does not touch.
  */
+
 export function keyRowNames(
   node: KeyTreeNode,
   folder: boolean,
@@ -511,22 +544,7 @@ export function keyRowNames(
 ): { readonly label: string; readonly title: string; readonly toggle: string } {
   const name = keyName(node.path, shape);
   const marker = levels ? shape.separator : `${shape.separator}*`;
-  /*
-   * A SEGMENT THAT IS EMPTY IS NOT A LABEL, so such a row keeps its full name under `levels` too: a
-   * key whose name ENDS in the separator has an empty last segment (the key `sales/` inside the folder
-   * `sales/`), and a row drawn from it would be blank. The rule above - no row's three names are empty
-   * but the empty key's own - is what this arm keeps true.
-   */
-  const ownSegment = levels && node.segment !== "";
-  const label = folder
-    ? levels && !ownSegment
-      ? `${name}${marker}`
-      : node.isKey && !ownSegment
-        ? name
-        : `${node.segment}${marker}`
-    : ownSegment
-      ? node.segment
-      : name;
+  const label = keyRowLabel({ node, folder, levels, name, marker });
   const both = levels
     ? `${name} is a key and a folder: ${name}${marker}`
     : `${name} is a key of this database and a prefix: ${name}${marker}`;

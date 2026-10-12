@@ -18,8 +18,14 @@ import { mkdirSync } from "node:fs";
  * The connection is made the way a reader makes it: open the dialog, pick OPC UA, type the endpoint,
  * choose None, connect. Nothing is seeded.
  */
-const SHOTS =
-  "/private/tmp/claude-501/-Users-yusuf-projects-digital-ocean/691af592-3da9-4764-bfea-5aa4ac35dccb/scratchpad/shots";
+/*
+ * UNDER THE REPOSITORY, NOT UNDER WHOEVER RAN IT LAST. This held one machine's absolute scratchpad
+ * path, which exists on exactly that machine: anywhere else the run fails at `mkdirSync`, and the
+ * path itself is a session id nobody else has. `test-results/` is already the directory Playwright
+ * writes to and is already in `.gitignore`. The variable is there for a pass that wants the pictures
+ * somewhere specific, which is how they were collected for the guide.
+ */
+const SHOTS = process.env.OPCUA_SHOTS_DIR?.trim() || "test-results/opcua-screens";
 const ENDPOINT = "opc.tcp://127.0.0.1:54840/";
 
 /** Whether the fixture is listening, asked once: this suite needs a server and CI has none. */
@@ -83,8 +89,14 @@ test.describe("OPC UA, end to end, with pictures", () => {
      * fields hold AND proves what travels - a filled username really does reach the provider, which
      * refuses it on a server that takes none.
      */
-    console.log(`[SHOT] autofilled user: ${JSON.stringify(await dialog.locator("#user").inputValue())}`);
-    console.log(`[SHOT] autofilled password: ${JSON.stringify(await dialog.locator("#password").inputValue())}`);
+    /*
+     * ASSERTED, NOT PRINTED. These two lines logged whatever the boxes held, and the password box is
+     * one of them: on a real machine Chromium can autofill a saved credential there, and the run's
+     * log is kept by CI and read by anyone. An assertion proves the same thing - the dialog opens
+     * empty - and puts nothing in the log.
+     */
+    await expect(dialog.locator("#user")).toHaveValue("");
+    await expect(dialog.locator("#password")).toHaveValue("");
     await dialog.locator("#user").fill("plant-reader");
     await dialog.locator("#password").fill("s3cret");
     await dialog.getByRole("button", { name: "Test Connection", exact: true }).click();

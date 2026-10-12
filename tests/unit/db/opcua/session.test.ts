@@ -282,6 +282,30 @@ describe("the dial itself", () => {
     }
   });
 
+  /*
+   * THE PEER WRITES THIS TEXT AND IS NOT AUTHENTICATED YET, which is why the flattening has to be
+   * linear. The pattern was `\s*\n\s*`, where `\s` already matches a newline, so the first group ate
+   * a whole whitespace run, failed to find the newline it still needed, and gave one character back
+   * per attempt at every start position. Measured against a run of spaces ending in a non-space:
+   * 2.6ms at 2,000 characters, 31.8ms at 8,000, 454ms at 32,000 and 7.9 SECONDS at 128,000, against
+   * 0.07ms for `\s+` at that last size. The bound below is 1 second, which the old pattern misses by
+   * eight times over on this machine and by more on a slower one, and which the new one clears by
+   * four orders of magnitude.
+   */
+  test("a dial failure padded with whitespace is flattened in linear time, not quadratic", async () => {
+    const hostile = new Error(`Err = (${" ".repeat(128_000)}x)`);
+    const started = performance.now();
+    const open = openReadOnlySession(failingEndpoints(hostile), options({ endpointUrl: "opc.tcp://h:4840/" }));
+    await expect(open).rejects.toBeInstanceOf(DatabaseConfigError);
+    expect(performance.now() - started).toBeLessThan(1000);
+    try {
+      await open;
+    } catch (error) {
+      // Collapsed to one space, so the run never reaches whatever draws the message either.
+      expect(String((error as Error).message)).toContain("Err = ( x)");
+    }
+  });
+
   test("a status code in a dial failure still becomes that code's own sentence", async () => {
     await expect(
       openReadOnlySession(failingEndpoints(new Error("BadCertificateUntrusted")), options()),
@@ -673,6 +697,30 @@ describe("a library throw while the session is being opened", () => {
       expect(message).toContain("certificate directory could not be prepared");
       expect(message).toContain(root);
       expect(message).toContain("LIBREDB_OPCUA_PKI_ROOT");
+      expect(message).not.toContain("could not be opened to");
+    }
+  });
+
+  /*
+   * A ROOT WITH TWO SPACES IN IT STILL MATCHES, because the message it is compared against has had
+   * every whitespace run collapsed to one. Without flattening the root the same way, this case fell
+   * through to the generic endpoint sentence about a server that was listening - the exact failure
+   * the test above exists to prevent, reopened by a directory somebody named with a double space.
+   */
+  test("a PKI root holding two spaces is still recognised in the flattened message", async () => {
+    const root = "/Volumes/plant  data/opcua-pki";
+    const thrown = new Error(`EACCES: permission denied, mkdir '${root}'`);
+    try {
+      await openReadOnlySession(
+        failingToOpen(thrown, [endpoint("SignAndEncrypt", PLC_THUMB)]),
+        options({ pkiRoot: root }),
+      );
+      throw new Error("the connect did not fail");
+    } catch (error) {
+      const message = (error as Error).message;
+      expect(message).toContain("certificate directory could not be prepared");
+      // The sentence prints the REAL root, not the flattened one it was matched by.
+      expect(message).toContain(root);
       expect(message).not.toContain("could not be opened to");
     }
   });

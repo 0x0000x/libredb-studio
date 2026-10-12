@@ -35,8 +35,12 @@ test.describe("OPC UA in the connection dialog", () => {
 
     await expect(dialog.getByText("Endpoint URL", { exact: true })).toBeVisible();
     await expect(dialog.locator("#host")).toHaveAttribute("placeholder", "opc.tcp://plc.example.net:4840/");
-    // The IANA port, shown for orientation: the endpoint URL carries its own.
-    await expect(dialog.locator('input[value="4840"]')).toBeVisible();
+    // NO PORT BOX, and that is the point of this engine's address: the endpoint URL carries its own
+    // port, so a second box beside it could only disagree with the URL the reader typed. An earlier
+    // draft drew one "for orientation" pre-filled with 4840, and this assertion was written against
+    // that draft; the box is gone and the assertion now holds the absence in place.
+    await expect(dialog.locator("#port")).toHaveCount(0);
+    await expect(dialog.getByText("Port", { exact: true })).toHaveCount(0);
     await expect(dialog.getByText("Connection String", { exact: true })).toHaveCount(0);
   });
 

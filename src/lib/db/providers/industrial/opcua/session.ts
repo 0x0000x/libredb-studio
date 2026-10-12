@@ -156,7 +156,14 @@ async function endpointsGuarded(bridge: OpcuaLibraryBridge, options: OpcuaConnec
  */
 function pkiRefusal(message: string, options: OpcuaConnectionOptions): Error | undefined {
   if (!/\b(EACCES|EPERM|EROFS|ENOSPC|ENOTDIR)\b/.test(message)) return undefined;
-  if (!message.includes(options.pkiRoot)) return undefined;
+  /*
+   * BOTH SIDES FLATTENED THE SAME WAY. The message reaching here has had every whitespace run
+   * collapsed to one space (see `dialRefusal`), so a root that holds two spaces of its own - a
+   * directory somebody named that way - would no longer appear in it verbatim, this guard would say
+   * no, and the reader would get the generic endpoint sentence instead of the one naming the
+   * directory they have to fix. The sentence below still prints the real root.
+   */
+  if (!message.includes(options.pkiRoot.replaceAll(/\s+/g, " "))) return undefined;
   return new DatabaseConfigError(
     `The OPC UA client's certificate directory could not be prepared at ${options.pkiRoot}: ${message}. Studio ` +
       "writes its own key pair and its trust list there, so a connection cannot be opened without it. Make that " +
@@ -175,9 +182,18 @@ function pkiRefusal(message: string, options: OpcuaConnectionOptions): Error | u
  * nothing that draws it.
  */
 function dialRefusal(error: unknown, options: OpcuaConnectionOptions): Error {
-  const message = messageOf(error)
-    .replaceAll(/\s*\n\s*/g, " ")
-    .trim();
+  /*
+   * `\s+`, NOT `\s*\n\s*`, and the difference is measured rather than stylistic. `\s` already
+   * matches a newline, so in `\s*\n\s*` the first group eats a whole whitespace run, fails to find
+   * the newline it still needs, and gives one character back per attempt, at every start position:
+   * quadratic. Measured on this machine against a run of spaces ending in a non-space, which is what
+   * a server's own diagnostic text can be: 2.6ms at 2,000 characters, 31.8ms at 8,000, 454ms at
+   * 32,000 and 7.9 SECONDS at 128,000, against 0.07ms for `\s+` at that last size. The text comes
+   * from a peer the reader has not authenticated yet, so a hostile server could hold the event loop
+   * with nothing but whitespace. `\s+` collapses runs of spaces as well, which is what a message
+   * drawn on one line wants anyway.
+   */
+  const message = messageOf(error).replaceAll(/\s+/g, " ").trim();
   const code = /\b(Bad[A-Za-z]+)\b/.exec(message)?.[1];
   if (code !== undefined) return errorForStatus(code, options.pkiRoot);
   const unwritable = pkiRefusal(message, options);

@@ -8,7 +8,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { DatabaseConfigError } from "@/lib/db/errors";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { getDataDir } from "@/lib/data-dir";
 import {
   clientIdentitySource,
@@ -35,7 +35,8 @@ describe("the PKI root", () => {
     expect(pkiRoot({})).toBe(expected);
     expect(pkiRoot({ [OPCUA_PKI_ROOT_ENV]: "   " })).toBe(expected);
     // Absolute by construction, because the data directory is: the rule below still holds for it.
-    expect(pkiRoot({}).startsWith("/")).toBe(true);
+    // Asked with `isAbsolute` rather than a leading slash, which is what the rule itself now asks.
+    expect(isAbsolute(pkiRoot({}))).toBe(true);
   });
 
   test("the variable still overrides the default, which is what a shared identity needs", () => {

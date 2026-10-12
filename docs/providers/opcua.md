@@ -252,7 +252,8 @@ a reader could type `54840` into it and the dial still went to the port in the U
 box could not make. It is drawn from the declaration now (`connectionFields`, which for this engine
 names no port), by the same rule as every other field, and the endpoint takes the whole row. The
 `defaultPort` of `4840` stays as the IANA-registered port for `opc.tcp`, which is what a seeded
-connection and the login screen's example read.
+connection reads. Nothing shows it to a reader: the login screen's example connection is built from
+`SIGNATURE_URIS`, which this engine is not in, and the dialog draws no port box for it.
 
 **And the endpoint box starts empty.** It used to start at `localhost`, the generic host default,
 under the label "Endpoint URL" and beside a placeholder reading `opc.tcp://plc.example.net:4840/` —
@@ -344,6 +345,18 @@ So the certificate manager is strict, and a pin is checked **before the session 
 thumbprint is read from `GetEndpoints` and compared there. Measured, the library's own
 `checkCertificate` fires exactly once and before `CreateSession`, so a wrong pin refuses with zero
 `CreateSessionRequest` on the wire. The refusal names both thumbprints and says nothing was sent.
+
+**What the pin catches is an honest rotation, not an attacker**, and that holds on the two modes where
+a pin is allowed at all. (With `None` it is refused outright, for the reason this section's last
+paragraph gives.) The thumbprint it compares comes from this provider's own `GetEndpoints` dial,
+which is unsecured by construction (`library.ts` builds that client with `MessageSecurityMode.None`),
+while the certificate the session actually uses comes from a second, independent discovery that
+`node-opcua` performs inside `connect` (`client_base_impl.js` `fetchServerCertificate`). Nothing binds
+the two, so a host answering the typed address can serve one certificate to the pin dial and its own
+to the channel dial. That grants nothing on `Sign` or `SignAndEncrypt`, because the strict manager
+still answers `BadCertificateUntrusted` for a certificate the trust list does not hold; it means the
+pin's value is narrower than the word suggests. `docs/BACKLOG.md` U130 records comparing the pin
+against the session's own certificate.
 
 **The trust list is the gate; the pin narrows it.** A pin is a check, not a trust decision, so
 pinning a thumbprint does not make an unknown certificate acceptable: measured against OPC PLC with

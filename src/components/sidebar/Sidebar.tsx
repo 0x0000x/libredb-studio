@@ -25,6 +25,43 @@ import type { ConnectionGroup } from "@/lib/storage/types";
  */
 type SidebarView = "objects" | "keys";
 
+/**
+ * A view the reader PRESSED, together with what they could see when they pressed it.
+ *
+ * `enumeratedNothing` is what tells an informed choice from an inherited one. A reader who presses
+ * Objects on an OPC UA server has SEEN what that tab says and asked for it anyway, so the choice
+ * travels to the next OPC UA server; a reader whose last choice was Objects on Postgres chose
+ * nothing about an engine with no objects, so that one does not travel.
+ */
+interface ChosenSidebarView {
+  readonly connectionId: string | null;
+  readonly view: SidebarView;
+  readonly enumeratedNothing: boolean;
+}
+
+/**
+ * The view ON SCREEN for this connection, derived every render rather than stored, so a default can
+ * never outlive the connection it was right for.
+ *
+ * THREE NAMED ARMS, AND THE THIRD IS THE ONE A STORED DEFAULT GOT WRONG:
+ *  - no choice at all: the engine's own default, which is `keys` only where nothing is enumerable;
+ *  - a choice made on THIS connection: honoured as it stands, including `objects` on an engine with
+ *    nothing to enumerate - a reader who presses that tab asked to see what is there;
+ *  - a choice carried from ANOTHER connection: honoured too, except that `objects` is not carried
+ *    onto an engine that enumerates nothing, since the tab it names would be empty by design.
+ */
+function sidebarViewFor(options: {
+  readonly chosen: ChosenSidebarView | null;
+  readonly connectionId: string | null;
+  readonly enumeratesNothing: boolean;
+}): SidebarView {
+  const { chosen, connectionId, enumeratesNothing } = options;
+  if (chosen === null) return enumeratesNothing ? "keys" : "objects";
+  const carried = chosen.connectionId !== connectionId;
+  if (carried && chosen.view === "objects" && enumeratesNothing && !chosen.enumeratedNothing) return "keys";
+  return chosen.view;
+}
+
 interface SidebarProps {
   connections: DatabaseConnection[];
   activeConnection: DatabaseConnection | null;
@@ -186,19 +223,7 @@ export const Sidebar = React.memo(function Sidebar({
    * capability check is what keeps the rest honest: on an engine without the walk, `keys` renders the
    * object tree anyway and the tabs are not drawn at all.
    */
-  const [chosenView, setChosenView] = React.useState<{
-    readonly connectionId: string | null;
-    readonly view: SidebarView;
-    /*
-     * WHETHER THE ENGINE THEY CHOSE IT ON HAD ANYTHING TO ENUMERATE, which is what tells an informed
-     * choice from an inherited one. A reader who presses Objects on an OPC UA server has SEEN what
-     * that tab says and asked for it anyway, so the choice travels to the next OPC UA server; a
-     * reader whose last choice was Objects on Postgres chose nothing about an engine with no objects,
-     * so that one does not travel. Without this, the first case was reverted to Keys on every switch
-     * between two such servers - the opposite of what the Redis-to-Redis rule above promises.
-     */
-    readonly enumeratedNothing: boolean;
-  } | null>(null);
+  const [chosenView, setChosenView] = React.useState<ChosenSidebarView | null>(null);
   /**
    * The connection whose key panel is being kept mounted, or null while none is.
    *
@@ -242,27 +267,8 @@ export const Sidebar = React.memo(function Sidebar({
    */
   const enumeratesNothing =
     keyScan !== undefined && metadata != null && enumerableKinds(metadata.capabilities).length === 0;
-  /*
-   * THE READING ON SCREEN, DERIVED EVERY RENDER rather than stored, so a default can reach this
-   * connection without outliving it. Three cases, and the third is the one a stored default got
-   * wrong:
-   *  - no choice at all: the engine's own default, which is `keys` only where nothing is enumerable;
-   *  - a choice made on THIS connection: honoured as it stands, including `objects` on an engine
-   *    with nothing to enumerate - a reader who presses that tab asked to see what is there;
-   *  - a choice carried from ANOTHER connection: honoured too, except that `objects` is not carried
-   *    onto an engine that enumerates nothing, since the tab it names would be empty by design.
-   */
-  const view: SidebarView =
-    chosenView === null
-      ? enumeratesNothing
-        ? "keys"
-        : "objects"
-      : chosenView.connectionId !== connectionId &&
-          chosenView.view === "objects" &&
-          enumeratesNothing &&
-          !chosenView.enumeratedNothing
-        ? "keys"
-        : chosenView.view;
+  // Derived every render; the three arms and why they are these three are on `sidebarViewFor`.
+  const view: SidebarView = sidebarViewFor({ chosen: chosenView, connectionId, enumeratesNothing });
   const showingKeys = keyScan !== undefined && view === "keys";
   /*
    * A SHOWN PANEL IS A LIVE PANEL, recorded here rather than in each handler that can reach it: the

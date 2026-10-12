@@ -16,10 +16,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface PivotTableProps {
-  result: QueryResult | null;
-  onLoadQuery?: (query: string) => void;
+  readonly result: QueryResult | null;
+  readonly onLoadQuery?: (query: string) => void;
   /** The connected engine, so a generated literal is quoted the way it reads it. */
-  databaseType?: string;
+  readonly databaseType?: string;
   /**
    * Whether this connection can RUN the SQL this panel generates, or undefined while nobody knows.
    *
@@ -28,7 +28,7 @@ interface PivotTableProps {
    * back the undo stack. The engine's declared `queryLanguage` is the fact, so the control is drawn
    * where the answer is yes or not yet known and withheld where it is no.
    */
-  offersGeneratedSql?: boolean;
+  readonly offersGeneratedSql?: boolean;
 }
 
 type AggFunction = "count" | "sum" | "avg" | "min" | "max";
