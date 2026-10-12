@@ -150,14 +150,14 @@ async function session(over: Partial<OpcuaConnectionOptions> = {}): Promise<Opcu
 }
 
 describe("GetEndpoints, before any session exists", () => {
-  test("the server's endpoints arrive in this provider's shape, with a SHA-1 thumbprint", async () => {
+  test("the server's endpoints arrive in this provider's shape, with a SHA-256 thumbprint", async () => {
     const endpoints = await OPCUA_LIBRARY_BRIDGE.readEndpoints(options());
     expect(endpoints.length).toBeGreaterThan(0);
     for (const endpoint of endpoints) {
       expect(["None", "Sign", "SignAndEncrypt"]).toContain(endpoint.securityMode);
       expect(endpoint.securityPolicyUri).toContain("http://opcfoundation.org/UA/SecurityPolicy#");
       if (endpoint.serverCertificateThumbprint !== undefined) {
-        expect(endpoint.serverCertificateThumbprint).toMatch(/^[0-9a-f]{40}$/);
+        expect(endpoint.serverCertificateThumbprint).toMatch(/^[0-9a-f]{64}$/);
       }
       // Each token's own policy, or null meaning the channel's (Part 4 7.41).
       for (const token of endpoint.userIdentityTokens) {
@@ -385,13 +385,13 @@ describe("a session over the real library", () => {
 describe("what this provider refuses against a real server", () => {
   /** O-S2: the pin is checked against the certificate GetEndpoints answered, before CreateSession. */
   test("a wrong certificate pin refuses, and the session is never created", async () => {
-    await expect(session({ pinnedThumbprint: "0".repeat(40) })).rejects.toThrow(/pins the server certificate/);
+    await expect(session({ pinnedThumbprint: "0".repeat(64) })).rejects.toThrow(/pins the server certificate/);
   });
 
   test("the right thumbprint connects, which is the control for the refusal above", async () => {
     const endpoints = await OPCUA_LIBRARY_BRIDGE.readEndpoints(options());
     const presented = endpoints.find((endpoint) => endpoint.securityMode === "None")?.serverCertificateThumbprint;
-    expect(presented).toMatch(/^[0-9a-f]{40}$/);
+    expect(presented).toMatch(/^[0-9a-f]{64}$/);
     const client = await session({ pinnedThumbprint: presented ?? "" });
     try {
       const [level] = await client.browse([OPCUA_OBJECTS_FOLDER]);

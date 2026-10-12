@@ -141,7 +141,7 @@ export interface OpcuaEndpoint {
   readonly securityPolicyUri: string;
   /** The server's certificate in DER, present even on a None endpoint, so it can be shown. */
   readonly serverCertificate?: Uint8Array;
-  /** Its SHA-1 thumbprint as 40 lowercase hex, the form a pin is written in (O-S2). */
+  /** Its SHA-256 thumbprint as 64 lowercase hex, the form a pin is written in (O-S2). */
   readonly serverCertificateThumbprint?: string;
   /** Each identity token with its own policy, which may be null meaning the channel's (Part 4 7.41). */
   readonly userIdentityTokens: readonly {

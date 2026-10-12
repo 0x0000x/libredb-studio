@@ -218,7 +218,7 @@ export const SeedConnectionSchema = z
      * The mode is an enum rather than a string, for the reason `saslMechanism` is: it names no
      * credential and no address, so it is not resolved from `${ENV}` or `${vault:...}`
      * (RESOLVABLE_FIELDS), and this enum refuses a reference here at load, naming the field. The
-     * thumbprint is a literal 40 hexadecimal characters, case-insensitive and separators removed by
+     * thumbprint is a literal 64 hexadecimal characters, case-insensitive and separators removed by
      * the provider, and it is not a secret: it is published by the server it names.
      */
     securityMode: z.enum(["None", "Sign", "SignAndEncrypt"]).optional(),

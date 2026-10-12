@@ -35,7 +35,7 @@ from the command above, which is why this paragraph exists.
 
 | File | What it holds |
 |---|---|
-| `endpoints.json` | The seven endpoints the server offers, each with its policy and its certificate's SHA-1 thumbprint, and the URL it ADVERTISES — a container hostname that resolves nowhere outside Docker |
+| `endpoints.json` | The seven endpoints the server offers, each with its policy and its certificate's SHA-256 thumbprint, and the URL it ADVERTISES — a container hostname that resolves nowhere outside Docker |
 | `limits.json` | The operational limits it publishes: 2,500 nodes per Read and per Browse, 1,000 per HistoryReadData, 10 browse continuation points, 100 history ones |
 | `levels.json` | Browse answers, by node id, from the Objects folder down four levels |
 | `values.json` | A Read of five nodes asking for the ten attributes `OPCUA_READ_ATTRIBUTES` names - a scalar answers nine of them, `arrayDimensions` being absent: three nodes that answer, the historized one, and one that does not exist |

@@ -150,7 +150,7 @@ describe("the capture is the fixture's own answer", () => {
     // O-S7, measured again in the capture: the server advertises a container hostname.
     for (const endpoint of ENDPOINTS.endpoints) {
       expect(endpoint.advertisedUrl).not.toContain("127.0.0.1");
-      expect(endpoint.serverCertificateThumbprint).toMatch(/^[0-9a-f]{40}$/);
+      expect(endpoint.serverCertificateThumbprint).toMatch(/^[0-9a-f]{64}$/);
     }
   });
 

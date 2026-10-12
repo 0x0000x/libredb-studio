@@ -107,7 +107,7 @@ describe("the OPC UA entry in the connection dialog", () => {
     openOpcua();
     const pin = document.getElementById("serverCertificateThumbprint") as HTMLInputElement;
     expect(pin).not.toBeNull();
-    const thumbprint = "4a25cd3ba6a2ddef16c8c88d33973cdabea3d8b2";
+    const thumbprint = "b9432ed131e30092d2a0619284763a403c33fc3929546728864b27b475c9529a";
     fireEvent.change(pin, { target: { value: thumbprint } });
     expect((document.getElementById("serverCertificateThumbprint") as HTMLInputElement).value).toBe(thumbprint);
   });
@@ -133,7 +133,7 @@ describe("the OPC UA entry in the connection dialog", () => {
     // The three modes, and that there is no fallback: a mode the server lacks is refused.
     for (const word of ["None", "Sign", "SignAndEncrypt", "refused"]) expect(mode).toContain(word);
     // What a pin is, and what its absence means.
-    for (const word of ["SHA-1", "40"]) expect(pin).toContain(word);
+    for (const word of ["SHA-256", "64"]) expect(pin).toContain(word);
   });
 
   /** The control: another engine draws neither field, so these two belong to this entry alone. */

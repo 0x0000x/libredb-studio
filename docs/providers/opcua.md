@@ -231,7 +231,7 @@ written refuses the connection in its own words rather than blaming the endpoint
 | `password` | Password | Refused without a username. |
 | `securityMode` | Security mode | `None`, `Sign` or `SignAndEncrypt`, chosen with three buttons. Default `SignAndEncrypt`. Studio's own `sslMode` and the shared SSL panel are **not** read: their vocabulary (`require`, `verify-full`) names nothing a server offers, so this entry declares `showSslPanel: false`. |
 | `securityPolicyUri` | — (seed file only) | Optional. An endpoint is a **mode and a policy**, so the policy of the endpoint chosen for the mode is what the session dials with; naming one here narrows the choice to that pair and is refused when the server offers no such pair. |
-| `serverCertificateThumbprint` | Server certificate | SHA-1, 40 hex characters; colons and spaces ignored. Refused together with `securityMode: None`, because a pin cannot be enforced there ([4.5](#45-the-certificate-pin)). |
+| `serverCertificateThumbprint` | Server certificate | SHA-256, 64 hex characters; colons and spaces ignored. Refused together with `securityMode: None`, because a pin cannot be enforced there ([4.5](#45-the-certificate-pin)). |
 | `clientCertificatePath` / `clientPrivateKeyPath` | — (seed file only) | Supplied together or not at all. |
 | `sshTunnel` | SSH Tunnel | Standard Studio tunnel. The address is rebuilt rather than replaced: the tunnel rewrites `host` to the local end, which for this engine is the whole URL, so the dialled URL keeps the scheme and path the reader typed and takes the local authority. A tunnel the factory has not opened is refused rather than dialled. |
 
@@ -342,7 +342,8 @@ trusted that one too, with no prompt and no error. Part 4 6.1.3 says the opposit
 "Applications shall never communicate with another application that they do not trust."
 
 So the certificate manager is strict, and a pin is checked **before the session exists**: the
-thumbprint is read from `GetEndpoints` and compared there. Measured, the library's own
+thumbprint - SHA-256 over the certificate's DER, the form `openssl x509 -fingerprint -sha256`
+prints - is read from `GetEndpoints` and compared there. Measured, the library's own
 `checkCertificate` fires exactly once and before `CreateSession`, so a wrong pin refuses with zero
 `CreateSessionRequest` on the wire. The refusal names both thumbprints and says nothing was sent.
 

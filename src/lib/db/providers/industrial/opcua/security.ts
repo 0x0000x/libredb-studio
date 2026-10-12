@@ -120,7 +120,7 @@ export function plaintextIdentityRefusal(options: {
  * THE HOOK IS REAL AND IT IS THE RIGHT ONE. Measured: `certificateManager.checkCertificate` is
  * called exactly once and BEFORE CreateSession, so a wrong pin refuses with zero
  * CreateSessionRequest on the wire even when the certificate is otherwise trusted. The thumbprint
- * is SHA-1 over the DER as 40 lowercase hex, which is `openssl -fingerprint -sha1` without the
+ * is SHA-256 over the DER as 64 lowercase hex, which is `openssl x509 -fingerprint -sha256` without the
  * colons, and it is readable before any session from `getEndpoints()[i].serverCertificate`.
  *
  * The comparison is case-insensitive on the hex and ignores colons and spaces, because an operator
@@ -133,8 +133,8 @@ export function normaliseThumbprint(raw: string): string {
 export function pinRefusal(pinned: string | undefined, presented: string | undefined): string | undefined {
   if (pinned === undefined) return undefined;
   const want = normaliseThumbprint(pinned);
-  if (!/^[0-9a-f]{40}$/.test(want))
-    return "The pinned server certificate is not a SHA-1 thumbprint: it reads as 40 hexadecimal characters, which is what openssl -fingerprint -sha1 prints without the colons.";
+  if (!/^[0-9a-f]{64}$/.test(want))
+    return "The pinned server certificate is not a SHA-256 thumbprint: it reads as 64 hexadecimal characters, which is what openssl x509 -fingerprint -sha256 prints without the colons.";
   if (presented === undefined)
     return `This connection pins the server certificate ${want}, and the server presented none. A None security mode presents a certificate but authenticates nobody with it, so a pin cannot be checked there.`;
   const got = normaliseThumbprint(presented);

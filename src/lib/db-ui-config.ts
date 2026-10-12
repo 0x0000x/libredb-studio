@@ -1093,7 +1093,7 @@ export const DB_UI_CONFIG: Record<DatabaseType, DatabaseUIConfig> = {
         "has to accept this client's - until then a secured connect is refused, and the refusal names the " +
         "directory.",
       serverCertificateThumbprint:
-        "The SHA-1 thumbprint this server's certificate must present, as 40 hexadecimal characters; " +
+        "The SHA-256 thumbprint this server's certificate must present, as 64 hexadecimal characters; " +
         "colons and spaces are ignored. Without it any certificate the trust list accepts is accepted.",
     },
     readOnlyHint:

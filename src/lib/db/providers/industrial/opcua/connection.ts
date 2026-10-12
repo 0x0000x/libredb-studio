@@ -40,7 +40,7 @@ export interface OpcuaConnectionOptions {
   readonly identity: OpcuaIdentityKind;
   readonly user?: string;
   readonly password?: string;
-  /** The pinned server certificate's SHA-1 thumbprint, 40 lowercase hex (O-S2). */
+  /** The pinned server certificate's SHA-256 thumbprint, 64 lowercase hex (O-S2). */
   readonly pinnedThumbprint?: string;
   /** Where the client's own key pair and trust store live (O-S4). */
   readonly pkiRoot: string;
@@ -123,10 +123,10 @@ export function readConnection(
   const pinnedRaw =
     typeof config.serverCertificateThumbprint === "string" ? config.serverCertificateThumbprint.trim() : "";
   const pinnedThumbprint = pinnedRaw === "" ? undefined : normaliseThumbprint(pinnedRaw);
-  if (pinnedThumbprint !== undefined && !/^[0-9a-f]{40}$/.test(pinnedThumbprint))
+  if (pinnedThumbprint !== undefined && !/^[0-9a-f]{64}$/.test(pinnedThumbprint))
     throw new DatabaseConfigError(
-      "A pinned server certificate is a SHA-1 thumbprint: 40 hexadecimal characters, which is what " +
-        "openssl -fingerprint -sha1 prints without the colons. Colons and spaces are ignored.",
+      "A pinned server certificate is a SHA-256 thumbprint: 64 hexadecimal characters, which is what " +
+        "openssl x509 -fingerprint -sha256 prints without the colons. Colons and spaces are ignored.",
       OPCUA_TYPE,
     );
 

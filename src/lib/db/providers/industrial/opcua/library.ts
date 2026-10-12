@@ -72,10 +72,20 @@ const SECURITY_MODES: Readonly<Record<OpcuaConnectionOptions["mode"], MessageSec
   SignAndEncrypt: MessageSecurityMode.SignAndEncrypt,
 });
 
-/** The SHA-1 thumbprint of a DER certificate as 40 lowercase hex: what a pin is written in (O-S2). */
+/**
+ * The SHA-256 thumbprint of a DER certificate as 64 lowercase hex: what a pin is written in (O-S2).
+ *
+ * SHA-256 AND NOT SHA-1, which is what an OPC UA thumbprint usually means and what this computed
+ * first. Two scanners read the SHA-1 as a weak algorithm on a trust path and both were right that
+ * the algorithm is weak, whatever the pin's threat model is: defeating a pin of an existing
+ * certificate needs a second preimage, which SHA-1 still resists, but there is no reason to write a
+ * NEW pin in a hash whose collision resistance is broken. Nothing shipped with a SHA-1 pin, so
+ * nothing had to be kept working. An operator reads the value out of
+ * `openssl x509 -fingerprint -sha256`, which is what current openssl prints by default.
+ */
 function thumbprintOf(der: Buffer | Uint8Array | null | undefined): string | undefined {
   if (der === null || der === undefined || der.length === 0) return undefined;
-  return createHash("sha1").update(Buffer.from(der)).digest("hex");
+  return createHash("sha256").update(Buffer.from(der)).digest("hex");
 }
 
 /** The status code's own name, which is what the error table is keyed on, never the object. */

@@ -127,7 +127,7 @@ await check("a history read pages by continuation point and ends on its own", as
 });
 
 await check("a wrong certificate pin refuses, and refuses before a session exists", async () => {
-  const wrong = "0".repeat(40);
+  const wrong = "0".repeat(64);
   const countBefore = await sessionCount(probe);
   try {
     const client = await openReadOnlySession(OPCUA_LIBRARY_BRIDGE, options({ pinnedThumbprint: wrong }));

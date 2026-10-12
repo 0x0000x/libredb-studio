@@ -16,7 +16,7 @@ import {
 
 const NONE = "http://opcfoundation.org/UA/SecurityPolicy#None";
 const B256 = "http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256";
-const PLC_THUMB = "4a25cd3ba6a2ddef16c8c88d33973cdabea3d8b2";
+const PLC_THUMB = "b9432ed131e30092d2a0619284763a403c33fc3929546728864b27b475c9529a";
 
 function endpoint(mode: OpcuaEndpoint["securityMode"], thumb?: string): OpcuaEndpoint {
   return {
@@ -123,7 +123,7 @@ describe("the security mode is never weakened", () => {
 describe("the certificate pin is checked before the session exists (O-S2)", () => {
   test("a different certificate is refused with no session opened", async () => {
     const record = fresh();
-    const other = "0000000000000000000000000000000000000000";
+    const other = "0".repeat(64);
     await expect(
       openReadOnlySession(
         bridge([endpoint("SignAndEncrypt", other)], record),

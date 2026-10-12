@@ -79,13 +79,15 @@ describe("the identity", () => {
 });
 
 describe("the pinned server certificate", () => {
-  const PLC = "4a25cd3ba6a2ddef16c8c88d33973cdabea3d8b2";
+  const PLC = "b9432ed131e30092d2a0619284763a403c33fc3929546728864b27b475c9529a";
 
   test("an operator's paste is normalised however their tool printed it", () => {
     expect(
       readConnection(
         connection({
-          serverCertificateThumbprint: "4A:25:CD:3B:A6:A2:DD:EF:16:C8:C8:8D:33:97:3C:DA:BE:A3:D8:B2",
+          // The same thumbprint as `PLC`, in the upper-case colon-separated form a certificate
+          // dialog prints: what the operator actually has on their clipboard.
+          serverCertificateThumbprint: PLC.toUpperCase().replace(/(..)(?=.)/g, "$1:"),
         }),
         ENV,
       ).pinnedThumbprint,
@@ -98,7 +100,7 @@ describe("the pinned server certificate", () => {
 
   test("something that is not a thumbprint is refused, with the form it should take", () => {
     expect(() => readConnection(connection({ serverCertificateThumbprint: "deadbeef" }), ENV)).toThrow(
-      /40 hexadecimal/,
+      /64 hexadecimal/,
     );
   });
 });
@@ -171,7 +173,7 @@ describe("the field the dialog writes", () => {
  * own hint and the guide both say a certificate cannot be pinned on a None channel.
  */
 describe("a pin and the mode it is pinned on", () => {
-  const PIN = "451da1b4c3d7ce116483efae454a1e2e15e30e25";
+  const PIN = "b9432ed131e30092d2a0619284763a403c33fc3929546728864b27b475c9529a";
 
   test("a pin on None is refused, and the sentence names both ways out", () => {
     expect(() => readConnection(connection({ securityMode: "None", serverCertificateThumbprint: PIN }), ENV)).toThrow(

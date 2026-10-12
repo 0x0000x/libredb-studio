@@ -215,12 +215,12 @@ describe("the endpoint URL is what the reader typed (O-S7)", () => {
 });
 
 describe("the server certificate pin (O-S2)", () => {
-  /** SHA-1 over the DER, 40 lowercase hex: the thumbprint measured on the fixture. */
-  const PLC = "4a25cd3ba6a2ddef16c8c88d33973cdabea3d8b2";
+  /** SHA-256 over the DER, 64 lowercase hex: measured on the running fixture with `sha256sum`. */
+  const PLC = "b9432ed131e30092d2a0619284763a403c33fc3929546728864b27b475c9529a";
 
   test("an operator's paste is read however their tool printed it", () => {
-    expect(normaliseThumbprint("4A:25:CD:3B:A6:A2:DD:EF:16:C8:C8:8D:33:97:3C:DA:BE:A3:D8:B2")).toBe(PLC);
-    expect(normaliseThumbprint(" 4a25cd3b a6a2ddef 16c8c88d 33973cda bea3d8b2 ")).toBe(PLC);
+    expect(normaliseThumbprint(PLC.toUpperCase().replace(/(..)(?=.)/g, "$1:"))).toBe(PLC);
+    expect(normaliseThumbprint(` ${PLC.replace(/(.{8})(?=.)/g, "$1 ")} `)).toBe(PLC);
   });
 
   test("the pinned server is allowed", () => {
@@ -230,7 +230,7 @@ describe("the server certificate pin (O-S2)", () => {
 
   /** The case O-S2 exists for: the server was recreated with a new certificate. */
   test("a different certificate is refused, and the refusal names both thumbprints", () => {
-    const other = "0000000000000000000000000000000000000000";
+    const other = "0".repeat(64);
     const refusal = pinRefusal(PLC, other);
     expect(refusal).toContain(PLC);
     expect(refusal).toContain(other);
@@ -242,7 +242,9 @@ describe("the server certificate pin (O-S2)", () => {
     expect(pinRefusal(PLC, undefined)).toMatch(/None security mode/);
   });
 
-  test("a pin that is not a SHA-1 thumbprint is refused as a mistake in the pin", () => {
-    expect(pinRefusal("deadbeef", PLC)).toMatch(/40 hexadecimal/);
+  test("a pin that is not a SHA-256 thumbprint is refused as a mistake in the pin", () => {
+    expect(pinRefusal("deadbeef", PLC)).toMatch(/64 hexadecimal/);
+    // A SHA-1 thumbprint is the near miss an operator's older tool prints, and it is refused by length.
+    expect(pinRefusal("4a25cd3ba6a2ddef16c8c88d33973cdabea3d8b2", PLC)).toMatch(/64 hexadecimal/);
   });
 });

@@ -454,7 +454,7 @@ export interface DatabaseConnection {
    */
   securityMode?: string;
   /**
-   * OPC UA only: the SHA-1 thumbprint the server's certificate must present, 40 hexadecimal
+   * OPC UA only: the SHA-256 thumbprint the server's certificate must present, 64 hexadecimal
    * characters.
    *
    * Pinned per connection because the library's default trusts a server on first sight: measured, a

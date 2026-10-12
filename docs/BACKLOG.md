@@ -5947,23 +5947,26 @@ Not fixed there: it needs a new audit reason, a security control count change an
 A scanner finding that is open, is not failing a required check, and needs a written ruling before it can be dismissed or fixed.
 CodeQL alerts anchor to a source location, so moving the code re-reports them and a dismissal made against the wrong location does not hold.
 
-### SCAN2. CodeQL alert 660 and SonarCloud S4790, SHA-1 in the OPC UA certificate thumbprint, ruled not a weakness
+### SCAN2. CodeQL alert 660, SHA-1 in the OPC UA certificate thumbprint, closed by moving the pin to SHA-256
 
-`js/weak-cryptographic-algorithm`, security severity high, open against `refs/pull/1719/merge` at `src/lib/db/providers/industrial/opcua/library.ts:78`, and the same line as `typescript:S4790` on SonarCloud.
+`js/weak-cryptographic-algorithm`, security severity high, raised against `refs/pull/1719/merge` at `src/lib/db/providers/industrial/opcua/library.ts:78`, and the same line as `typescript:S4790` on SonarCloud.
 CodeQL's text: "A broken or weak cryptographic algorithm depends on sensitive data from an access to serverCertificate."
 
-The line computes the SHA-1 thumbprint of the server's DER certificate, which `session.ts` then compares against the operator's pin.
+The line computed the SHA-1 thumbprint of the server's DER certificate, which `session.ts` compares against the operator's pin.
 
-Both halves of the stated consequence were measured on 2026-10-12 and neither holds.
+The stated CONSEQUENCE was measured on 2026-10-12 and does not hold, and that is worth recording because it is what the next reader will want.
 The hashed DER is not sensitive: an OPC UA server publishes it to any unauthenticated caller in its `GetEndpoints` reply (Part 4 5.5.4), and this repository already classifies the derived thumbprint as `public` in `src/lib/storage/connection-secrets.ts`.
-And no hash attack is needed to defeat the pin, because the pin is compared against the discovery dial's certificate rather than the session's, which U130 records; where the pin does bind, the property an attacker would need is second-preimage resistance, which is unbroken for SHA-1, not the collision resistance that SHAttered 2017 and Leurent and Peyrin 2020 broke.
-Changing the algorithm would also not remove the deployment's dependence on SHA-1: `node-opcua-pki` keys its own trust list on a SHA-1 fingerprint with no comparison of the stored bytes, so the library's trust decision is SHA-1 either way.
+Nor was the pin defeatable: defeating a pin of a certificate that already exists needs a SECOND PREIMAGE, which SHA-1 still resists, and not the collision resistance that SHAttered 2017 and Leurent and Peyrin 2020 broke.
+The thing actually worth fixing that the audit turned up is U130, which is about which certificate the pin is compared against rather than about the hash.
 
-Two SonarCloud `typescript:S5332` findings on the same provider ("Using http protocol is insecure") are the OPC Foundation's own policy URI, `http://opcfoundation.org/UA/SecurityPolicy#None`, which is an identifier nothing dereferences and which a server compares as bytes; `https` there would stop matching every server. It is now declared once, in `constants.ts`, with that reason.
+The ALGORITHM was weak all the same, and nothing had shipped with a SHA-1 pin, so there was no compatibility to keep.
+The thumbprint is SHA-256 now, 64 lowercase hex, which is what `openssl x509 -fingerprint -sha256` prints and what current openssl prints by default.
+Measured against the running fixture on 2026-10-13: the same certificate is `451da1b4...` under SHA-1 and `b9432ed1...` under SHA-256, and the recorded endpoints fixture was re-derived from the DER it already carries rather than retyped.
+One thing this does NOT buy, and a reader should not believe it does: `node-opcua-pki` keys its own trust list on a SHA-1 fingerprint with no comparison of the stored bytes, so the library's trust decision is still SHA-1 whatever this provider writes.
 
-Neither check is required on `main`, and `main` itself carries open high-severity CodeQL alerts and a failing SonarCloud gate, so this does not block.
+A SonarCloud `typescript:S5332` finding on the same provider ("Using http protocol is insecure") is the OPC Foundation's own policy URI, `http://opcfoundation.org/UA/SecurityPolicy#None`, which is an identifier nothing dereferences and which a server compares as bytes; `https` there would stop matching every server. It is declared once, in `constants.ts`, with that reason.
 
-**Done when:** alert 660 carries a written dismissal on the ground above, filed against the merged location on `main`, and the `S5332` finding on the one remaining declaration of that URI is marked as the protocol identifier it is.
+**Done when:** alert 660 is closed by the SHA-256 change on `main`, and the `S5332` finding on the one declaration of that URI is marked as the protocol identifier it is.
 
 ### SCAN1. CodeQL alert 536, polynomial ReDoS in the MCP error redactor, needs a ruling
 
