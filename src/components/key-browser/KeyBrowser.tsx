@@ -410,9 +410,9 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
    * saying which row is readable; a level with a single row keeps it too, since one word is not a
    * repetition. Only under `levels`, where a level is one the server listed.
    */
-  const uniformTypeOf = useMemo(() => {
-    if (!levels) return () => false;
+  const uniformTypes = useMemo(() => {
     const byParent = new Map<string, boolean>();
+    if (!levels) return byParent;
     const visit = (node: KeyTreeNode): void => {
       const words = new Set<string>();
       let keyRows = 0;
@@ -425,7 +425,9 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
       for (const child of node.children) visit(child);
     };
     visit(tree);
-    return (parent: string): boolean => byParent.get(parent) ?? false;
+    // A MAP RATHER THAN A FUNCTION, which the React compiler asks for: a `useMemo` that returns a
+    // closure over a local cannot have its memoization preserved, and CI's ESLint says so.
+    return byParent;
   }, [levels, tree, types, shape]);
   const filtering = term.trim() !== "";
   const visible = useMemo(() => filterKeyTree(tree, term, shape), [tree, term, shape]);
@@ -1116,7 +1118,7 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
              * that tells them apart - and only under `levels`, where a level is a level the SERVER
              * listed rather than a prefix a glob walk inferred.
              */
-            const uniformType = uniformTypeOf(pathKey(node.path.slice(0, -1)));
+            const uniformType = uniformTypes.get(pathKey(node.path.slice(0, -1))) ?? false;
             const isOpen = filtering || open.has(key);
             // The FULL name, the one join every reader uses, and the three names the row gives its node,
             // all in the declared separator (spec 4.6).
