@@ -1,0 +1,3208 @@
+{
+  "i=85": {
+    "nodeId": "i=85",
+    "references": [
+      {
+        "nodeId": "ns=0;i=23470",
+        "browseName": "Aliases",
+        "displayName": "Aliases",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=OpcPlc",
+        "browseName": "OpcPlc",
+        "displayName": "OpcPlc",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=5",
+        "browseName": "Boilers",
+        "displayName": "Boilers",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2253",
+        "browseName": "Server",
+        "displayName": "Server",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=ReferenceTest",
+        "browseName": "ReferenceTest",
+        "displayName": "ReferenceTest",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=2;i=5001",
+        "browseName": "DeviceSet",
+        "displayName": "DeviceSet",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=31915",
+        "browseName": "Locations",
+        "displayName": "Locations",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=2;i=6094",
+        "browseName": "DeviceTopology",
+        "displayName": "DeviceTopology",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=2;i=6078",
+        "browseName": "NetworkSet",
+        "displayName": "NetworkSet",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=23470": {
+    "nodeId": "ns=0;i=23470",
+    "references": [
+      {
+        "nodeId": "ns=0;i=23476",
+        "browseName": "FindAlias",
+        "displayName": "FindAlias",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=32852",
+        "browseName": "LastChange",
+        "displayName": "LastChange",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=23488",
+        "browseName": "Topics",
+        "displayName": "Topics",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=23479",
+        "browseName": "TagVariables",
+        "displayName": "TagVariables",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=OpcPlc": {
+    "nodeId": "ns=3;s=OpcPlc",
+    "references": [
+      {
+        "nodeId": "ns=3;s=Telemetry",
+        "browseName": "Telemetry",
+        "displayName": "Telemetry",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=Methods",
+        "browseName": "Methods",
+        "displayName": "Methods",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=SimulatorConfiguration",
+        "browseName": "SimulatorConfiguration",
+        "displayName": "SimulatorConfiguration",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=4;i=5": {
+    "nodeId": "ns=4;i=5",
+    "references": [
+      {
+        "nodeId": "ns=4;i=5017",
+        "browseName": "Boiler #2",
+        "displayName": "Boiler #2",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=15070",
+        "browseName": "Boiler #1",
+        "displayName": "Boiler #1",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2253": {
+    "nodeId": "ns=0;i=2253",
+    "references": [
+      {
+        "nodeId": "ns=0;i=2254",
+        "browseName": "ServerArray",
+        "displayName": "ServerArray",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2255",
+        "browseName": "NamespaceArray",
+        "displayName": "NamespaceArray",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=15004",
+        "browseName": "UrisVersion",
+        "displayName": "UrisVersion",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2256",
+        "browseName": "ServerStatus",
+        "displayName": "ServerStatus",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2267",
+        "browseName": "ServiceLevel",
+        "displayName": "ServiceLevel",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=12885",
+        "browseName": "EstimatedReturnTime",
+        "displayName": "EstimatedReturnTime",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=17634",
+        "browseName": "LocalTime",
+        "displayName": "LocalTime",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2268",
+        "browseName": "ServerCapabilities",
+        "displayName": "ServerCapabilities",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2274",
+        "browseName": "ServerDiagnostics",
+        "displayName": "ServerDiagnostics",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2295",
+        "browseName": "VendorServerInfo",
+        "displayName": "VendorServerInfo",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2296",
+        "browseName": "ServerRedundancy",
+        "displayName": "ServerRedundancy",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=11715",
+        "browseName": "Namespaces",
+        "displayName": "Namespaces",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=11492",
+        "browseName": "GetMonitoredItems",
+        "displayName": "GetMonitoredItems",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=12873",
+        "browseName": "ResendData",
+        "displayName": "ResendData",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=12886",
+        "browseName": "RequestServerStateChange",
+        "displayName": "RequestServerStateChange",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=12637",
+        "browseName": "ServerConfiguration",
+        "displayName": "ServerConfiguration",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=17594",
+        "browseName": "Dictionaries",
+        "displayName": "Dictionaries",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=24226",
+        "browseName": "Resources",
+        "displayName": "Resources",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=14443",
+        "browseName": "PublishSubscribe",
+        "displayName": "PublishSubscribe",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=19372",
+        "browseName": "ServerLog",
+        "displayName": "ServerLog",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32637",
+        "browseName": "DefaultHAConfiguration",
+        "displayName": "DefaultHAConfiguration",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32754",
+        "browseName": "DefaultHEConfiguration",
+        "displayName": "DefaultHEConfiguration",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32530",
+        "browseName": "Quantities",
+        "displayName": "Quantities",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=6;s=ReferenceTest": {
+    "nodeId": "ns=6;s=ReferenceTest",
+    "references": [
+      {
+        "nodeId": "ns=6;s=Scalar",
+        "browseName": "Scalar",
+        "displayName": "Scalar",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=DataAccess",
+        "browseName": "DataAccess",
+        "displayName": "DataAccess",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=References",
+        "browseName": "References",
+        "displayName": "References",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=AccessRights",
+        "browseName": "AccessRights",
+        "displayName": "AccessRights",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=NodeIds",
+        "browseName": "NodeIds",
+        "displayName": "NodeIds",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Methods",
+        "browseName": "Methods",
+        "displayName": "Methods",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Views",
+        "browseName": "Views",
+        "displayName": "Views",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales",
+        "browseName": "Locales",
+        "displayName": "Locales",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Attributes",
+        "browseName": "Attributes",
+        "displayName": "Attributes",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=MyCompany",
+        "browseName": "MyCompany",
+        "displayName": "MyCompany",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=2;i=5001": {
+    "nodeId": "ns=2;i=5001",
+    "references": [
+      {
+        "nodeId": "ns=4;i=5017",
+        "browseName": "Boiler #2",
+        "displayName": "Boiler #2",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=2;i=15034",
+        "browseName": "DeviceFeatures",
+        "displayName": "DeviceFeatures",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=31915": {
+    "nodeId": "ns=0;i=31915",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=2;i=6094": {
+    "nodeId": "ns=2;i=6094",
+    "references": [
+      {
+        "nodeId": "ns=2;i=6095",
+        "browseName": "OnlineAccess",
+        "displayName": "OnlineAccess",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=2;i=6078": {
+    "nodeId": "ns=2;i=6078",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=32852": {
+    "nodeId": "ns=0;i=32852",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=23488": {
+    "nodeId": "ns=0;i=23488",
+    "references": [
+      {
+        "nodeId": "ns=0;i=23494",
+        "browseName": "FindAlias",
+        "displayName": "FindAlias",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=23479": {
+    "nodeId": "ns=0;i=23479",
+    "references": [
+      {
+        "nodeId": "ns=0;i=23485",
+        "browseName": "FindAlias",
+        "displayName": "FindAlias",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=Telemetry": {
+    "nodeId": "ns=3;s=Telemetry",
+    "references": [
+      {
+        "nodeId": "ns=3;s=Basic",
+        "browseName": "Basic",
+        "displayName": "Basic",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=Deterministic GUID",
+        "browseName": "Deterministic GUID",
+        "displayName": "Deterministic GUID",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=Anomaly",
+        "browseName": "Anomaly",
+        "displayName": "Anomaly",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=Fast",
+        "browseName": "Fast",
+        "displayName": "Fast",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=Historian",
+        "browseName": "Historian",
+        "displayName": "Historian",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=Special",
+        "browseName": "Special",
+        "displayName": "Special",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=Slow",
+        "browseName": "Slow",
+        "displayName": "Slow",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=VeryFastByteString",
+        "browseName": "VeryFastByteString",
+        "displayName": "VeryFastByteString",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=Methods": {
+    "nodeId": "ns=3;s=Methods",
+    "references": [
+      {
+        "nodeId": "ns=4;s=HeaterOn",
+        "browseName": "HeaterOn",
+        "displayName": "HeaterOn",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=4;s=HeaterOff",
+        "browseName": "HeaterOff",
+        "displayName": "HeaterOff",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=3;s=ResetStepUp",
+        "browseName": "ResetStepUp",
+        "displayName": "ResetStepUp",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=3;s=StartStepUp",
+        "browseName": "StartStepUp",
+        "displayName": "StartStepUp",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=3;s=StopStepUp",
+        "browseName": "StopStepUp",
+        "displayName": "StopStepUp",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=3;s=StopUpdateFastNodes",
+        "browseName": "StopUpdateFastNodes",
+        "displayName": "StopUpdateFastNodes",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=3;s=StartUpdateFastNodes",
+        "browseName": "StartUpdateFastNodes",
+        "displayName": "StartUpdateFastNodes",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=3;s=ResetNegTrend",
+        "browseName": "ResetNegTrend",
+        "displayName": "ResetNegTrend",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=3;s=ResetPosTrend",
+        "browseName": "ResetPosTrend",
+        "displayName": "ResetPosTrend",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=3;s=StopUpdateSlowNodes",
+        "browseName": "StopUpdateSlowNodes",
+        "displayName": "StopUpdateSlowNodes",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=3;s=StartUpdateSlowNodes",
+        "browseName": "StartUpdateSlowNodes",
+        "displayName": "StartUpdateSlowNodes",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=SimulatorConfiguration": {
+    "nodeId": "ns=3;s=SimulatorConfiguration",
+    "references": [
+      {
+        "nodeId": "ns=3;s=FastNumberOfUpdates",
+        "browseName": "FastNumberOfUpdates",
+        "displayName": "FastNumberOfUpdates",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=SlowNumberOfUpdates",
+        "browseName": "SlowNumberOfUpdates",
+        "displayName": "SlowNumberOfUpdates",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=4;i=5017": {
+    "nodeId": "ns=4;i=5017",
+    "references": [
+      {
+        "nodeId": "ns=4;i=5020",
+        "browseName": "ParameterSet",
+        "displayName": "ParameterSet",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=5019",
+        "browseName": "MethodSet",
+        "displayName": "MethodSet",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6202",
+        "browseName": "Manufacturer",
+        "displayName": "Manufacturer",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6203",
+        "browseName": "ManufacturerUri",
+        "displayName": "ManufacturerUri",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6204",
+        "browseName": "Model",
+        "displayName": "Model",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6201",
+        "browseName": "HardwareRevision",
+        "displayName": "HardwareRevision",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6209",
+        "browseName": "SoftwareRevision",
+        "displayName": "SoftwareRevision",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6200",
+        "browseName": "DeviceRevision",
+        "displayName": "DeviceRevision",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6205",
+        "browseName": "ProductCode",
+        "displayName": "ProductCode",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6199",
+        "browseName": "DeviceManual",
+        "displayName": "DeviceManual",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6197",
+        "browseName": "DeviceClass",
+        "displayName": "DeviceClass",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6208",
+        "browseName": "SerialNumber",
+        "displayName": "SerialNumber",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6206",
+        "browseName": "ProductInstanceUri",
+        "displayName": "ProductInstanceUri",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6207",
+        "browseName": "RevisionCounter",
+        "displayName": "RevisionCounter",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6195",
+        "browseName": "AssetId",
+        "displayName": "AssetId",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6196",
+        "browseName": "ComponentName",
+        "displayName": "ComponentName",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6198",
+        "browseName": "DeviceHealth",
+        "displayName": "DeviceHealth",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=5018",
+        "browseName": "DeviceHealthAlarms",
+        "displayName": "DeviceHealthAlarms",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=4;i=15070": {
+    "nodeId": "ns=4;i=15070",
+    "references": [
+      {
+        "nodeId": "ns=4;i=15013",
+        "browseName": "BoilerStatus",
+        "displayName": "BoilerStatus",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2254": {
+    "nodeId": "ns=0;i=2254",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2255": {
+    "nodeId": "ns=0;i=2255",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=15004": {
+    "nodeId": "ns=0;i=15004",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2256": {
+    "nodeId": "ns=0;i=2256",
+    "references": [
+      {
+        "nodeId": "ns=0;i=2257",
+        "browseName": "StartTime",
+        "displayName": "StartTime",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2258",
+        "browseName": "CurrentTime",
+        "displayName": "CurrentTime",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2259",
+        "browseName": "State",
+        "displayName": "State",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2260",
+        "browseName": "BuildInfo",
+        "displayName": "BuildInfo",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2992",
+        "browseName": "SecondsTillShutdown",
+        "displayName": "SecondsTillShutdown",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2993",
+        "browseName": "ShutdownReason",
+        "displayName": "ShutdownReason",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=Basic": {
+    "nodeId": "ns=3;s=Basic",
+    "references": [
+      {
+        "nodeId": "ns=3;s=StepUp",
+        "browseName": "StepUp",
+        "displayName": "StepUp",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=AlternatingBoolean",
+        "browseName": "AlternatingBoolean",
+        "displayName": "AlternatingBoolean",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=RandomSignedInt32",
+        "browseName": "RandomSignedInt32",
+        "displayName": "RandomSignedInt32",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=RandomUnsignedInt32",
+        "browseName": "RandomUnsignedInt32",
+        "displayName": "RandomUnsignedInt32",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=Deterministic GUID": {
+    "nodeId": "ns=3;s=Deterministic GUID",
+    "references": [
+      {
+        "nodeId": "ns=3;g=51B74E55-F2E3-4A4D-B79C-BF57C76EA67C",
+        "browseName": "51b74e55-f2e3-4a4d-b79c-bf57c76ea67c",
+        "displayName": "51b74e55-f2e3-4a4d-b79c-bf57c76ea67c",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=Anomaly": {
+    "nodeId": "ns=3;s=Anomaly",
+    "references": [
+      {
+        "nodeId": "ns=3;s=DipData",
+        "browseName": "DipData",
+        "displayName": "DipData",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=NegativeTrendData",
+        "browseName": "NegativeTrendData",
+        "displayName": "NegativeTrendData",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=PositiveTrendData",
+        "browseName": "PositiveTrendData",
+        "displayName": "PositiveTrendData",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=SpikeData",
+        "browseName": "SpikeData",
+        "displayName": "SpikeData",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=Fast": {
+    "nodeId": "ns=3;s=Fast",
+    "references": [
+      {
+        "nodeId": "ns=3;s=FastUInt1",
+        "browseName": "FastUInt1",
+        "displayName": "FastUInt1",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=FastUInt2",
+        "browseName": "FastUInt2",
+        "displayName": "FastUInt2",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=FastUInt3",
+        "browseName": "FastUInt3",
+        "displayName": "FastUInt3",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=BadFastUInt1",
+        "browseName": "BadFastUInt1",
+        "displayName": "BadFastUInt1",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=Historian": {
+    "nodeId": "ns=3;s=Historian",
+    "references": [
+      {
+        "nodeId": "ns=3;s=HistorianInt32",
+        "browseName": "HistorianInt32",
+        "displayName": "HistorianInt32",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=Special": {
+    "nodeId": "ns=3;s=Special",
+    "references": [
+      {
+        "nodeId": "ns=3;s=ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWX",
+        "browseName": "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWX",
+        "displayName": "LongId3950",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=LongString10kB",
+        "browseName": "LongString10kB",
+        "displayName": "LongString10kB",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=LongString50kB",
+        "browseName": "LongString50kB",
+        "displayName": "LongString50kB",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=LongString100kB",
+        "browseName": "LongString100kB",
+        "displayName": "LongString100kB",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=LongString200kB",
+        "browseName": "LongString200kB",
+        "displayName": "LongString200kB",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;b=YWJj",
+        "browseName": "Opaque_abc",
+        "displayName": "Opaque_abc",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=ScalarStaticNodeIdString",
+        "browseName": "ScalarStaticNodeIdString",
+        "displayName": "ScalarStaticNodeIdString",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=ScalarStaticNodeIdNumeric",
+        "browseName": "ScalarStaticNodeIdNumeric",
+        "displayName": "ScalarStaticNodeIdNumeric",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=ScalarStaticNodeIdOpaque",
+        "browseName": "ScalarStaticNodeIdOpaque",
+        "displayName": "ScalarStaticNodeIdOpaque",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=ScalarStaticNodeIdGuid",
+        "browseName": "ScalarStaticNodeIdGuid",
+        "displayName": "ScalarStaticNodeIdGuid",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=ScalarStaticExpandedNodeIdString",
+        "browseName": "ScalarStaticExpandedNodeIdString",
+        "displayName": "ScalarStaticExpandedNodeIdString",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=ScalarStaticExpandedNodeIdNumeric",
+        "browseName": "ScalarStaticExpandedNodeIdNumeric",
+        "displayName": "ScalarStaticExpandedNodeIdNumeric",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=ScalarStaticExpandedNodeIdGuid",
+        "browseName": "ScalarStaticExpandedNodeIdGuid",
+        "displayName": "ScalarStaticExpandedNodeIdGuid",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=ScalarStaticExpandedNodeIdOpaque",
+        "browseName": "ScalarStaticExpandedNodeIdOpaque",
+        "displayName": "ScalarStaticExpandedNodeIdOpaque",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=Special_\"!§$%&/()=?`´\\+~*'#_-:.;,<>|@^°€µ{[]}",
+        "browseName": "Special_\"!§$%&/()=?`´\\+~*'#_-:.;,<>|@^°€µ{[]}",
+        "displayName": "\"!§$%&/()=?`´\\+~*'#_-:.;,<>|@^°€µ{[]}",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=WorkingSetMB",
+        "browseName": "WorkingSetMB",
+        "displayName": "WorkingSetMB",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=Slow": {
+    "nodeId": "ns=3;s=Slow",
+    "references": [
+      {
+        "nodeId": "ns=3;s=SlowUInt1",
+        "browseName": "SlowUInt1",
+        "displayName": "SlowUInt1",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=SlowUInt2",
+        "browseName": "SlowUInt2",
+        "displayName": "SlowUInt2",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=SlowUInt3",
+        "browseName": "SlowUInt3",
+        "displayName": "SlowUInt3",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=3;s=BadSlowUInt1",
+        "browseName": "BadSlowUInt1",
+        "displayName": "BadSlowUInt1",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=VeryFastByteString": {
+    "nodeId": "ns=3;s=VeryFastByteString",
+    "references": [
+      {
+        "nodeId": "ns=3;s=VeryFastByteString1",
+        "browseName": "VeryFastByteString1",
+        "displayName": "VeryFastByteString1",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=FastNumberOfUpdates": {
+    "nodeId": "ns=3;s=FastNumberOfUpdates",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=SlowNumberOfUpdates": {
+    "nodeId": "ns=3;s=SlowNumberOfUpdates",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=5020": {
+    "nodeId": "ns=4;i=5020",
+    "references": [
+      {
+        "nodeId": "ns=4;i=6218",
+        "browseName": "TemperatureChangeSpeed",
+        "displayName": "TemperatureChangeSpeed",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6210",
+        "browseName": "BaseTemperature",
+        "displayName": "BaseTemperature",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6217",
+        "browseName": "TargetTemperature",
+        "displayName": "TargetTemperature",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6213",
+        "browseName": "MaintenanceInterval",
+        "displayName": "MaintenanceInterval",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6215",
+        "browseName": "OverheatedThresholdTemperature",
+        "displayName": "OverheatedThresholdTemperature",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6212",
+        "browseName": "HeaterState",
+        "displayName": "HeaterState",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6211",
+        "browseName": "CurrentTemperature",
+        "displayName": "CurrentTemperature",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6214",
+        "browseName": "Overheated",
+        "displayName": "Overheated",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=6350",
+        "browseName": "OverheatInterval",
+        "displayName": "OverheatInterval",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=4;i=5019": {
+    "nodeId": "ns=4;i=5019",
+    "references": [
+      {
+        "nodeId": "ns=4;i=7019",
+        "browseName": "Switch",
+        "displayName": "Switch",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2267": {
+    "nodeId": "ns=0;i=2267",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=12885": {
+    "nodeId": "ns=0;i=12885",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=17634": {
+    "nodeId": "ns=0;i=17634",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2268": {
+    "nodeId": "ns=0;i=2268",
+    "references": [
+      {
+        "nodeId": "ns=0;i=2269",
+        "browseName": "ServerProfileArray",
+        "displayName": "ServerProfileArray",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2271",
+        "browseName": "LocaleIdArray",
+        "displayName": "LocaleIdArray",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2272",
+        "browseName": "MinSupportedSampleRate",
+        "displayName": "MinSupportedSampleRate",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2735",
+        "browseName": "MaxBrowseContinuationPoints",
+        "displayName": "MaxBrowseContinuationPoints",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2736",
+        "browseName": "MaxQueryContinuationPoints",
+        "displayName": "MaxQueryContinuationPoints",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2737",
+        "browseName": "MaxHistoryContinuationPoints",
+        "displayName": "MaxHistoryContinuationPoints",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=3704",
+        "browseName": "SoftwareCertificates",
+        "displayName": "SoftwareCertificates",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=11702",
+        "browseName": "MaxArrayLength",
+        "displayName": "MaxArrayLength",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=11703",
+        "browseName": "MaxStringLength",
+        "displayName": "MaxStringLength",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=12911",
+        "browseName": "MaxByteStringLength",
+        "displayName": "MaxByteStringLength",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=11704",
+        "browseName": "OperationLimits",
+        "displayName": "OperationLimits",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2996",
+        "browseName": "ModellingRules",
+        "displayName": "ModellingRules",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2997",
+        "browseName": "AggregateFunctions",
+        "displayName": "AggregateFunctions",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=15606",
+        "browseName": "RoleSet",
+        "displayName": "RoleSet",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=24095",
+        "browseName": "MaxSessions",
+        "displayName": "MaxSessions",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=24096",
+        "browseName": "MaxSubscriptions",
+        "displayName": "MaxSubscriptions",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=24097",
+        "browseName": "MaxMonitoredItems",
+        "displayName": "MaxMonitoredItems",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=24098",
+        "browseName": "MaxSubscriptionsPerSession",
+        "displayName": "MaxSubscriptionsPerSession",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=24104",
+        "browseName": "MaxMonitoredItemsPerSubscription",
+        "displayName": "MaxMonitoredItemsPerSubscription",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=24099",
+        "browseName": "MaxSelectClauseParameters",
+        "displayName": "MaxSelectClauseParameters",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=24100",
+        "browseName": "MaxWhereClauseParameters",
+        "displayName": "MaxWhereClauseParameters",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=31916",
+        "browseName": "MaxMonitoredItemsQueueSize",
+        "displayName": "MaxMonitoredItemsQueueSize",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=24101",
+        "browseName": "ConformanceUnits",
+        "displayName": "ConformanceUnits",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=2;i=6387",
+        "browseName": "MaxInactiveLockTime",
+        "displayName": "MaxInactiveLockTime",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=11192",
+        "browseName": "HistoryServerCapabilities",
+        "displayName": "HistoryServerCapabilities",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2274": {
+    "nodeId": "ns=0;i=2274",
+    "references": [
+      {
+        "nodeId": "ns=0;i=3706",
+        "browseName": "SessionsDiagnosticsSummary",
+        "displayName": "SessionsDiagnosticsSummary",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2294",
+        "browseName": "EnabledFlag",
+        "displayName": "EnabledFlag",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2295": {
+    "nodeId": "ns=0;i=2295",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2296": {
+    "nodeId": "ns=0;i=2296",
+    "references": [
+      {
+        "nodeId": "ns=0;i=3709",
+        "browseName": "RedundancySupport",
+        "displayName": "RedundancySupport",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=11313",
+        "browseName": "RedundantServerArray",
+        "displayName": "RedundantServerArray",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=11715": {
+    "nodeId": "ns=0;i=11715",
+    "references": [
+      {
+        "nodeId": "ns=4;i=5000",
+        "browseName": "http://microsoft.com/Opc/OpcPlc/Boiler",
+        "displayName": "http://microsoft.com/Opc/OpcPlc/Boiler",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=15957",
+        "browseName": "http://opcfoundation.org/UA/",
+        "displayName": "http://opcfoundation.org/UA/",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=2;i=15001",
+        "browseName": "http://opcfoundation.org/UA/DI/",
+        "displayName": "http://opcfoundation.org/UA/DI/",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=12637": {
+    "nodeId": "ns=0;i=12637",
+    "references": [
+      {
+        "nodeId": "ns=0;i=25706",
+        "browseName": "ApplicationUri",
+        "displayName": "ApplicationUri",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=25725",
+        "browseName": "ProductUri",
+        "displayName": "ProductUri",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=25707",
+        "browseName": "ApplicationType",
+        "displayName": "ApplicationType",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=12710",
+        "browseName": "ServerCapabilities",
+        "displayName": "ServerCapabilities",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=12639",
+        "browseName": "SupportedPrivateKeyFormats",
+        "displayName": "SupportedPrivateKeyFormats",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=12640",
+        "browseName": "MaxTrustListSize",
+        "displayName": "MaxTrustListSize",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=12641",
+        "browseName": "MulticastDnsEnabled",
+        "displayName": "MulticastDnsEnabled",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=23597",
+        "browseName": "HasSecureElement",
+        "displayName": "HasSecureElement",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=13737",
+        "browseName": "UpdateCertificate",
+        "displayName": "UpdateCertificate",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=32296",
+        "browseName": "GetCertificates",
+        "displayName": "GetCertificates",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=12740",
+        "browseName": "ApplyChanges",
+        "displayName": "ApplyChanges",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=25708",
+        "browseName": "CancelChanges",
+        "displayName": "CancelChanges",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=12737",
+        "browseName": "CreateSigningRequest",
+        "displayName": "CreateSigningRequest",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=12777",
+        "browseName": "GetRejectedList",
+        "displayName": "GetRejectedList",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=25709",
+        "browseName": "ResetToServerDefaults",
+        "displayName": "ResetToServerDefaults",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=14053",
+        "browseName": "CertificateGroups",
+        "displayName": "CertificateGroups",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32336",
+        "browseName": "TransactionDiagnostics",
+        "displayName": "TransactionDiagnostics",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=15892",
+        "browseName": "ConfigurationFile",
+        "displayName": "ConfigurationFile",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=24290",
+        "browseName": "UserManagement",
+        "displayName": "UserManagement",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=18155",
+        "browseName": "KeyCredentialConfiguration",
+        "displayName": "KeyCredentialConfiguration",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=17732",
+        "browseName": "AuthorizationServices",
+        "displayName": "AuthorizationServices",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=17594": {
+    "nodeId": "ns=0;i=17594",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=24226": {
+    "nodeId": "ns=0;i=24226",
+    "references": [
+      {
+        "nodeId": "ns=0;i=29878",
+        "browseName": "ProvisionableDevice",
+        "displayName": "ProvisionableDevice",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=19378",
+        "browseName": "Logs",
+        "displayName": "Logs",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=24227",
+        "browseName": "Communication",
+        "displayName": "Communication",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=16706",
+        "browseName": "ManagedApplications",
+        "displayName": "ManagedApplications",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=14443": {
+    "nodeId": "ns=0;i=14443",
+    "references": [
+      {
+        "nodeId": "ns=0;i=15215",
+        "browseName": "GetSecurityKeys",
+        "displayName": "GetSecurityKeys",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=15440",
+        "browseName": "GetSecurityGroup",
+        "displayName": "GetSecurityGroup",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=15443",
+        "browseName": "SecurityGroups",
+        "displayName": "SecurityGroups",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=25440",
+        "browseName": "KeyPushTargets",
+        "displayName": "KeyPushTargets",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=17364",
+        "browseName": "SetSecurityKeys",
+        "displayName": "SetSecurityKeys",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=17366",
+        "browseName": "AddConnection",
+        "displayName": "AddConnection",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=17369",
+        "browseName": "RemoveConnection",
+        "displayName": "RemoveConnection",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=17371",
+        "browseName": "PublishedDataSets",
+        "displayName": "PublishedDataSets",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=23658",
+        "browseName": "SubscribedDataSets",
+        "displayName": "SubscribedDataSets",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=25451",
+        "browseName": "PubSubConfiguration",
+        "displayName": "PubSubConfiguration",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=17405",
+        "browseName": "Status",
+        "displayName": "Status",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=17409",
+        "browseName": "Diagnostics",
+        "displayName": "Diagnostics",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=23678",
+        "browseName": "PubSubCapablities",
+        "displayName": "PubSubCapabilities",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=23685",
+        "browseName": "DataSetClasses",
+        "displayName": "DataSetClasses",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=17481",
+        "browseName": "SupportedTransportProfiles",
+        "displayName": "SupportedTransportProfiles",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=25480",
+        "browseName": "DefaultDatagramPublisherId",
+        "displayName": "DefaultDatagramPublisherId",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=25481",
+        "browseName": "ConfigurationVersion",
+        "displayName": "ConfigurationVersion",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32403",
+        "browseName": "DefaultSecurityKeyServices",
+        "displayName": "DefaultSecurityKeyServices",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32404",
+        "browseName": "ConfigurationProperties",
+        "displayName": "ConfigurationProperties",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=19372": {
+    "nodeId": "ns=0;i=19372",
+    "references": [
+      {
+        "nodeId": "ns=0;i=19373",
+        "browseName": "GetRecords",
+        "displayName": "GetRecords",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=0;i=19376",
+        "browseName": "MaxRecords",
+        "displayName": "MaxRecords",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=19377",
+        "browseName": "MaxStorageDuration",
+        "displayName": "MaxStorageDuration",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=19751",
+        "browseName": "MinimumSeverity",
+        "displayName": "MinimumSeverity",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=32637": {
+    "nodeId": "ns=0;i=32637",
+    "references": [
+      {
+        "nodeId": "ns=0;i=32638",
+        "browseName": "AggregateConfiguration",
+        "displayName": "AggregateConfiguration",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32643",
+        "browseName": "AggregateFunctions",
+        "displayName": "AggregateFunctions",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32644",
+        "browseName": "Stepped",
+        "displayName": "Stepped",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32645",
+        "browseName": "Definition",
+        "displayName": "Definition",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32646",
+        "browseName": "MaxTimeInterval",
+        "displayName": "MaxTimeInterval",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32647",
+        "browseName": "MinTimeInterval",
+        "displayName": "MinTimeInterval",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32648",
+        "browseName": "ExceptionDeviation",
+        "displayName": "ExceptionDeviation",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32649",
+        "browseName": "ExceptionDeviationFormat",
+        "displayName": "ExceptionDeviationFormat",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32650",
+        "browseName": "StartOfArchive",
+        "displayName": "StartOfArchive",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32656",
+        "browseName": "StartOfOnlineArchive",
+        "displayName": "StartOfOnlineArchive",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32682",
+        "browseName": "ServerTimestampSupported",
+        "displayName": "ServerTimestampSupported",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32752",
+        "browseName": "MaxTimeStoredValues",
+        "displayName": "MaxTimeStoredValues",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32753",
+        "browseName": "MaxCountStoredValues",
+        "displayName": "MaxCountStoredValues",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=32754": {
+    "nodeId": "ns=0;i=32754",
+    "references": [
+      {
+        "nodeId": "ns=0;i=32755",
+        "browseName": "EventTypes",
+        "displayName": "EventTypes",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32756",
+        "browseName": "StartOfArchive",
+        "displayName": "StartOfArchive",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=32757",
+        "browseName": "StartOfOnlineArchive",
+        "displayName": "StartOfOnlineArchive",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=46",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=32530": {
+    "nodeId": "ns=0;i=32530",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=6;s=Scalar": {
+    "nodeId": "ns=6;s=Scalar",
+    "references": [
+      {
+        "nodeId": "ns=6;s=Scalar_Instructions",
+        "browseName": "Scalar_Instructions",
+        "displayName": "Scalar_Instructions",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Scalar_Static",
+        "browseName": "Scalar_Static",
+        "displayName": "Scalar_Static",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Scalar_Simulation",
+        "browseName": "Scalar_Simulation",
+        "displayName": "Simulation",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=6;s=DataAccess": {
+    "nodeId": "ns=6;s=DataAccess",
+    "references": [
+      {
+        "nodeId": "ns=6;s=DataAccess_Instructions",
+        "browseName": "DataAccess_Instructions",
+        "displayName": "Instructions",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=DataAccess_DataItem",
+        "browseName": "DataAccess_DataItem",
+        "displayName": "DataItem",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=DataAccess_AnalogType",
+        "browseName": "DataAccess_AnalogType",
+        "displayName": "AnalogType",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=DataAccess_DiscreteType",
+        "browseName": "DataAccess_DiscreteType",
+        "displayName": "DiscreteType",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=6;s=References": {
+    "nodeId": "ns=6;s=References",
+    "references": [
+      {
+        "nodeId": "ns=6;s=References_Instructions",
+        "browseName": "References_Instructions",
+        "displayName": "Instructions",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=References_HasForwardReference",
+        "browseName": "References_HasForwardReference",
+        "displayName": "HasForwardReference",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=References_HasInverseReference",
+        "browseName": "References_HasInverseReference",
+        "displayName": "HasInverseReference",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=References_Has3ForwardReferences",
+        "browseName": "References_Has3ForwardReferences",
+        "displayName": "Has3ForwardReferences",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=References_Has3ForwardReferences2",
+        "browseName": "References_Has3ForwardReferences2",
+        "displayName": "Has3ForwardReferences2",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=References_Has3ForwardReferences3",
+        "browseName": "References_Has3ForwardReferences3",
+        "displayName": "Has3ForwardReferences3",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=References_Has3ForwardReferences4",
+        "browseName": "References_Has3ForwardReferences4",
+        "displayName": "Has3ForwardReferences4",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=References_Has3ForwardReferences5",
+        "browseName": "References_Has3ForwardReferences5",
+        "displayName": "Has3ForwardReferences5",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=References_Has3InverseReferences",
+        "browseName": "References_Has3InverseReferences",
+        "displayName": "Has3InverseReferences",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=References_HasForwardAndInverseReference",
+        "browseName": "References_HasForwardAndInverseReference",
+        "displayName": "HasForwardAndInverseReference",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=6;s=AccessRights": {
+    "nodeId": "ns=6;s=AccessRights",
+    "references": [
+      {
+        "nodeId": "ns=6;s=AccessRights_Instructions",
+        "browseName": "AccessRights_Instructions",
+        "displayName": "Instructions",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=AccessRights_AccessAll",
+        "browseName": "AccessRights_AccessAll",
+        "displayName": "AccessAll",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=AccessRights_AccessUser1",
+        "browseName": "AccessRights_AccessUser1",
+        "displayName": "AccessUser1",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=AccessRights_AccessGroup1",
+        "browseName": "AccessRights_AccessGroup1",
+        "displayName": "AccessGroup1",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=AccessRights_RolePermissions",
+        "browseName": "AccessRights_RolePermissions",
+        "displayName": "RolePermissions",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=AccessRights_AccessRestrictions",
+        "browseName": "AccessRights_AccessRestrictions",
+        "displayName": "AccessRestrictions",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=6;s=NodeIds": {
+    "nodeId": "ns=6;s=NodeIds",
+    "references": [
+      {
+        "nodeId": "ns=6;s=NodeIds_Instructions",
+        "browseName": "NodeIds_Instructions",
+        "displayName": "Instructions",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;i=9202",
+        "browseName": "NodeIds_Int16Integer",
+        "displayName": "Int16Integer",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=NodeIds_Int16String",
+        "browseName": "NodeIds_Int16String",
+        "displayName": "Int16String",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;g=00000000-0000-0000-0000-000000009204",
+        "browseName": "NodeIds_Int16GUID",
+        "displayName": "Int16GUID",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;b=CQIABQ==",
+        "browseName": "NodeIds_Int16Opaque",
+        "displayName": "Int16Opaque",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=6;s=Methods": {
+    "nodeId": "ns=6;s=Methods",
+    "references": [
+      {
+        "nodeId": "ns=6;s=Methods_Instructions",
+        "browseName": "Methods_Instructions",
+        "displayName": "Instructions",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Methods_Void",
+        "browseName": "Methods_Void",
+        "displayName": "Void",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=6;s=Methods_Add",
+        "browseName": "Methods_Add",
+        "displayName": "Add",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=6;s=Methods_Multiply",
+        "browseName": "Methods_Multiply",
+        "displayName": "Multiply",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=6;s=Methods_Divide",
+        "browseName": "Methods_Divide",
+        "displayName": "Divide",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=6;s=Methods_Substract",
+        "browseName": "Methods_Substract",
+        "displayName": "Substract",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=6;s=Methods_Hello",
+        "browseName": "Methods_Hello",
+        "displayName": "Hello",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=6;s=Methods_Input",
+        "browseName": "Methods_Input",
+        "displayName": "Input",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      },
+      {
+        "nodeId": "ns=6;s=Methods_Output",
+        "browseName": "Methods_Output",
+        "displayName": "Output",
+        "nodeClass": "Method",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": false
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=6;s=Views": {
+    "nodeId": "ns=6;s=Views",
+    "references": [
+      {
+        "nodeId": "ns=6;s=Views_Engineering",
+        "browseName": "Engineering",
+        "displayName": "Engineering",
+        "nodeClass": "View",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Views_Operations",
+        "browseName": "Operations",
+        "displayName": "Operations",
+        "nodeClass": "View",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=6;s=Locales": {
+    "nodeId": "ns=6;s=Locales",
+    "references": [
+      {
+        "nodeId": "ns=6;s=Locales_QNEnglish",
+        "browseName": "Locales_QNEnglish",
+        "displayName": "QNEnglish",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_LTEnglish",
+        "browseName": "Locales_LTEnglish",
+        "displayName": "LTEnglish",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_QNFrancais",
+        "browseName": "Locales_QNFrancais",
+        "displayName": "QNFrancais",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_LTFrancais",
+        "browseName": "Locales_LTFrancais",
+        "displayName": "LTFrancais",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_QNDeutsch",
+        "browseName": "Locales_QNDeutsch",
+        "displayName": "QNDeutsch",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_LTDeutsch",
+        "browseName": "Locales_LTDeutsch",
+        "displayName": "LTDeutsch",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_QNEspanol",
+        "browseName": "Locales_QNEspanol",
+        "displayName": "QNEspanol",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_LTEspanol",
+        "browseName": "Locales_LTEspanol",
+        "displayName": "LTEspanol",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_QN日本の",
+        "browseName": "Locales_QN日本の",
+        "displayName": "QN日本の",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_LT日本の",
+        "browseName": "Locales_LT日本の",
+        "displayName": "LT日本の",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_QN中國的",
+        "browseName": "Locales_QN中國的",
+        "displayName": "QN中國的",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_LT中國的",
+        "browseName": "Locales_LT中國的",
+        "displayName": "LT中國的",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_QNрусский",
+        "browseName": "Locales_QNрусский",
+        "displayName": "QNрусский",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_LTрусский",
+        "browseName": "Locales_LTрусский",
+        "displayName": "LTрусский",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_QNالعربية",
+        "browseName": "Locales_QNالعربية",
+        "displayName": "QNالعربية",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_LTالعربية",
+        "browseName": "Locales_LTالعربية",
+        "displayName": "LTالعربية",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_QNtlhIngan",
+        "browseName": "Locales_QNtlhIngan",
+        "displayName": "QNtlhIngan",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Locales_LTtlhIngan",
+        "browseName": "Locales_LTtlhIngan",
+        "displayName": "LTtlhIngan",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=6;s=Attributes": {
+    "nodeId": "ns=6;s=Attributes",
+    "references": [
+      {
+        "nodeId": "ns=6;s=Attributes_AccessAll",
+        "browseName": "Attributes_AccessAll",
+        "displayName": "AccessAll",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=6;s=Attributes_AccessUser1",
+        "browseName": "Attributes_AccessUser1",
+        "displayName": "AccessUser1",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=6;s=MyCompany": {
+    "nodeId": "ns=6;s=MyCompany",
+    "references": [
+      {
+        "nodeId": "ns=6;s=MyCompany_Instructions",
+        "browseName": "MyCompany_Instructions",
+        "displayName": "Instructions",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=2;i=15034": {
+    "nodeId": "ns=2;i=15034",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=2;i=6095": {
+    "nodeId": "ns=2;i=6095",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6202": {
+    "nodeId": "ns=4;i=6202",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6203": {
+    "nodeId": "ns=4;i=6203",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6204": {
+    "nodeId": "ns=4;i=6204",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6201": {
+    "nodeId": "ns=4;i=6201",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6209": {
+    "nodeId": "ns=4;i=6209",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6200": {
+    "nodeId": "ns=4;i=6200",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6205": {
+    "nodeId": "ns=4;i=6205",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6199": {
+    "nodeId": "ns=4;i=6199",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6197": {
+    "nodeId": "ns=4;i=6197",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6208": {
+    "nodeId": "ns=4;i=6208",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6206": {
+    "nodeId": "ns=4;i=6206",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6207": {
+    "nodeId": "ns=4;i=6207",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6195": {
+    "nodeId": "ns=4;i=6195",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6196": {
+    "nodeId": "ns=4;i=6196",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6198": {
+    "nodeId": "ns=4;i=6198",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=5018": {
+    "nodeId": "ns=4;i=5018",
+    "references": [
+      {
+        "nodeId": "ns=4;i=5022",
+        "browseName": "FailureAlarm",
+        "displayName": "FailureAlarm",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=5021",
+        "browseName": "CheckFunctionAlarm",
+        "displayName": "CheckFunctionAlarm",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=5024",
+        "browseName": "OffSpecAlarm",
+        "displayName": "OffSpecAlarm",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=4;i=5023",
+        "browseName": "MaintenanceRequiredAlarm",
+        "displayName": "MaintenanceRequiredAlarm",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=35",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=4;i=15013": {
+    "nodeId": "ns=4;i=15013",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2257": {
+    "nodeId": "ns=0;i=2257",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2258": {
+    "nodeId": "ns=0;i=2258",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2259": {
+    "nodeId": "ns=0;i=2259",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2260": {
+    "nodeId": "ns=0;i=2260",
+    "references": [
+      {
+        "nodeId": "ns=0;i=2262",
+        "browseName": "ProductUri",
+        "displayName": "ProductUri",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2263",
+        "browseName": "ManufacturerName",
+        "displayName": "ManufacturerName",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2261",
+        "browseName": "ProductName",
+        "displayName": "ProductName",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2264",
+        "browseName": "SoftwareVersion",
+        "displayName": "SoftwareVersion",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2265",
+        "browseName": "BuildNumber",
+        "displayName": "BuildNumber",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      },
+      {
+        "nodeId": "ns=0;i=2266",
+        "browseName": "BuildDate",
+        "displayName": "BuildDate",
+        "nodeClass": "Variable",
+        "referenceTypeId": "ns=0;i=47",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2992": {
+    "nodeId": "ns=0;i=2992",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=0;i=2993": {
+    "nodeId": "ns=0;i=2993",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=StepUp": {
+    "nodeId": "ns=3;s=StepUp",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=AlternatingBoolean": {
+    "nodeId": "ns=3;s=AlternatingBoolean",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=RandomSignedInt32": {
+    "nodeId": "ns=3;s=RandomSignedInt32",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=RandomUnsignedInt32": {
+    "nodeId": "ns=3;s=RandomUnsignedInt32",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;g=51B74E55-F2E3-4A4D-B79C-BF57C76EA67C": {
+    "nodeId": "ns=3;g=51B74E55-F2E3-4A4D-B79C-BF57C76EA67C",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=DipData": {
+    "nodeId": "ns=3;s=DipData",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=NegativeTrendData": {
+    "nodeId": "ns=3;s=NegativeTrendData",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=PositiveTrendData": {
+    "nodeId": "ns=3;s=PositiveTrendData",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=SpikeData": {
+    "nodeId": "ns=3;s=SpikeData",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=FastUInt1": {
+    "nodeId": "ns=3;s=FastUInt1",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=FastUInt2": {
+    "nodeId": "ns=3;s=FastUInt2",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=FastUInt3": {
+    "nodeId": "ns=3;s=FastUInt3",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=BadFastUInt1": {
+    "nodeId": "ns=3;s=BadFastUInt1",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=HistorianInt32": {
+    "nodeId": "ns=3;s=HistorianInt32",
+    "references": [
+      {
+        "nodeId": "ns=3;s=HistorianInt32_HA Configuration",
+        "browseName": "HA Configuration",
+        "displayName": "HA Configuration",
+        "nodeClass": "Object",
+        "referenceTypeId": "ns=0;i=56",
+        "mayHaveChildren": true
+      }
+    ],
+    "statusCode": "Good"
+  },
+  "ns=3;s=ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWX": {
+    "nodeId": "ns=3;s=ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWX",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=LongString10kB": {
+    "nodeId": "ns=3;s=LongString10kB",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=LongString50kB": {
+    "nodeId": "ns=3;s=LongString50kB",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=LongString100kB": {
+    "nodeId": "ns=3;s=LongString100kB",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=LongString200kB": {
+    "nodeId": "ns=3;s=LongString200kB",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;b=YWJj": {
+    "nodeId": "ns=3;b=YWJj",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=ScalarStaticNodeIdString": {
+    "nodeId": "ns=3;s=ScalarStaticNodeIdString",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=ScalarStaticNodeIdNumeric": {
+    "nodeId": "ns=3;s=ScalarStaticNodeIdNumeric",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=ScalarStaticNodeIdOpaque": {
+    "nodeId": "ns=3;s=ScalarStaticNodeIdOpaque",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=ScalarStaticNodeIdGuid": {
+    "nodeId": "ns=3;s=ScalarStaticNodeIdGuid",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=ScalarStaticExpandedNodeIdString": {
+    "nodeId": "ns=3;s=ScalarStaticExpandedNodeIdString",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=ScalarStaticExpandedNodeIdNumeric": {
+    "nodeId": "ns=3;s=ScalarStaticExpandedNodeIdNumeric",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=ScalarStaticExpandedNodeIdGuid": {
+    "nodeId": "ns=3;s=ScalarStaticExpandedNodeIdGuid",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=ScalarStaticExpandedNodeIdOpaque": {
+    "nodeId": "ns=3;s=ScalarStaticExpandedNodeIdOpaque",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=Special_\"!§$%&/()=?`´\\+~*'#_-:.;,<>|@^°€µ{[]}": {
+    "nodeId": "ns=3;s=Special_\"!§$%&/()=?`´\\+~*'#_-:.;,<>|@^°€µ{[]}",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=WorkingSetMB": {
+    "nodeId": "ns=3;s=WorkingSetMB",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=SlowUInt1": {
+    "nodeId": "ns=3;s=SlowUInt1",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=SlowUInt2": {
+    "nodeId": "ns=3;s=SlowUInt2",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=SlowUInt3": {
+    "nodeId": "ns=3;s=SlowUInt3",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=BadSlowUInt1": {
+    "nodeId": "ns=3;s=BadSlowUInt1",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=3;s=VeryFastByteString1": {
+    "nodeId": "ns=3;s=VeryFastByteString1",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6218": {
+    "nodeId": "ns=4;i=6218",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6210": {
+    "nodeId": "ns=4;i=6210",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6217": {
+    "nodeId": "ns=4;i=6217",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6213": {
+    "nodeId": "ns=4;i=6213",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6215": {
+    "nodeId": "ns=4;i=6215",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6212": {
+    "nodeId": "ns=4;i=6212",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6211": {
+    "nodeId": "ns=4;i=6211",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6214": {
+    "nodeId": "ns=4;i=6214",
+    "references": [],
+    "statusCode": "Good"
+  },
+  "ns=4;i=6350": {
+    "nodeId": "ns=4;i=6350",
+    "references": [],
+    "statusCode": "Good"
+  }
+}

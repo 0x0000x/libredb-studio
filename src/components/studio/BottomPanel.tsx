@@ -609,6 +609,13 @@ export const BottomPanel = React.memo(function BottomPanel({
                   onSetMode("results");
                 }}
                 databaseType={activeConnection?.type}
+                // Only where the engine says it reads SQL: on a JSON engine the generated statement
+                // replaces the reader's own request with something that cannot run.
+                offersGeneratedSql={
+                  metadata?.capabilities.queryLanguage === undefined
+                    ? undefined
+                    : metadata.capabilities.queryLanguage === "sql"
+                }
               />
             ) : mode === "docs" ? (
               <DatabaseDocs
@@ -677,7 +684,9 @@ export const BottomPanel = React.memo(function BottomPanel({
                 {runError !== undefined && !hydratedHere && (
                   <div
                     role="alert"
-                    className="shrink-0 px-3 py-2 border-b border-destructive/30 bg-destructive/10 text-destructive"
+                    // The same token swap as the failure block below, for the same measurement: the
+                    // text is the engine's own sentence and `--destructive` is a surface red.
+                    className="shrink-0 px-3 py-2 border-b border-danger/30 bg-danger/10 text-danger"
                     data-testid="script-failure"
                   >
                     <p className="text-xs font-medium">The script stopped at a failing statement.</p>
@@ -728,18 +737,24 @@ export const BottomPanel = React.memo(function BottomPanel({
                 className="h-full flex flex-col items-center justify-center px-3 text-center bg-surface"
                 data-testid="run-failure"
               >
-                <TriangleAlert
-                  aria-hidden="true"
-                  strokeWidth={1.5}
-                  className="mb-2 h-8 w-8 text-destructive opacity-50"
-                />
-                <p className="text-xs font-medium text-destructive">The query failed.</p>
+                {/*
+                  `danger` RATHER THAN `destructive`, and that is a contrast measurement, not taste:
+                  in the dark theme `--destructive` is `#7f1d1d`, a SURFACE red, and this block drew
+                  the whole failure in it at 1.98:1 against the panel - the engine's own sentence,
+                  which is the only thing a reader has when a query is refused, was effectively
+                  unreadable. `--studio-danger` is the foreground red the rest of the product uses
+                  for the same job (#ff6467 in dark, 6.85:1 here; #9f0712 in light). Measured in a
+                  browser on an OPC UA refusal, which is the engine whose request shape is stated
+                  nowhere else.
+                */}
+                <TriangleAlert aria-hidden="true" strokeWidth={1.5} className="mb-2 h-8 w-8 text-danger opacity-50" />
+                <p className="text-xs font-medium text-danger">The query failed.</p>
                 {/*
                   Left-aligned inside the centred block: an engine's message can span lines with a caret under
                   the failing name, and centring each line on its own moves the caret off its column.
                 */}
                 <p
-                  className="mt-1 max-w-xl break-words whitespace-pre-wrap text-left font-mono text-xs text-destructive"
+                  className="mt-1 max-w-xl break-words whitespace-pre-wrap text-left font-mono text-xs text-danger"
                   data-testid="run-failure-message"
                 >
                   {runError}

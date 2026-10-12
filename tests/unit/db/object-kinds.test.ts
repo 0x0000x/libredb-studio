@@ -238,6 +238,25 @@ describe("relationKindIds", () => {
     expect(relationKindIds(withKinds)).toEqual(["table", "view"]);
   });
 
+  /*
+   * A KIND THE KEYS PANEL ENUMERATES IS NOT ONE OF THESE, and the rule had no test at its own unit:
+   * every reader of this function LISTS what it names, and that kind is listed by the Keys panel
+   * alone. Measured over all 33 shipped declarations, one engine's answer changes - `opcua`, from
+   * `["node"]` to `[]` - and before it did, connecting asked the inventory route for that kind and
+   * the reader's first screen carried a red "Schema Error" toast quoting a refusal by design.
+   */
+  test("a kind the Keys panel enumerates is left out, whatever its role says", () => {
+    const panelOnly = {
+      ...withKinds,
+      objectKinds: [
+        { id: "table", role: "relation", label: "Table", labelPlural: "Tables" },
+        { id: "node", role: "relation", label: "Node", labelPlural: "Nodes", enumeratedBy: "key-browser" },
+      ],
+    } as ProviderCapabilities;
+
+    expect(relationKindIds(panelOnly)).toEqual(["table"]);
+  });
+
   test("a relation kind that withholds its names is refused, since the schema surfaces would list them", () => {
     const declaring = {
       ...withKinds,

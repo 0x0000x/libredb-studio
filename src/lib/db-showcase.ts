@@ -112,6 +112,9 @@ export const SHOWCASE_RANK: Record<DatabaseType, number> = {
   // icon and a slot in the connection picker, so omitting it would make the login page
   // contradict the app (issue #425, step 2).
   libredb: 33,
+  // Last (rank 34), behind the embedded store: a plant's address space is the least recognisable name
+  // on a page of databases, so no existing engine moves for it (#1677).
+  opcua: 34,
 };
 
 /**

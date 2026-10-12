@@ -95,6 +95,7 @@ const ALL_TYPES: DatabaseType[] = [
   "mqtt",
   "firestore",
   "rabbitmq",
+  "opcua",
 ];
 
 describe("db-ui-config", () => {
@@ -322,15 +323,19 @@ describe("db-ui-config", () => {
       expect(offersSshTunnel("sqlite")).toBe(true);
     });
 
-    test("only bigquery's and firestore's connections withhold the SSL panel, and only because their entries declare it", () => {
+    test("only bigquery's, firestore's and opcua's connections withhold the SSL panel, and only because their entries declare it", () => {
       // BigQuery always speaks HTTPS to googleapis.com with the system trust store, so an SSL mode is read by nothing.
+      // OPC UA's transport security is its own: a security mode of None, Sign or SignAndEncrypt and a pinned server
+      // certificate, with the client's key pair in the installation's PKI directory. The shared panel's vocabulary
+      // names nothing a server offers, and a reader who chose `require` there was refused with a word this engine
+      // does not know (#1677).
       for (const type of ALL_TYPES) {
         expect({ type, offered: offersSslPanel(type) }).toEqual({
           type,
           offered: getDBConfig(type).showSslPanel !== false,
         });
       }
-      expect(ALL_TYPES.filter((type) => !offersSslPanel(type))).toEqual(["bigquery", "firestore"]);
+      expect(ALL_TYPES.filter((type) => !offersSslPanel(type)).sort()).toEqual(["bigquery", "firestore", "opcua"]);
     });
 
     test("a field an engine draws as a select is a field it takes, and the SASL select is drawn exactly where the field is taken", () => {
@@ -684,6 +689,8 @@ const FIELD_CHECKLIST: Record<ConnectionField, true> = {
   namespaces: true,
   tlsServerName: true,
   amqpPort: true,
+  securityMode: true,
+  serverCertificateThumbprint: true,
 };
 const EVERY_FIELD = Object.keys(FIELD_CHECKLIST) as ConnectionField[];
 
@@ -962,7 +969,7 @@ describe("declared connection-field copy (#1085)", () => {
     }
   });
 
-  test("only libsql, db2, prometheus, kafka, etcd, neo4j, milvus, qdrant, the two InfluxDB types, oxia, databend, bigquery, s3, kubernetes, mqtt, firestore and rabbitmq declare field copy, so every other engine draws every label and hint it drew before", () => {
+  test("only libsql, db2, prometheus, kafka, etcd, neo4j, milvus, qdrant, the two InfluxDB types, oxia, databend, bigquery, s3, kubernetes, mqtt, firestore, rabbitmq and opcua declare field copy, so every other engine draws every label and hint it drew before", () => {
     const declared = Object.entries(DB_UI_CONFIG)
       .filter(([, config]) => config.fieldLabels !== undefined || config.fieldHints !== undefined)
       .map(([type]) => type);
@@ -985,6 +992,8 @@ describe("declared connection-field copy (#1085)", () => {
       "mqtt",
       "firestore",
       "rabbitmq",
+      // OPC UA relabels Host as the endpoint URL and adds its own two boxes, each with a hint (#1677).
+      "opcua",
     ]);
     // The control that the walk saw the whole table rather than nothing.
     expect(Object.keys(DB_UI_CONFIG).sort()).toEqual([...ALL_TYPES].sort());
@@ -1504,6 +1513,9 @@ describe("db-showcase", () => {
         "rabbitmq",
         "libsql",
         "libredb",
+        // Last (rank 34), behind the embedded store: an industrial address space is the least recognisable
+        // name on a page of databases, so no existing engine moves for it (#1677).
+        "opcua",
       ]);
     });
   });

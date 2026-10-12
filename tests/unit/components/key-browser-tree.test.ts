@@ -78,7 +78,12 @@ describe("buildKeyTree()", () => {
 
     expect(segments(root)).toEqual(["healthcheck"]);
     expect(root.count).toBe(1);
-    expect(at(root, "healthcheck")).toMatchObject({ path: ["healthcheck"], count: 1, isKey: true, children: [] });
+    expect(at(root, "healthcheck")).toMatchObject({
+      path: ["healthcheck"],
+      count: 1,
+      isKey: true,
+      children: [],
+    });
   });
 
   test("counts every key at or under a node, and nothing above it", () => {
@@ -606,7 +611,10 @@ describe("the tree in a declared shape", () => {
     expect(segments(root)).toEqual(["", "k3s", "plain"]);
     expect(at(root, "").count).toBe(2);
     expect(segments(at(root, ""))).toEqual(["apisix", "feature-flag"]);
-    expect(at(root, "", "apisix", "routes", "1")).toMatchObject({ path: ["", "apisix", "routes", "1"], isKey: true });
+    expect(at(root, "", "apisix", "routes", "1")).toMatchObject({
+      path: ["", "apisix", "routes", "1"],
+      isKey: true,
+    });
   });
 
   test("names every node of a straining key space by its stored string, and never with an empty name", () => {
@@ -630,7 +638,11 @@ describe("the tree in a declared shape", () => {
     const root = buildKeyTree(["/apisix/routes/1", "/app/", "/app/cfg"], ETCD);
 
     // The root row: a folder whose full name is empty, so its twisty names the separator instead.
-    expect(keyRowNames(at(root, ""), true, ETCD)).toEqual({ label: "/*", title: "/*", toggle: "/" });
+    expect(keyRowNames(at(root, ""), true, ETCD)).toEqual({
+      label: "/*",
+      title: "/*",
+      toggle: "/",
+    });
     expect(keyRowNames(at(root, "", "apisix"), true, ETCD)).toEqual({
       label: "apisix/*",
       title: "/apisix/*",
@@ -641,7 +653,10 @@ describe("the tree in a declared shape", () => {
       label: "/apisix/routes/1",
       title: "/apisix/routes/1",
     });
-    expect(keyRowNames(at(root, "", "app", ""), false, ETCD)).toMatchObject({ label: "/app/", title: "/app/" });
+    expect(keyRowNames(at(root, "", "app", ""), false, ETCD)).toMatchObject({
+      label: "/app/",
+      title: "/app/",
+    });
   });
 
   test("says both names of a row that is a key and a prefix, in the declared separator", () => {
@@ -664,10 +679,17 @@ describe("the tree in a declared shape", () => {
       title: "app is a key of this database and a prefix: app:*",
       toggle: "app",
     });
-    expect(keyRowNames(at(root, "app", "env"), false)).toMatchObject({ label: "app:env", title: "app:env" });
+    expect(keyRowNames(at(root, "app", "env"), false)).toMatchObject({
+      label: "app:env",
+      title: "app:env",
+    });
     // `:foo` makes Redis's own root row: its label and title are today's `:*`, and its twisty, which
     // announced an empty name before, names the separator.
-    expect(keyRowNames(at(root, ""), true)).toEqual({ label: ":*", title: ":*", toggle: ":" });
+    expect(keyRowNames(at(root, ""), true)).toEqual({
+      label: ":*",
+      title: ":*",
+      toggle: ":",
+    });
   });
 
   test("holds a key to its prefix segment by segment under the declared separator", () => {
@@ -795,8 +817,17 @@ describe("the tree in a declared shape", () => {
   test("reads a separator of more than one character in every helper", () => {
     // `separator` is any string, so the folder mark is the separator and a star whatever its length,
     // and every helper strips or appends exactly that mark rather than a fixed two characters.
-    const wide = keyScanShape({ defaultCount: 1, maxCount: 1, separator: "::", pattern: "prefix" });
-    const wideGlob = keyScanShape({ defaultCount: 1, maxCount: 1, separator: "::" });
+    const wide = keyScanShape({
+      defaultCount: 1,
+      maxCount: 1,
+      separator: "::",
+      pattern: "prefix",
+    });
+    const wideGlob = keyScanShape({
+      defaultCount: 1,
+      maxCount: 1,
+      separator: "::",
+    });
 
     expect(splitKey("a::b::c", wide)).toEqual(["a", "b", "c"]);
     expect(prefixPattern("a::b::*", wide)).toBe("a::b::");
@@ -810,7 +841,11 @@ describe("the tree in a declared shape", () => {
     // the key named exactly `a::b` included.
     expect(filterKeyTree(root, "::*", wide)).toBe(root);
     expect(segments(at(filterKeyTree(root, "a::b::*", wide), "a"))).toEqual(["b"]);
-    expect(keyRowNames(at(root, "a"), true, wide)).toEqual({ label: "a::*", title: "a::*", toggle: "a" });
+    expect(keyRowNames(at(root, "a"), true, wide)).toEqual({
+      label: "a::*",
+      title: "a::*",
+      toggle: "a",
+    });
   });
 });
 
@@ -869,7 +904,12 @@ describe("server folders in the tree", () => {
     const root = buildKeyTree(["sales"], LEVELS, ["sales/"]);
 
     expect(segments(root)).toEqual(["sales"]);
-    expect(at(root, "sales")).toMatchObject({ isKey: true, serverFolder: true, count: 1, children: [] });
+    expect(at(root, "sales")).toMatchObject({
+      isKey: true,
+      serverFolder: true,
+      count: 1,
+      children: [],
+    });
   });
 
   test("a deeper folder creates the nodes above it, and only the last is the server's folder", () => {
@@ -944,7 +984,14 @@ describe("server folders in the tree", () => {
     );
 
     const last = rows.at(-1);
-    expect(last).toEqual({ kind: "loadMore", path: [], depth: 0, count: 3, setSize: 0, posInSet: 0 });
+    expect(last).toEqual({
+      kind: "loadMore",
+      path: [],
+      depth: 0,
+      count: 3,
+      setSize: 0,
+      posInSet: 0,
+    });
     const items = rows.filter((row) => row.kind === "node");
     expect(items.map((row) => [row.posInSet, row.setSize])).toEqual([
       [1, 3],
@@ -975,14 +1022,30 @@ describe("server folders in the tree", () => {
     const root = buildKeyTree([], LEVELS, ["a/b/", "a/c/"]);
     const onlyA = (path: readonly string[]) => path.length === 1;
 
-    const counted = flattenKeyTree(root, () => true, onlyA, { countRows: true });
+    const counted = flattenKeyTree(root, () => true, onlyA, {
+      countRows: true,
+    });
     const today = flattenKeyTree(root, () => true, onlyA);
 
     expect(counted.filter((row) => row.kind === "loadMore")).toEqual([
-      { kind: "loadMore", path: ["a"], depth: 1, count: 2, setSize: 0, posInSet: 0 },
+      {
+        kind: "loadMore",
+        path: ["a"],
+        depth: 1,
+        count: 2,
+        setSize: 0,
+        posInSet: 0,
+      },
     ]);
     expect(today.filter((row) => row.kind === "loadMore")).toEqual([
-      { kind: "loadMore", path: ["a"], depth: 1, count: 0, setSize: 0, posInSet: 0 },
+      {
+        kind: "loadMore",
+        path: ["a"],
+        depth: 1,
+        count: 0,
+        setSize: 0,
+        posInSet: 0,
+      },
     ]);
   });
 
@@ -994,16 +1057,55 @@ describe("server folders in the tree", () => {
       toggle: "sales/2026",
     });
 
+    // A row that is both says its own segment with the separator, and BOTH in its title: under levels
+    // the label is the segment whatever the row is, and the title is where the full key stays.
     const both = buildKeyTree(["sales/2026"], LEVELS, ["sales/2026/"]);
     expect(keyRowNames(at(both, "sales", "2026"), true, LEVELS, true)).toEqual({
-      label: "sales/2026",
+      label: "2026/",
       title: "sales/2026 is a key and a folder: sales/2026/",
       toggle: "sales/2026",
     });
 
-    // A folder marker is a key row inside its folder, named by its full key.
+    // A folder marker is a key row inside its folder, named by its full key: its own segment is
+    // EMPTY, and an empty label names nothing.
     const marker = buildKeyTree(["m/"], LEVELS, ["m/"]);
-    expect(keyRowNames(at(marker, "m", ""), false, LEVELS, true)).toEqual({ label: "m/", title: "m/", toggle: "m/" });
+    expect(keyRowNames(at(marker, "m", ""), false, LEVELS, true)).toEqual({
+      label: "m/",
+      title: "m/",
+      toggle: "m/",
+    });
+  });
+
+  /*
+   * AN EMPTY SEGMENT IN THE MIDDLE belongs to a FOLDER, and it is not a label either. S3 permits the
+   * key `a//b`, so the walk lists a folder whose own segment is empty; drawing it by that segment
+   * gives a row whose whole label is the separator, and two such folders under different parents
+   * read identically. They keep their full name, like a key that ends in the separator.
+   */
+  test("a folder whose own segment is empty keeps its full name under levels", () => {
+    const tree = buildKeyTree([], LEVELS, ["a//", "c//"]);
+    const names = ["a", "c"].map((parent) => keyRowNames(at(tree, parent, ""), true, LEVELS, true));
+
+    expect(names.map((name) => name.label)).toEqual(["a//", "c//"]);
+    expect(new Set(names.map((name) => name.label)).size).toBe(2);
+  });
+
+  /*
+   * WHAT THE LABEL RULE IS FOR, on the shape that produced it: the OPC UA fixture's deepest branch,
+   * where eight sibling keys share 59 leading characters. Each row draws the segment that tells it
+   * apart - at the sidebar's own width the full names clipped before it, so eight rows read the same -
+   * and each title still carries the whole path, which is what activating the row addresses.
+   */
+  test("sibling keys deep in a level walk are drawn by the segment that differs", () => {
+    const branch = "OpcPlc/Telemetry/Historian/HistorianInt32/HA Configuration";
+    const keys = [`${branch}/AggregateFunctions`, `${branch}/Definition`, `${branch}/ExceptionDeviation`];
+    const tree = buildKeyTree(keys, LEVELS, []);
+    const names = keys.map((key) => keyRowNames(at(tree, ...key.split("/")), false, LEVELS, true));
+
+    expect(names.map((name) => name.label)).toEqual(["AggregateFunctions", "Definition", "ExceptionDeviation"]);
+    expect(names.map((name) => name.title)).toEqual(keys);
+    // And the same nodes outside a level walk are unchanged: a glob engine's rows say the whole key.
+    expect(keyRowNames(at(tree, ...keys[0].split("/")), false, LEVELS, false).label).toBe(keys[0]);
   });
 
   test("names every row exactly as today when levels is not asked for", () => {

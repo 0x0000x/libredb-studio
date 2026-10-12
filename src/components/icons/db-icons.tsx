@@ -807,7 +807,7 @@ export const MqttIcon: React.FC<IconProps> = ({ className, ...props }) => (
 );
 
 /**
- * Firestore: a mark drawn for Studio, never the Firebase or Google Cloud logo: a document with a second one behind it,
+ *  * Firestore: a mark drawn for Studio, never the Firebase or Google Cloud logo: a document with a second one behind it,
  * the collection-of-documents shape in the plainest terms. Stroked on the house 24-unit grid like the others.
  */
 export const FirestoreIcon: React.FC<IconProps> = ({ className, ...props }) => (
@@ -826,5 +826,30 @@ export const FirestoreIcon: React.FC<IconProps> = ({ className, ...props }) => (
     <path d="M9.5 11h5" />
     <path d="M9.5 14h3" />
     <path d="M4 7v12.5A1.5 1.5 0 0 0 5.5 21H14" />
+  </svg>
+);
+
+/**
+ *  * A mark drawn for Studio, never the OPC Foundation's logo or any vendor's asset.
+ *
+ * An address space is a tree of nodes with values hanging off it, so the mark is a root with two
+ * branches and a leaf on each: what the Keys panel shows, rather than a protocol badge.
+ */
+export const OpcuaIcon: React.FC<IconProps> = ({ className, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <circle cx="5" cy="12" r="2" />
+    <circle cx="19" cy="6" r="2" />
+    <circle cx="19" cy="18" r="2" />
+    <path d="M7 12 H11 V6 H17" />
+    <path d="M11 12 V18 H17" />
   </svg>
 );

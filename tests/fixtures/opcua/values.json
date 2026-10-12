@@ -1,0 +1,76 @@
+{
+  "nodeIds": [
+    "ns=3;s=SlowUInt1",
+    "ns=3;s=FastUInt1",
+    "i=2258",
+    "ns=3;s=HistorianInt32",
+    "ns=3;s=NoSuchNodeAtAll"
+  ],
+  "values": [
+    {
+      "nodeId": "ns=3;s=SlowUInt1",
+      "value": 479,
+      "nodeClass": "Variable",
+      "dataTypeId": "ns=0;i=7",
+      "valueRank": -1,
+      "accessLevel": 3,
+      "userAccessLevel": 3,
+      "historizing": false,
+      "description": "Constantly increasing value(s)",
+      "displayName": "SlowUInt1",
+      "sourceTimestamp": "2026-10-12T16:48:39.243Z",
+      "serverTimestamp": "2026-10-12T16:48:44.531Z",
+      "statusCode": "Good"
+    },
+    {
+      "nodeId": "ns=3;s=FastUInt1",
+      "value": 4795,
+      "nodeClass": "Variable",
+      "dataTypeId": "ns=0;i=7",
+      "valueRank": -1,
+      "accessLevel": 3,
+      "userAccessLevel": 3,
+      "historizing": false,
+      "description": "Constantly increasing value(s)",
+      "displayName": "FastUInt1",
+      "sourceTimestamp": "2026-10-12T16:48:44.243Z",
+      "serverTimestamp": "2026-10-12T16:48:44.531Z",
+      "statusCode": "Good"
+    },
+    {
+      "nodeId": "i=2258",
+      "value": "2026-10-12T16:48:44.530Z",
+      "nodeClass": "Variable",
+      "dataTypeId": "ns=0;i=294",
+      "valueRank": -1,
+      "accessLevel": 1,
+      "userAccessLevel": 1,
+      "historizing": false,
+      "displayName": "CurrentTime",
+      "sourceTimestamp": "2026-10-12T16:48:44.530Z",
+      "serverTimestamp": "2026-10-12T16:48:44.530Z",
+      "statusCode": "Good"
+    },
+    {
+      "nodeId": "ns=3;s=HistorianInt32",
+      "value": 1479,
+      "nodeClass": "Variable",
+      "dataTypeId": "ns=0;i=6",
+      "valueRank": -1,
+      "accessLevel": 5,
+      "userAccessLevel": 5,
+      "historizing": true,
+      "description": "Historical samples",
+      "displayName": "HistorianInt32",
+      "sourceTimestamp": "2026-10-12T16:48:39.243Z",
+      "serverTimestamp": "2026-10-12T16:48:44.531Z",
+      "statusCode": "Good"
+    },
+    {
+      "nodeId": "ns=3;s=NoSuchNodeAtAll",
+      "value": null,
+      "serverTimestamp": "2026-10-12T16:48:44.531Z",
+      "statusCode": "BadNodeIdUnknown"
+    }
+  ]
+}

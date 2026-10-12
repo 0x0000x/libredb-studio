@@ -39,13 +39,14 @@ in lockstep with the code (see the tri-sync rule in [`../../CLAUDE.md`](../../CL
 | Kubernetes | `kubernetes` | Platform | none, HTTP over the shared `node:https` transport (the API server's REST API) | kubectl read commands (a subset) | [kubernetes.md](./kubernetes.md) |
 | MQTT | `mqtt` | Key-Value (a broker's topic tree) | `mqtt-packet` (its parser only; the packets Studio sends are Studio's own) | None: no query console | [mqtt.md](./mqtt.md) |
 | RabbitMQ | `rabbitmq` | Stream | none: the management HTTP API over the shared `node:http(s)` transport, and Studio's own read-only AMQP 0-9-1 client | A JSON stream read request | [rabbitmq.md](./rabbitmq.md) |
+| OPC UA | `opcua` | Industrial (address space) | `node-opcua-client` (pure JavaScript, `opc.tcp`) | JSON (read request) | [opcua.md](./opcua.md) |
 | LibreDB | `libredb` | Embedded (Key-Value) | `@libredb/libredb` | JSON (command grammar) | [libredb.md](./libredb.md) |
 
 ## Conventions
 
 - **Filename = canonical type-id** (`postgres.md`, `mssql.md`, …), mirroring the source file
   (`src/lib/db/providers/<family>/<type-id>.ts`, or a `<type-id>/` directory when a provider is
-  split across modules, as Couchbase, ClickHouse, Druid, Trino, Cassandra, libSQL, DuckDB, Db2, Prometheus, Kafka, etcd, Neo4j, Milvus, Qdrant, InfluxDB, Oxia, Databend, S3, Kubernetes, Firestore and RabbitMQ are). The official product name (e.g.
+  split across modules, as Couchbase, ClickHouse, Druid, Trino, Cassandra, libSQL, DuckDB, Db2, Prometheus, Kafka, etcd, Neo4j, Milvus, Qdrant, InfluxDB, Oxia, Databend, S3, Kubernetes, MQTT, Firestore, RabbitMQ and OPC UA are). The official product name (e.g.
   "SQL Server") is used only in each doc's title and prose. **One directory may serve two type-ids**
   — `providers/sql/search/` is `elasticsearch` and `opensearch`, and `providers/timeseries/influxdb/` is
   `influxdb` and `influxdb3`, two classes on two base classes sharing one connection layer — and each type-id still gets its own
@@ -281,8 +282,15 @@ The Databend row was verified against the running `databend-http` container (v1.
 Start the forty-eight always-on services with a plain `docker compose -f database-compose.yml up -d`:
 thirty engine containers plus the one-shot `couchbase-init`, `trino-init`, `kafka-init`, `rabbitmq-init`, `etcd-seed`, `oxia-seed`, `milvus-seed`, `qdrant-seed`, `influxdb-seed`, `databend-http-seed`, `silo-principals`, `silo-seed`, `garage-keys`, `garage-setup`, `garage-seed`, `rustfs-principals`, `rustfs-seed` and `firestore-seed` seed sidecars; the `Profile` column names
 the ones that need asking for. The count is derived, not written: a service in this file carries no
-`profiles:` key precisely when it backs a SHIPPED provider, so a plain `up -d` can reproduce that
-provider's integration pass.
+`profiles:` key precisely when it backs a SHIPPED provider whose fixture lives here, so a plain
+`up -d` can reproduce that provider's integration pass.
+
+**Two shipped providers have no service in this file at all**, and that is deliberate rather than an
+omission: MQTT and OPC UA are started by the commands their own fixture notes give
+([`tests/fixtures/opcua/README.md`](../../tests/fixtures/opcua/README.md) pins OPC PLC by digest and
+names the start-up flags, because this server's address space depends on them), and their
+integration suites read from captures and from a server started inside the test process. So `up -d`
+reproduces every provider in the table below and those two are reproduced by their own notes.
 
 | Provider | Compose service | Host | Port | User | Password | Database / service | Profile |
 |---|---|---|---|---|---|---|---|

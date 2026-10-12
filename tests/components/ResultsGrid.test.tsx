@@ -2477,11 +2477,14 @@ describe("ResultsGrid", () => {
     const text = container.textContent ?? "";
     expect(text).toContain("Query returned no data");
     expect(text).toContain("2 segments of the queried data were unavailable.");
-    // The warning has to come before the "operation was successful" reassurance -
-    // a reader who stops at the reassurance is back to being told the data is absent.
-    expect(text.indexOf("2 segments of the queried data were unavailable.")).toBeLessThan(
-      text.indexOf("The operation was successful"),
-    );
+    /*
+     * AND THE REASSURANCE IS GONE, rather than pushed below the warning as it used to be. The two
+     * contradict each other: measured in a browser on an OPC UA history read of a node that keeps
+     * none, the panel said "the server answered BadHistoryOperationUnsupported: that node keeps no
+     * history" in red and "The operation was successful, but the result set is currently empty"
+     * under it in grey. A reader who stops at either one has been told the opposite of the other.
+     */
+    expect(text).not.toContain("The operation was successful");
   });
 
   test("keeps the empty state unchanged when the engine reported no warnings", () => {

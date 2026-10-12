@@ -27,6 +27,7 @@ import { rowActions, type TreeRowAction, type TreeRowActionHandlers } from "./ro
 import { TreeFilter } from "./TreeFilter";
 import { TREE_ROW_HEIGHT, TreeRow } from "./TreeRow";
 import { useTreeNodes, type ObjectSource } from "./use-tree-nodes";
+import { enumerableKinds, keyBrowserKind } from "@/lib/db/object-kinds";
 
 /** Rows kept mounted beyond each edge of the viewport, so a scroll does not flash empty. */
 const OVERSCAN = 4;
@@ -160,7 +161,10 @@ export function ObjectTree({
 }: ObjectTreeProps) {
   const columnsReadable = source === undefined || readsColumns === true;
   // Held per connection, so a switch starts unfiltered without an effect to reset it (D7).
-  const [filter, setFilter] = useState<{ readonly connectionId: string; readonly text: string }>({
+  const [filter, setFilter] = useState<{
+    readonly connectionId: string;
+    readonly text: string;
+  }>({
     connectionId: connection.id,
     text: "",
   });
@@ -173,12 +177,17 @@ export function ObjectTree({
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [pinned, setPinned] = useState(false);
   // Keyed by the query, so a new query starts at the top without an effect to reset it.
-  const [scroll, setScroll] = useState<{ readonly query: string; readonly top: number }>({ query: "", top: 0 });
+  const [scroll, setScroll] = useState<{
+    readonly query: string;
+    readonly top: number;
+  }>({ query: "", top: 0 });
   const scrollTop = scroll.query === filterQuery ? scroll.top : 0;
   const [viewportHeight, setViewportHeight] = useState(0);
   // A fresh object per request rather than an id, so asking twice for the same row focuses it
   // twice: Right on an open row and Left on its child both land on a row that is already active.
-  const [focusRequest, setFocusRequest] = useState<{ readonly id: string } | null>(null);
+  const [focusRequest, setFocusRequest] = useState<{
+    readonly id: string;
+  } | null>(null);
   const treeRef = useRef<HTMLDivElement | null>(null);
 
   /**
@@ -300,7 +309,11 @@ export function ObjectTree({
       const mounted = Array.from(treeRef.current?.querySelectorAll<HTMLElement>("[data-row-id]") ?? []);
       const element = mounted.find((candidate) => candidate.dataset.rowId === row.id);
       const box = element?.getBoundingClientRect();
-      openMenu(row, { x: box?.left ?? 0, top: box?.top ?? 0, bottom: box?.bottom ?? 0 });
+      openMenu(row, {
+        x: box?.left ?? 0,
+        top: box?.top ?? 0,
+        bottom: box?.bottom ?? 0,
+      });
     },
     [openMenu],
   );
@@ -443,7 +456,11 @@ export function ObjectTree({
       // The browser's own menu stands where this one has nothing to offer, rather than the
       // page swallowing the gesture and showing nothing.
       // A pointer is a point, so both edges of the anchor are where it was pressed.
-      const anchor = { x: event.clientX, top: event.clientY, bottom: event.clientY };
+      const anchor = {
+        x: event.clientX,
+        top: event.clientY,
+        bottom: event.clientY,
+      };
       if (row !== undefined && openMenu(row, anchor)) event.preventDefault();
     },
     [openMenu, rowOf],
@@ -550,6 +567,57 @@ export function ObjectTree({
   // An empty FILTERED view is not an empty catalog: it falls through to the render below, which
   // keeps the box and its status line above the no-match panel.
   if (rows.length === 0 && tree.search === undefined) {
+    /*
+     * AN ENGINE THAT LISTS ITS OBJECTS ELSEWHERE IS NOT AN EMPTY ENGINE, and this panel said it was.
+     * MQTT and OPC UA declare one kind, enumerated by the key browser alone, so the inventory this
+     * tree reads is EMPTY BY DESIGN - and the sentence below it drew, "the engine answered, and
+     * reported nothing at this level", is a claim about the server that is false: the OPC UA fixture
+     * holds 6,769 nodes while it says so. Measured in a browser, by pressing the Objects tab on a
+     * connected server; every unit and route test passed throughout, because each of them was right
+     * that the list is empty.
+     *
+     * Read from the DECLARATION rather than a type-id (#1089 3.4): the engine says it enumerates
+     * nothing in a tree and names the kind the key browser enumerates instead.
+     */
+    /*
+     * BOTH HALVES ARE DEFENSIVE AND ONE IS UNREACHABLE TODAY, which is said here rather than left for
+     * the next reader to discover: a mutation run showed that dropping the `enumerableKinds` guard is
+     * caught by no test, because every engine that declares a key-browser kind is depth 0 (measured
+     * over all 33 shipped declarations), so an engine that ALSO enumerates something draws its kind
+     * folders and never reaches an empty tree at all. The guard stays because the sentence below is a
+     * claim about the whole engine, and an engine that gains both would otherwise make it false.
+     */
+    const elsewhere = enumerableKinds(capabilities).length === 0 ? keyBrowserKind(capabilities) : undefined;
+    if (elsewhere !== undefined) {
+      const plural = elsewhere.labelPlural.toLowerCase();
+      /*
+       * WHETHER THIS SHELL HAS THE PANEL TO POINT AT. `source` is set only in the embedded workspace,
+       * which ships no API routes and therefore no key walk, so telling that reader to press Keys
+       * would name a tab that is not drawn. Same fact the sidebar reads for the tab itself.
+       */
+      // `keyScan` is the engine's half and `source` the shell's. No shipped engine declares a
+      // key-browser kind without a walk, so the first half is unreachable today and no test kills a
+      // mutation of it; it stays because the sentence names a panel, and a kind the Keys panel
+      // enumerates on an engine with no walk would have no panel to name.
+      const panelIsHere = capabilities.keyScan !== undefined && source === undefined;
+      return (
+        <TreePanel
+          testId="tree-listed-elsewhere"
+          icon={<Database strokeWidth={1.5} className="w-6 h-6 text-muted-foreground" />}
+        >
+          <h3 className="text-foreground text-xs font-medium mb-1">
+            {panelIsHere
+              ? `${elsewhere.labelPlural} are listed in the Keys panel`
+              : `${elsewhere.labelPlural} are not listed here`}
+          </h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {panelIsHere
+              ? `This engine has no catalog to list: its ${plural} are browsed one level at a time, which is what the Keys tab beside this one does. Nothing here is missing.`
+              : `This engine has no catalog to list: its ${plural} are browsed one level at a time, and this workspace shows no key walk. Nothing here is missing.`}
+          </p>
+        </TreePanel>
+      );
+    }
     return (
       <TreePanel testId="tree-empty" icon={<CircleAlert strokeWidth={1.5} className="w-6 h-6 text-muted-foreground" />}>
         <h3 className="text-foreground text-xs font-medium mb-1">Nothing to show</h3>

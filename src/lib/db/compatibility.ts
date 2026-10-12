@@ -119,6 +119,10 @@ const SHIPPED: Readonly<Record<DatabaseType, true>> = Object.freeze({
   // service that speaks the same management API is recorded below as a relative only once a gate-4 probe has measured
   // one, never because the API answers.
   rabbitmq: true,
+  // OPC UA (#1677): its own provider, doc and integration test, the first member of the `industrial/` family.
+  // A plant's address space rather than a store, read through a client seam that names eight read services, so
+  // the read-only guarantee is a type rather than a setting.
+  opcua: true,
   libredb: true,
 });
 
@@ -197,6 +201,8 @@ const EXTERNAL: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   firestore: true,
   // A broker the user already runs, reached over its management API and AMQP 0-9-1.
   rabbitmq: true,
+  // A server the plant already runs, reached over opc.tcp at one endpoint the reader types.
+  opcua: true,
   // The one false entry. SQLite is a file rather than a server and is still
   // external: it is the user's file, opened from a path they give us. libredb is
   // ours, created by this app, so it is the only id that answers no here.
@@ -297,6 +303,9 @@ export const READ_ONLY_ENFORCED: Record<DatabaseType, boolean> = Object.freeze({
   // Read-only whatever the flag says: the management client's closed route table holds GET routes only, and the AMQP
   // client has no encoder for a publish, a get, a reject or any queue or exchange method, so no request path writes.
   rabbitmq: true,
+  // Structural rather than a mode: the client seam names eight read services and none of them writes, so there
+  // is no write to enforce against (`src/lib/db/providers/industrial/opcua/client.ts`).
+  opcua: true,
   libredb: false,
 });
 
@@ -354,6 +363,7 @@ export const READS_FILE_ACCESS_POSTURE: Readonly<Record<DatabaseType, boolean>> 
   mqtt: false,
   firestore: false,
   rabbitmq: false,
+  opcua: false,
   libredb: false,
 });
 
@@ -424,6 +434,12 @@ export const MCP_EXPOSABLE: Readonly<Record<DatabaseType, boolean>> = Object.fre
   // Offered for the two metadata tools, carrying stream names and the fixed read columns only; `run_read_query` does
   // not serve it, because the provider implements no `queryReadOnly`.
   rabbitmq: true,
+  // Outside this version, as for etcd, Oxia, S3 and MQTT. NOT because there is no read to hand over:
+  // the console reads one JSON request and is read-only by construction. Because a node's value
+  // without its plant is a number with no unit, no range and no neighbour - the engineering units
+  // and the EU range live on nodes of their own, and this version reads neither - so an agent
+  // grounded on an address space would be reasoning about figures it cannot qualify.
+  opcua: false,
   libredb: true,
 });
 
@@ -472,6 +488,7 @@ export const CONNECTION_FORM_URI_MODE: Readonly<Record<DatabaseType, boolean>> =
   mqtt: false,
   firestore: false,
   rabbitmq: false,
+  opcua: false,
   libredb: false,
 });
 
@@ -526,6 +543,8 @@ export const CONNECTION_STRING_ACCEPTED: Readonly<Record<DatabaseType, boolean>>
   mqtt: false,
   firestore: false,
   rabbitmq: false,
+  // The endpoint URL is the whole address: host and port are read from it, so there is no second string to parse.
+  opcua: false,
   libredb: false,
 });
 

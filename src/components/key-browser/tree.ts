@@ -117,7 +117,14 @@ export function isFolder(node: KeyTreeNode): boolean {
 }
 
 function createNode(segment: string, path: string[]): MutableNode {
-  return { segment, path, children: new Map(), count: 0, isKey: false, serverFolder: false };
+  return {
+    segment,
+    path,
+    children: new Map(),
+    count: 0,
+    isKey: false,
+    serverFolder: false,
+  };
 }
 
 /** The child of `node` named `segment`, created on first use, so both walks of `buildKeyTree` share one path. */
@@ -216,7 +223,13 @@ export function buildKeyTree(
 
 function toTreeNode(node: MutableNode): KeyTreeNode {
   const children = [...node.children.values()].map(toTreeNode).sort(compareNodes);
-  const built = { segment: node.segment, path: node.path, children, count: node.count, isKey: node.isKey };
+  const built = {
+    segment: node.segment,
+    path: node.path,
+    children,
+    count: node.count,
+    isKey: node.isKey,
+  };
   // The flag is added only where it is true, so a tree with no server folders has no such property.
   return node.serverFolder ? { ...built, serverFolder: true } : built;
 }
@@ -296,7 +309,10 @@ export function flattenKeyTree(
    * folder holding only server folders holds no keys, and "0 keys" beside several drawn folders would
    * be false.
    */
-  options: { readonly rootLoadMore?: boolean; readonly countRows?: boolean } = {},
+  options: {
+    readonly rootLoadMore?: boolean;
+    readonly countRows?: boolean;
+  } = {},
 ): KeyTreeRow[] {
   const rows: KeyTreeRow[] = [];
   const countOf = (node: KeyTreeNode): number => (options.countRows === true ? node.children.length : node.count);
@@ -304,7 +320,14 @@ export function flattenKeyTree(
   const walk = (node: KeyTreeNode, depth: number): void => {
     for (const child of node.children) {
       const folder = isFolder(child);
-      rows.push({ kind: "node", node: child, depth, folder, setSize: 0, posInSet: 0 });
+      rows.push({
+        kind: "node",
+        node: child,
+        depth,
+        folder,
+        setSize: 0,
+        posInSet: 0,
+      });
       if (!folder || !isExpanded(child.path)) continue;
       walk(child, depth + 1);
       if (canLoadMore(child.path)) {
@@ -322,7 +345,14 @@ export function flattenKeyTree(
 
   walk(root, 0);
   if (options.rootLoadMore === true && canLoadMore([])) {
-    rows.push({ kind: "loadMore", path: [], depth: 0, count: countOf(root), setSize: 0, posInSet: 0 });
+    rows.push({
+      kind: "loadMore",
+      path: [],
+      depth: 0,
+      count: countOf(root),
+      setSize: 0,
+      posInSet: 0,
+    });
   }
   return numberSiblings(rows);
 }
@@ -447,6 +477,20 @@ export function sentPattern(text: string, shape: KeyScanShape = UNDECLARED): str
  * title says the whole prefix. A row that is both says both in its title, because a reader needs to
  * know both and the label can only say one.
  *
+ * UNDER `levels` EVERY ROW SAYS ITS OWN SEGMENT INSTEAD, with the separator where it has children.
+ * The full name is still its title, and still what activating it addresses - what changes is only the
+ * text drawn. A walk that lists one level at a time draws a row per level of a path the SERVER named,
+ * so the ancestors are already on screen above the row and the key's full name repeats them: measured
+ * on the OPC UA fixture at the sidebar's own width, eight sibling rows under
+ * `OpcPlc/Telemetry/Historian/HistorianInt32/HA Configuration/` all drew the same 59 leading
+ * characters and clipped before the segment that tells them apart, so the panel that is this engine's
+ * only surface could not be read without hovering every row. S3 declares `levels` too and reads the
+ * same way, its keys being object paths under a bucket; measured over every shipped declaration,
+ * those two are the only engines this touches. The glob engines are untouched, and that is not
+ * caution: Redis's folders are globs a walk inferred rather than levels a server listed, its keys are
+ * flat names that a reader addresses whole, and nothing above a row there is guaranteed to be on
+ * screen.
+ *
  * THE ROOT ROW NAMES ITSELF TOO. A key that begins with the separator has an empty first segment, so
  * the node `[""]` holds every such key and its full name is the empty string: its label and title keep
  * the folder mark (`/*`, which is also how the object tree labels the prefix `/`, and which a key
@@ -467,7 +511,22 @@ export function keyRowNames(
 ): { readonly label: string; readonly title: string; readonly toggle: string } {
   const name = keyName(node.path, shape);
   const marker = levels ? shape.separator : `${shape.separator}*`;
-  const label = folder && !node.isKey ? `${node.segment}${marker}` : name;
+  /*
+   * A SEGMENT THAT IS EMPTY IS NOT A LABEL, so such a row keeps its full name under `levels` too: a
+   * key whose name ENDS in the separator has an empty last segment (the key `sales/` inside the folder
+   * `sales/`), and a row drawn from it would be blank. The rule above - no row's three names are empty
+   * but the empty key's own - is what this arm keeps true.
+   */
+  const ownSegment = levels && node.segment !== "";
+  const label = folder
+    ? levels && !ownSegment
+      ? `${name}${marker}`
+      : node.isKey && !ownSegment
+        ? name
+        : `${node.segment}${marker}`
+    : ownSegment
+      ? node.segment
+      : name;
   const both = levels
     ? `${name} is a key and a folder: ${name}${marker}`
     : `${name} is a key of this database and a prefix: ${name}${marker}`;

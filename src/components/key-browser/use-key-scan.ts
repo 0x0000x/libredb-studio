@@ -162,6 +162,16 @@ export interface KeyScanResult {
    * absent for that reason: absent means "never pressed", and the two must not read alike.
    */
   readonly nodeAdded: ReadonlyMap<string, number>;
+
+  /**
+   * The folders whose own listing was REFUSED, by `pathKey`, with the sentence that refused them.
+   *
+   * THE PANEL BANNER IS NOT ENOUGH, because the next folder that lists clears it: measured in a
+   * browser, a folder whose level answered an error was left drawn OPEN and EMPTY as soon as any
+   * other folder listed, which is exactly how this panel draws a folder that really holds nothing.
+   * The mark lives on the row that earned it and is dropped when that row lists.
+   */
+  readonly nodeFailed: ReadonlyMap<string, string>;
 }
 
 export interface KeyScanControls {
@@ -257,6 +267,7 @@ export function useKeyScan(options: {
   const [nodeCursors, setNodeCursors] = useState<ReadonlyMap<string, string>>(new Map());
   const [nodeLoading, setNodeLoading] = useState<ReadonlySet<string>>(new Set());
   const [nodeAdded, setNodeAdded] = useState<ReadonlyMap<string, number>>(new Map());
+  const [nodeFailed, setNodeFailed] = useState<ReadonlyMap<string, string>>(new Map());
   const [types, setTypes] = useState<ReadonlyMap<string, string>>(new Map());
   const [skipped, setSkipped] = useState<{ readonly count: number; readonly reason: string } | null>(null);
   const [readOutcome, setReadOutcome] = useState<KeyScanPage["readOutcome"] | null>(null);
@@ -715,13 +726,26 @@ export function useKeyScan(options: {
         // report, and leaving it out would draw that press as one that never happened. A folder the
         // page named is something it added, as a key is.
         setNodeAdded((previous) => new Map(previous).set(key, fresh.length + freshFolders.length));
+        // This folder listed, so its own refusal is over - the panel banner is cleared by any
+        // success, and the ROW's mark only by its own.
+        setNodeFailed((previous) => {
+          if (!previous.has(key)) return previous;
+          const next = new Map(previous);
+          next.delete(key);
+          return next;
+        });
         setError(null);
       } catch (thrown) {
         if (!stillAsked(mine, asked)) return;
         // NOT written to the loop's failure flag: see this callback's own note. The panel shows the
         // sentence and keeps the keys it already has, because a page that failed did not invalidate
         // the pages that did not.
-        setError(thrown instanceof Error ? thrown.message : String(thrown));
+        const message = thrown instanceof Error ? thrown.message : String(thrown);
+        // On the ROW as well as in the banner: the banner is cleared by the next folder that lists,
+        // and without this the refused folder was left open and empty, which is how a folder that
+        // really holds nothing is drawn.
+        setNodeFailed((previous) => new Map(previous).set(key, message));
+        setError(message);
       } finally {
         // Only a page of the walk still current frees its folder, the guard the page itself is held
         // to: `reset` already cleared a discarded walk's slots, and the slot this key holds now may be
@@ -781,6 +805,8 @@ export function useKeyScan(options: {
     setNodeCursors(new Map());
     setNodeLoading(new Set());
     setNodeAdded(new Map());
+    // A refusal belongs to the walk that earned it, like the sentence above.
+    setNodeFailed(new Map());
     setTypes(new Map());
   }, []);
 
@@ -801,6 +827,7 @@ export function useKeyScan(options: {
     nodeCursors,
     nodeLoading,
     nodeAdded,
+    nodeFailed,
     scanMore,
     scanAll,
     loadMoreUnder,

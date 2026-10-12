@@ -102,6 +102,10 @@ const NUMERAL_WORDS: Record<string, number> = {
   "thirty-three": 33,
   "thirty-four": 34,
   "thirty-five": 35,
+  // Two past the registry, which is what the test below asks for: a copy that states the count in
+  // words has to fail loudly on the next two providers rather than pass unread.
+  "thirty-six": 36,
+  "thirty-seven": 37,
 };
 
 /**

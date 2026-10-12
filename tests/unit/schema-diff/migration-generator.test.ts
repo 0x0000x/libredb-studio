@@ -1115,6 +1115,7 @@ describe("generateMigrationSQL: SQLite's grammar declares a foreign key only ins
     mqtt: "engine-has-no-foreign-key",
     firestore: "engine-has-no-foreign-key",
     rabbitmq: "engine-has-no-foreign-key",
+    opcua: "engine-has-no-foreign-key",
   };
 
   for (const [dialectId, entry] of Object.entries(GRAMMAR)) {
@@ -1271,6 +1272,13 @@ const MODIFIED_COLUMN_COVERAGE: Record<
   rabbitmq: {
     label: "RabbitMQ",
     reason: "A stream holds messages, not rows with declared columns, so there is no column definition to change.",
+  },
+  // Not a table store either (#1677): a node has ATTRIBUTES defined by its type in the server's own
+  // model, and this provider has no code that can write one.
+  opcua: {
+    label: "OPC UA",
+    reason:
+      "An OPC UA node has attributes defined by its type in the server's own model, not columns, and this provider has no code that can write to a server, so there is no column definition to change.",
   },
 };
 
@@ -1556,6 +1564,7 @@ describe("generateMigrationSQL: dialects that cannot modify a column", () => {
           "mqtt",
           "firestore",
           "rabbitmq",
+          "opcua",
         ].includes(dialect)
       ) {
         expect(sql).toContain(`-- ${expected.label}: Cannot generate table DDL.`);
@@ -1629,6 +1638,7 @@ const TRANSACTION_WRAPPER_COVERAGE: Record<DatabaseType, "BEGIN;" | "BEGIN TRANS
   mqtt: false, // one JSON read request, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
   firestore: false, // one read-only query chain, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
   rabbitmq: false, // one JSON read request, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
+  opcua: false, // one JSON read request, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
 };
 
 // Both creation and modification paths must use the same wrapper policy.
@@ -1669,6 +1679,7 @@ describe("generateMigrationSQL: transaction wrapper by dialect", () => {
             "mqtt",
             "firestore",
             "rabbitmq",
+            "opcua",
           ].includes(dialect)
         ) {
           expect(sql).toMatch(/^CREATE TABLE /m);

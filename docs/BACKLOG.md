@@ -31,7 +31,7 @@ None of it is a GitHub issue.
 - [Drivers and connections](#drivers-and-connections) — D1-D316, U17 · 216
 - [Value interpolation](#value-interpolation) — V1
 - [Row editing](#row-editing) — R1–R3 · 3
-- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U124 · 114
+- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U129 · 119
 - [Dependencies](#dependencies) — P1-P9 · 7
 - [Documentation](#documentation) — DOC3-DOC24 · 21
 - [Release pipeline](#release-pipeline) — REL1-REL8 · 8
@@ -4959,6 +4959,56 @@ The sentence is not a declared field, so an engine entry cannot replace or drop 
 Found 2026-10-12 while reading the connection dialog for a new provider.
 
 **Done when:** the sentence under the schema box comes from the engine's declaration, or is drawn only for an engine whose declaration says it applies, Firestore's box carries no Create Table or `SHOW SCHEMAS` advice, and a component test renders the dialog for Firestore and for Trino and pins which of the two draws it.
+
+### U125. A Test Connection answer lands below the fold, so pressing the button looks like nothing happened
+
+The result of Test Connection is drawn where it sits in the dialog's form (`src/components/ConnectionModal.tsx`), and the dialog scrolls; nothing scrolls the answer into view after the press.
+Measured 2026-10-12 in a browser on an OPC UA connection: after pressing the button, the answer's box was at y≈2798 while the dialog's scroll viewport ended at y=578, so the screen was unchanged and the sentence sat behind the sticky footer until the reader scrolled. Scrolled to, the same sentence is legible at 6.87:1.
+Reproduced identically on a Redis connection and an MQTT connection, so it belongs to the dialog rather than to any provider; it is the only feedback the connect path has before Establish Connection.
+
+Found 2026-10-12 by the browser pass of the OPC UA provider; pre-existing.
+
+**Done when:** pressing Test Connection brings its answer into view (scrolling the result into the dialog's viewport, or drawing it beside the button), with a dialog test that asserts the answer is inside the viewport after the press.
+
+### U126. Deep key rows whose names share a long prefix clip to the same text
+
+A key row's label is truncated from the END (`truncate` in `src/components/key-browser/KeyBrowser.tsx`), and at depth the row has little width left: measured 2026-10-12 in a browser on the OPC UA fixture, level `OpcPlc/Telemetry/Historian/HistorianInt32/HA Configuration/` draws its rows at 8 + 6x12 = 80px of indent plus a twisty, a glyph and the type cell, leaving about 100px for the name in a 280px sidebar.
+Eleven of its thirteen rows clip, and two adjacent rows both read `Exceptio...`: `ExceptionDeviation` and `ExceptionDeviationFormat` share their first 18 characters, so no width this panel can give them tells them apart - the part that differs is the part cut off.
+Drawing each row by its own segment rather than the whole key (this round) fixed the shallow case and narrowed this one to names that share a long prefix; the row's `title` carries the full name, and the grid's own cells are unaffected.
+S3 shares the level walk and the same drawing.
+
+Found 2026-10-12 by the browser pass of the OPC UA provider.
+
+**Done when:** a key row whose name does not fit keeps the part that distinguishes it - a middle ellipsis (`Exception...Format`) or an end-anchored truncation - with a test that renders two siblings sharing a long prefix and asserts the two labels differ.
+
+### U127. A connection cannot be edited on a phone, and its row's controls are invisible there
+
+The mobile DB tab renders `ConnectionsList` without `onEditConnection` (`src/components/Studio.tsx`), so no Edit control exists on a phone, and the row's remaining controls are drawn at `opacity: 0` behind a hover gate that a touch screen never satisfies.
+Measured 2026-10-12 at 390x844 in a browser: the four controls on a connection row report 20x20 px at opacity 0, below the 44x44 a touch target needs and invisible until tapped blind; the Edit control is absent from the DOM.
+So a connection created on a phone can never have its endpoint, username or security mode changed there. It is not engine-specific - the same list draws every engine - and the delete prompt, which does render, was confirmed to ask first on the phone.
+
+Found 2026-10-12 by the browser pass of the OPC UA provider; pre-existing.
+
+**Done when:** a touch viewport draws the row's actions visibly at 44x44 or larger and offers Edit, with a mobile test that taps Edit on a connection row and asserts the dialog opens filled.
+
+### U128. The results grid truncates the column that identifies a row while leaving the width beside it empty
+
+Grid columns are sized without regard to the free width of the panel, so a long first column is clipped at every window size even when hundreds of pixels sit unused to its right.
+Measured 2026-10-12 in a browser on an OPC UA read, whose first column is the node id: at 1280, 1440 and 1920 px the `nodeId` cell read `ns=3;s=His...` on every row while the grid's own right edge had free space; WRAP makes it readable, and WRAP is not the default a reader meets.
+The identifying column being the clipped one is what makes it a defect rather than a preference: the rows of a read differ only there.
+
+Found 2026-10-12 by the browser pass of the OPC UA provider; pre-existing.
+
+**Done when:** columns consume the panel's free width (or size to content) before truncating, with a test that renders a result whose first column is long and asserts no cell is clipped while free width remains.
+
+### U129. The Docs tab reports "0 tables" on an engine that has none
+
+The Docs panel is built around a table reference, so on an engine whose `objectKinds` hold no table-shaped kind it draws "0 tables" and an empty "Table Reference" - a count about a thing the engine does not have, next to an Objects tree that says in words where the nodes are.
+Measured 2026-10-12 in a browser on an OPC UA connection; MQTT has the same shape.
+
+Found 2026-10-12 by the browser pass of the OPC UA provider.
+
+**Done when:** the Docs tab says what the Objects tree says for such an engine, or is not offered there, with a test over an engine whose kinds are all `enumeratedBy: "key-browser"`.
 
 ## Dependencies
 

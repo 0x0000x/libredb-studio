@@ -148,6 +148,14 @@ const CONNECTION_RELEVANCE: Record<keyof DatabaseConnection, FieldRelevance> = {
   // The namespace list changes only which namespaces the tree draws, so a run may still be started on the seed's id.
   apiPath: "resolution",
   tlsServerName: "resolution",
+  // Both decide HOW the server is reached and verified, so a change to either is a different connection.
+  securityMode: "resolution",
+  serverCertificateThumbprint: "resolution",
+  // Each one changes which channel is opened and which identity it is opened with, so each travels
+  // to the server with the request, as the mode and the pin do.
+  securityPolicyUri: "resolution",
+  clientCertificatePath: "resolution",
+  clientPrivateKeyPath: "resolution",
   namespaces: "cosmetic",
   // An AMQP port: the listener a read is sent to, which can be another server than host and port reach, so a copy
   // differing here does not resolve to the seed's connection.

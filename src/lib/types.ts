@@ -178,7 +178,13 @@ export type DatabaseType =
   // (`src/lib/db/providers/stream/rabbitmq/`). Never takes a message from a queue and never writes to the broker. The
   // connection's Port is the management port, `amqpPort` the AMQP port of stream reads (empty means browse only), and
   // `apiPath` the management API's path prefix.
-  | "rabbitmq";
+  | "rabbitmq"
+  // OPC UA (#1677). A plant's address space, read only, over `opc.tcp` by `node-opcua-client`
+  // (`src/lib/db/providers/industrial/opcua/`), the first member of the `industrial/` family. One connection is
+  // one endpoint URL, which carries its own host and port; `securityMode` and `serverCertificateThumbprint`
+  // below are its own fields. Read-only is structural rather than a mode: the client seam names eight read
+  // services and none of them writes, so there is no Write, Call or HistoryUpdate to send.
+  | "opcua";
 
 export type ConnectionEnvironment = "production" | "staging" | "development" | "local" | "other";
 
@@ -438,6 +444,42 @@ export interface DatabaseConnection {
    * no other engine.
    */
   tlsServerName?: string;
+  /**
+   * OPC UA only: the security mode the connection asks the server for, None, Sign or SignAndEncrypt.
+   *
+   * Studio's own `SSLMode` does not map onto these. `require` and `verify-full` have no meaning to a
+   * server that offers three modes with a policy each, so the field is OPC UA's own name rather than
+   * a translation, and a mode the server does not offer is refused rather than quietly weakened.
+   * Read by no other engine.
+   */
+  securityMode?: string;
+  /**
+   * OPC UA only: the SHA-1 thumbprint the server's certificate must present, 40 hexadecimal
+   * characters.
+   *
+   * Pinned per connection because the library's default trusts a server on first sight: measured, a
+   * SignAndEncrypt connect to an unknown server succeeded and wrote its certificate into the trust
+   * store, and after the server was recreated with a new certificate the next connect trusted that
+   * one too. Part 4 6.1.3 says the opposite: "Applications shall never communicate with another
+   * application that they do not trust." Read by no other engine.
+   */
+  serverCertificateThumbprint?: string;
+  /**
+   * OPC UA only, and a SEED FILE'S field rather than a dialog's: the security policy to insist on,
+   * and the client certificate and private key to present.
+   *
+   * There is no box for these three in the connection dialog and there is not meant to be. A policy
+   * URI is a string nobody types correctly from memory, and a certificate and key are files on the
+   * host the server runs against: both are deployment facts, which is what `seed-connections.json`
+   * is for (`docs/SEED_CONNECTIONS.md`). The pair is supplied together or not at all - a certificate
+   * with no key cannot open a secured channel - and absent, the library generates a client
+   * certificate under the PKI root, which is stable for as long as that directory is.
+   *
+   * Read by no other engine.
+   */
+  securityPolicyUri?: string;
+  clientCertificatePath?: string;
+  clientPrivateKeyPath?: string;
   /**
    * BigQuery only: where its jobs run (`EU`, `US`, `europe-west3`, ...). Absent, the provider takes the default
    * dataset's location, else the one most datasets share. Absent and empty are one value. Read by no other engine.
@@ -855,7 +897,8 @@ export interface QueryTab {
     | "kubectl"
     | "mqtt"
     | "firestore"
-    | "rabbitmq";
+    | "rabbitmq"
+    | "opcua";
   viewMode?: "results" | "explain" | "history" | "saved";
   explainPlan?: unknown;
   // Pagination state

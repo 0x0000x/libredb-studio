@@ -151,6 +151,16 @@ describe("the classification is exhaustive by construction", () => {
         "tlsServerName",
         // An AMQP port: an address, as port is, so `public`.
         "amqpPort",
+        // A security mode is a setting, and a thumbprint is the PUBLIC fingerprint of a public
+        // certificate: it identifies a server and authenticates nobody (#1677).
+        "securityMode",
+        "serverCertificateThumbprint",
+        // OPC UA's three deployment fields, seed-file only. A policy URI is published by the server,
+        // and the other two are PATHS: the private key stays in the file the path names, which is
+        // the reason this provider takes a path rather than a key.
+        "securityPolicyUri",
+        "clientCertificatePath",
+        "clientPrivateKeyPath",
       ].sort(),
     );
   });

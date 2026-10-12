@@ -449,6 +449,58 @@ describe("ObjectTree engine gaps", () => {
     expect(await screen.findByTestId("tree-empty")).toBeTruthy();
   });
 
+  /**
+   * AN ENGINE THAT LISTS ITS OBJECTS ELSEWHERE IS NOT AN EMPTY ENGINE.
+   *
+   * MQTT and OPC UA declare one kind, enumerated by the key browser alone, so the inventory this
+   * tree reads is empty BY DESIGN - and the panel above said "the engine answered, and reported
+   * nothing at this level", a claim about a server that was holding 6,769 nodes. Measured in a
+   * browser by pressing the Objects tab on a connected OPC UA server; every unit and route test
+   * passed throughout, because each of them was right that the list is empty.
+   */
+  const listedElsewhere = {
+    ...capabilitiesOf({
+      containerLevels: [],
+      objectKinds: [{ id: "node", role: "relation", label: "Node", labelPlural: "Nodes", enumeratedBy: "key-browser" }],
+    }),
+    // The walk itself, which is the fact that decides WHICH sentence this panel draws: a shell with
+    // the Keys panel names it, and the embedded workspace has none to name.
+    keyScan: { defaultCount: 200, maxCount: 1000, separator: "/", cursor: "opaque", pattern: "prefix" },
+  } as ProviderCapabilities;
+
+  test("an engine whose objects are listed in the Keys panel says so rather than reporting nothing", async () => {
+    installFetch({ counts: () => ({}), list: () => [] });
+    render(<ObjectTree connection={connectionOf("opcua")} capabilities={listedElsewhere} />);
+
+    const panel = await screen.findByTestId("tree-listed-elsewhere");
+    expect(panel.textContent).toContain("Nodes are listed in the Keys panel");
+    expect(panel.textContent).toContain("browsed one level at a time");
+    expect(screen.queryByTestId("tree-empty")).toBeNull();
+    expect(panel.textContent).not.toContain("reported nothing");
+  });
+
+  /*
+   * THE EMBEDDED WORKSPACE HAS NO KEYS PANEL, because the published package ships no API routes, so
+   * naming a tab that is not drawn would be the same kind of wrong sentence. `source` is the fact
+   * that says which shell this is, and it is the one the sidebar reads for the tab itself.
+   */
+  test("the same engine in the embedded workspace does not name a tab that is not there", async () => {
+    installFetch({ counts: () => ({}), list: () => [] });
+    render(
+      <ObjectTree
+        connection={connectionOf("opcua")}
+        capabilities={listedElsewhere}
+        // The embedded shell answers the tree's reads itself; this one answers them empty, which is
+        // what an engine with nothing to enumerate answers anyway.
+        source={async (_connection, request) => (request.route === "counts" ? {} : [])}
+      />,
+    );
+
+    const panel = await screen.findByTestId("tree-listed-elsewhere");
+    expect(panel.textContent).toContain("Nodes are not listed here");
+    expect(panel.textContent).not.toContain("Keys tab");
+  });
+
   test("any other failure shows the engine's message and a retry that reads again", async () => {
     let attempt = 0;
     const calls = installFetch({

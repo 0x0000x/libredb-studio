@@ -20,6 +20,15 @@ interface PivotTableProps {
   onLoadQuery?: (query: string) => void;
   /** The connected engine, so a generated literal is quoted the way it reads it. */
   databaseType?: string;
+  /**
+   * Whether this connection can RUN the SQL this panel generates, or undefined while nobody knows.
+   *
+   * A browser pass on OPC UA pressed Generate SQL and watched it replace the reader's JSON read
+   * request with a SELECT the engine cannot parse - the editor's contents gone, and the only way
+   * back the undo stack. The engine's declared `queryLanguage` is the fact, so the control is drawn
+   * where the answer is yes or not yet known and withheld where it is no.
+   */
+  offersGeneratedSql?: boolean;
 }
 
 type AggFunction = "count" | "sum" | "avg" | "min" | "max";
@@ -49,7 +58,7 @@ export function aggregate(values: unknown[], fn: AggFunction): string {
   }
 }
 
-export function PivotTable({ result, onLoadQuery, databaseType }: PivotTableProps) {
+export function PivotTable({ result, onLoadQuery, databaseType, offersGeneratedSql }: PivotTableProps) {
   const [rowField, setRowField] = useState<string | null>(null);
   const [colField, setColField] = useState<string | null>(null);
   const [valueField, setValueField] = useState<string | null>(null);
@@ -254,7 +263,7 @@ export function PivotTable({ result, onLoadQuery, databaseType }: PivotTableProp
           ))}
         </div>
 
-        {onLoadQuery && rowField && (
+        {onLoadQuery && rowField && offersGeneratedSql !== false && (
           <button
             onClick={() => {
               const sql = generateSQL();

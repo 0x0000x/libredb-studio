@@ -995,7 +995,15 @@ export function ResultsGrid({
             </ul>
           </div>
         )}
-        {affected === undefined && (
+        {/*
+          NOT BESIDE A WARNING, because the two contradict each other. The panel above may be the
+          engine's own account of why there are no rows - on OPC UA, "the server answered
+          BadHistoryOperationUnsupported: that node keeps no history" - and "the operation was
+          successful" under it tells the reader the opposite of what they just read. Measured in a
+          browser on a history read of a node that keeps none, in both themes. The hint is for the
+          case it was written for: an answer with nothing to say about itself.
+        */}
+        {affected === undefined && emptyWarnings.length === 0 && (
           <p className="text-xs text-fg-subtle mt-2 max-w-[280px] leading-relaxed">{EMPTY_RESULT_HINT}</p>
         )}
       </div>

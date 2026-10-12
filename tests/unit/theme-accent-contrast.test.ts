@@ -224,6 +224,11 @@ const HUES: ReadonlyArray<{ hue: string; light: string; lightAlt: string }> = [
   // Of the hues Tailwind ships, lime-800 clears AA in light (4.67) and leaves both closest identity pairs where
   // they were (0.0205 light, 0.0160 dark).
   { hue: "lime", light: "lime-800", lightAlt: "lime-900" },
+  // OPC UA's identity (#1677): by the time it registered every base hue and every `-alt` step was an
+  // engine's - Firestore had taken `lime` and RabbitMQ its `-alt` - so the palette gains one more.
+  // `slate-800` clears AA in light, and a steel grey is the one colour a plant's address space can
+  // carry without borrowing the mark of an engine beside it.
+  { hue: "slate", light: "slate-800", lightAlt: "slate-900" },
 ];
 
 /**

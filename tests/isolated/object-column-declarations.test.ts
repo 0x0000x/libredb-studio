@@ -138,6 +138,8 @@ const EXPECTED_COLUMN_KINDS: Readonly<Record<DatabaseType, readonly string[]>> =
   firestore: ["collection"],
   // One kind with columns: a stream, whose columns are the fixed shape of a read result.
   rabbitmq: ["stream"],
+  // A node has attributes defined by its type in the server's model, not columns (#1677).
+  opcua: [],
   libredb: ["table", "collection", "keyspace"],
 });
 
@@ -221,16 +223,16 @@ describe("the fleet census of object column declarations", () => {
     // The population every assertion below iterates. If this were empty or short, each of those
     // loops would certify only the engines it happened to reach, so it is asserted first.
     expect([...CENSUS_TYPES].sort()).toEqual([...SHIPPED_DATABASE_TYPES].sort());
-    // EXTERNAL_DATABASE_TYPES.length (33 with db2, neo4j, milvus, qdrant, influxdb, influxdb3, oxia, databend, bigquery, s3,
-    // kubernetes, mqtt, firestore and rabbitmq) plus the embedded store.
-    expect(CENSUS_TYPES).toHaveLength(34);
+    // EXTERNAL_DATABASE_TYPES.length (34 with db2, neo4j, milvus, qdrant, influxdb, influxdb3, oxia, databend, bigquery, s3,
+    // kubernetes, mqtt, firestore, rabbitmq and opcua) plus the embedded store.
+    expect(CENSUS_TYPES).toHaveLength(35);
     expect(Object.keys(EXPECTED_COLUMN_KINDS).sort()).toEqual([...SHIPPED_DATABASE_TYPES].sort());
     // A row naming nothing would make its type-id's census pass on the empty set, so the design's
     // table has three such rows, and they are named here: every engine but Oxia, S3 and Kubernetes has at least one
     // kind with columns; Oxia's shard and key and S3's bucket and object declare none (consistency ruling 24), and
     // every Kubernetes kind opens its YAML instead.
     const empty = CENSUS_TYPES.filter((type) => EXPECTED_COLUMN_KINDS[type].length === 0);
-    expect(empty).toEqual(["oxia", "s3", "kubernetes", "mqtt"]);
+    expect(empty).toEqual(["oxia", "s3", "kubernetes", "mqtt", "opcua"]);
   });
 
   test("every kind id the expectation names is a kind its provider actually declares", async () => {

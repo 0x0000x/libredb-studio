@@ -18,6 +18,7 @@ import { clearRateLimitState } from "@/lib/api/rate-limit";
 import type { DatabaseProvider, KeyScanOptions, KeyScanPage } from "@/lib/db/types";
 import { ETCD_KEY_SCAN } from "@/lib/db/providers/keyvalue/etcd/key-scan";
 import { OXIA_KEY_SCAN } from "@/lib/db/providers/keyvalue/oxia/key-scan";
+import { levelPage, levelSlice, OPCUA_KEY_SCAN } from "@/lib/db/providers/industrial/opcua/key-scan";
 import {
   DatabaseError,
   DatabaseConfigError,
@@ -775,5 +776,136 @@ describe("POST /api/db/keys/scan for one level", () => {
       expect({ request, status: answer.status }).toEqual({ request, status: 200 });
       expect(answer.body).toStrictEqual(page);
     }
+  });
+});
+
+/**
+ * THE OPC UA LEVEL PAGE, DRIVEN THROUGH THE ROUTE AND THROUGH ITS OWN CODE (#1677).
+ *
+ * This block exists because its absence let two defects pass two reviews. Every OPC UA level test
+ * lived beside the provider and called `levelPage` with request shapes the route cannot send -
+ * `cursor: ""`, `pattern: ""` - and asserted the cursor `""` at the end of a level. The route
+ * refuses an empty cursor, `use-key-scan.ts` reads `"0"` and nothing else as the end of a walk, and
+ * `checkAnswer` holds a level page to the RAW pattern. So: a real `OPCUA_KEY_SCAN` declaration, the
+ * real `levelSlice`/`levelPage` over references, and the route's own checks in between.
+ */
+describe("POST /api/db/keys/scan over the OPC UA level provider", () => {
+  /** A level of three leaves and one folder, as a Browse answers it. */
+  const REFERENCES = [
+    {
+      nodeId: "ns=3;s=Pump",
+      browseName: "Pump",
+      displayName: "Pump",
+      nodeClass: "Variable",
+      referenceTypeId: "i=47",
+      mayHaveChildren: false,
+    },
+    {
+      nodeId: "ns=3;s=Plant",
+      browseName: "Plant",
+      displayName: "Plant",
+      nodeClass: "Object",
+      referenceTypeId: "i=47",
+      mayHaveChildren: true,
+    },
+    {
+      nodeId: "ns=3;s=Pressure",
+      browseName: "Pressure",
+      displayName: "Pressure",
+      nodeClass: "Variable",
+      referenceTypeId: "i=47",
+      mayHaveChildren: false,
+    },
+    {
+      nodeId: "ns=3;s=Temperature",
+      browseName: "Temperature",
+      displayName: "Temperature",
+      nodeClass: "Variable",
+      referenceTypeId: "i=47",
+      mayHaveChildren: false,
+    },
+  ] as const;
+  const FOLDERS = new Set(["ns=3;s=Plant"]);
+
+  function opcuaProvider(): DatabaseProvider {
+    const provider = createMockProvider({
+      type: "opcua",
+      capabilities: { keyScan: OPCUA_KEY_SCAN, containerLevels: [] },
+    });
+    provider.scanKeysPage = mock(async (options: KeyScanOptions) => {
+      const pattern = options.pattern ?? "";
+      const slice = levelSlice(pattern, REFERENCES as never, { cursor: options.cursor, count: options.count });
+      return levelPage(slice, FOLDERS);
+    });
+    return provider;
+  }
+
+  test("the first press sends cursor 0, and a level that fits answers the end in that same word", async () => {
+    activeProvider = opcuaProvider();
+
+    // No `cursor` at all, which is what the panel's first press sends: the route defaults it to "0".
+    const { status, body } = await post<KeyScanPage>({ level: true });
+
+    expect(status).toBe(200);
+    expect(body.keys).toEqual(["Pressure", "Pump", "Temperature"]);
+    expect(body.prefixes).toEqual(["Plant/"]);
+    // `"0"` is the only end-of-walk signal the panel reads; `""` left every button enabled for ever.
+    expect(body.cursor).toBe("0");
+  });
+
+  test("paging a level is accepted at every step, and the last page ends it", async () => {
+    activeProvider = opcuaProvider();
+    const seen: string[] = [];
+    let cursor = "0";
+    let pages = 0;
+
+    do {
+      const { status, body } = await post<KeyScanPage>({ level: true, count: 2, cursor });
+      // Every page passes the route's own level checks, which is what a 500 here would mean.
+      expect(status).toBe(200);
+      seen.push(...body.keys, ...(body.prefixes ?? []));
+      cursor = body.cursor;
+      pages += 1;
+      if (pages > 6) throw new Error("the cursor did not advance");
+    } while (cursor !== "0");
+
+    expect(pages).toBe(2);
+    // Every entry once, and in byte order once the two lists of each page are put back together:
+    // a page answers its keys and its folders separately, so the walk's order is per page.
+    expect([...seen].sort()).toEqual(["Plant/", "Pressure", "Pump", "Temperature"]);
+    expect(new Set(seen).size).toBe(4);
+  });
+
+  /**
+   * The filter box sends its text as the prefix, with no separator on the end, and `checkAnswer`
+   * holds the answer to that raw text: a provider that read it as a level instead answered keys
+   * holding a separator after the pattern, and the route refused the page with a 500 naming it.
+   */
+  test("a prefix with no trailing separator is answered inside the level the route checks", async () => {
+    activeProvider = opcuaProvider();
+
+    const { status, body } = await post<KeyScanPage>({ level: true, pattern: "P" });
+
+    expect(status).toBe(200);
+    expect(body.keys).toEqual(["Pressure", "Pump"]);
+    expect(body.prefixes).toEqual(["Plant/"]);
+  });
+
+  test("a cursor the provider did not write is a 400 with a sentence, not a silent restart", async () => {
+    activeProvider = opcuaProvider();
+
+    const { status, body } = await post<{ error?: string }>({ level: true, cursor: "7" });
+
+    expect(status).toBe(400);
+    expect(body.error).toContain("not written by the OPC UA provider");
+  });
+
+  test("an empty cursor is refused by the route before the provider sees it", async () => {
+    activeProvider = opcuaProvider();
+
+    const { status, body } = await post<{ error?: string }>({ level: true, cursor: "" });
+
+    expect(status).toBe(400);
+    expect(body.error).toContain("cursor");
   });
 });

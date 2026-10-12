@@ -126,6 +126,8 @@ const ENGINE_FENCE_TAGS: Readonly<Record<DatabaseType, true>> = Object.freeze({
   firestore: true,
   // A ```rabbitmq block holds one JSON read request the editor runs as it is.
   rabbitmq: true,
+  // An ```opcua block holds one JSON read request, which the console runs as it is.
+  opcua: true,
 });
 
 /**

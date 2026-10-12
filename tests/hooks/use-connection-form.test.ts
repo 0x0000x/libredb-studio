@@ -1984,6 +1984,7 @@ describe("useConnectionForm", () => {
     mqtt: true,
     firestore: true,
     rabbitmq: true,
+    opcua: true,
   };
 
   test("dbTypes offers every database type a connection can carry", () => {

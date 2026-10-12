@@ -49,7 +49,11 @@ mock.module("@/components/object-tree", () => ({
     // The row menu's entry point into the keys panel, captured so a test can press it: the sidebar
     // hands the tree this handler and nothing else about the panel.
     capturedBrowseKeys = (
-      props.actions as { onBrowseKeys?: (object: { name: string; path: readonly string[] }) => void } | undefined
+      props.actions as
+        | {
+            onBrowseKeys?: (object: { name: string; path: readonly string[] }) => void;
+          }
+        | undefined
     )?.onBrowseKeys;
     return React.createElement(
       "div",
@@ -184,7 +188,10 @@ function createDefaultProps(overrides: Record<string, unknown> = {}) {
  */
 function walkMetadata(): ProviderMetadata {
   return {
-    capabilities: { ...oneLevel, keyScan: { defaultCount: 500, maxCount: 1000 } },
+    capabilities: {
+      ...oneLevel,
+      keyScan: { defaultCount: 500, maxCount: 1000 },
+    },
   } as unknown as ProviderMetadata;
 }
 
@@ -222,7 +229,9 @@ describe("Sidebar", () => {
 
   test("the object tree only renders when activeConnection exists", () => {
     // With active connection
-    const propsWithConn = createDefaultProps({ activeConnection: mockPostgresConnection });
+    const propsWithConn = createDefaultProps({
+      activeConnection: mockPostgresConnection,
+    });
     const { unmount, queryByTestId } = render(<Sidebar {...propsWithConn} />);
     expect(queryByTestId("object-tree")).not.toBeNull();
     unmount();
@@ -293,7 +302,11 @@ describe("Sidebar", () => {
 
   test("the failure offers a retry, and the press reaches the owner of the read", () => {
     const onRetryMetadata = mock(() => {});
-    const props = createDefaultProps({ metadata: null, metadataError: "Connection refused", onRetryMetadata });
+    const props = createDefaultProps({
+      metadata: null,
+      metadataError: "Connection refused",
+      onRetryMetadata,
+    });
     const { getByTestId } = render(<Sidebar {...props} />);
 
     fireEvent.click(getByTestId("sidebar-provider-retry"));
@@ -305,7 +318,10 @@ describe("Sidebar", () => {
   // workspace is that shell: its host DECLARES the capabilities, so there is no read to
   // re-issue and it passes neither prop.
   test("no retry is offered when the shell supplied no way to re-read", () => {
-    const props = createDefaultProps({ metadata: null, metadataError: "Connection refused" });
+    const props = createDefaultProps({
+      metadata: null,
+      metadataError: "Connection refused",
+    });
     const { queryByTestId } = render(<Sidebar {...props} />);
 
     expect(queryByTestId("sidebar-provider-retry")).toBeNull();
@@ -325,7 +341,10 @@ describe("Sidebar", () => {
   // that answer rather than performed here.
   test("a deferred connection hands the tree the deferral and the load action", () => {
     const onLoadObjects = mock(() => {});
-    const props = createDefaultProps({ objectScanDeferred: true, onLoadObjects });
+    const props = createDefaultProps({
+      objectScanDeferred: true,
+      onLoadObjects,
+    });
     const { getByTestId } = render(<Sidebar {...props} />);
 
     expect(getByTestId("object-tree").getAttribute("data-deferred")).toBe("true");
@@ -336,7 +355,11 @@ describe("Sidebar", () => {
   // CL-CORE-2: the shell holds a restored connection whose requests resume billed compute, and says why.
   test("a connection held for billed compute hands the tree the deferral, its reason and the load action", () => {
     const onLoadObjects = mock(() => {});
-    const props = createDefaultProps({ objectScanDeferred: true, deferredForBilledCompute: true, onLoadObjects });
+    const props = createDefaultProps({
+      objectScanDeferred: true,
+      deferredForBilledCompute: true,
+      onLoadObjects,
+    });
     const { getByTestId } = render(<Sidebar {...props} />);
 
     expect(getByTestId("object-tree").getAttribute("data-deferred")).toBe("true");
@@ -355,11 +378,17 @@ describe("Sidebar", () => {
    */
   test("the shell's row actions and the engine's wording reach the tree, plus the panel's own", () => {
     const props = createDefaultProps({
-      objectActions: { onProfileObject: mock(() => {}), onCreateObject: mock(() => {}) },
+      objectActions: {
+        onProfileObject: mock(() => {}),
+        onCreateObject: mock(() => {}),
+      },
       // The wording travels with the declaration rather than beside it: both halves of
       // `metadata` reach the tree, since the menu's maintenance items need the second.
       metadata: {
-        capabilities: { ...oneLevel, keyScan: { defaultCount: 500, maxCount: 1000 } },
+        capabilities: {
+          ...oneLevel,
+          keyScan: { defaultCount: 500, maxCount: 1000 },
+        },
         labels: { vacuumActionOperation: "optimize" },
       } as unknown as ProviderMetadata,
     });
@@ -394,7 +423,9 @@ describe("Sidebar", () => {
 
   test("ERD button only appears when activeConnection exists", () => {
     // With active connection — should have ERD button (title="Show ERD Diagram")
-    const propsWithConn = createDefaultProps({ activeConnection: mockPostgresConnection });
+    const propsWithConn = createDefaultProps({
+      activeConnection: mockPostgresConnection,
+    });
     const { unmount, container: c1 } = render(<Sidebar {...propsWithConn} />);
     const erdButton = c1.querySelector('[title="Show ERD Diagram"]');
     expect(erdButton).not.toBeNull();
@@ -426,7 +457,10 @@ describe("Sidebar", () => {
   test("passes favoriteConnectionIds and onToggleFavoriteConnection through to ConnectionsList", () => {
     const favoriteConnectionIds = new Set([mockPostgresConnection.id]);
     const onToggleFavoriteConnection = mock(() => {});
-    const props = createDefaultProps({ favoriteConnectionIds, onToggleFavoriteConnection });
+    const props = createDefaultProps({
+      favoriteConnectionIds,
+      onToggleFavoriteConnection,
+    });
 
     render(<Sidebar {...props} />);
 
@@ -548,7 +582,9 @@ describe("Sidebar", () => {
   });
 
   test("no ERD button on a connection declaring Cypher, whose relationship types are no tables (SR20)", () => {
-    const cypher = { capabilities: { ...oneLevel, queryLanguage: "cypher" } } as unknown as ProviderMetadata;
+    const cypher = {
+      capabilities: { ...oneLevel, queryLanguage: "cypher" },
+    } as unknown as ProviderMetadata;
     const { container, unmount } = render(<Sidebar {...createDefaultProps({ metadata: cypher })} />);
     expect(container.querySelector('[title="Show ERD Diagram"]')).toBeNull();
     unmount();
@@ -711,7 +747,14 @@ describe("Sidebar", () => {
     fireEvent.click(getByRole("tab", { name: "Objects" }));
     expect(queryByTestId("key-browser")).not.toBeNull();
 
-    rerender(<Sidebar {...createDefaultProps({ activeConnection: mockMySQLConnection, metadata: walkMetadata() })} />);
+    rerender(
+      <Sidebar
+        {...createDefaultProps({
+          activeConnection: mockMySQLConnection,
+          metadata: walkMetadata(),
+        })}
+      />,
+    );
 
     // A hidden panel still walks, and the connection it was walking is no longer the one on screen:
     // keeping it would spend the server's `SCAN` on a key space nobody is looking at.
@@ -770,7 +813,10 @@ describe("Sidebar", () => {
       // The walk declared and NO container level: the key space is walked as a whole, so the row's
       // first segment is part of the key and not the name of a container.
       metadata: {
-        capabilities: { queryLanguage: "sql", keyScan: { defaultCount: 500, maxCount: 1000 } },
+        capabilities: {
+          queryLanguage: "sql",
+          keyScan: { defaultCount: 500, maxCount: 1000 },
+        },
       } as unknown as ProviderMetadata,
       objectActions: { onGenerateSelect: () => {} },
     });
@@ -803,13 +849,251 @@ describe("Sidebar", () => {
     expect(queryByTestId("key-browser")?.getAttribute("data-request")).toBe("a\\[b:*");
   });
 
+  /**
+   * AN ENGINE THAT ENUMERATES NOTHING OPENS ON THE KEYS TAB, which a browser run is what found.
+   * MQTT and OPC UA declare a key walk and no enumerable object kind at all, so the object tree
+   * asked them for objects, the provider refused by design, and the reader's FIRST screen after
+   * connecting was an empty panel and a red "Schema Error" toast. Every other engine still opens on
+   * Objects: the key browser is an addition, not a replacement.
+   */
+  test("an engine with a key walk and no enumerable kind opens on Keys", () => {
+    const props = createDefaultProps({
+      activeConnection: mockPostgresConnection,
+      metadata: {
+        capabilities: {
+          queryLanguage: "json",
+          // What MQTT and OPC UA declare: one kind, enumerated by the Keys panel alone.
+          objectKinds: [
+            {
+              id: "node",
+              role: "relation",
+              label: "Node",
+              labelPlural: "Nodes",
+              enumeratedBy: "key-browser",
+            },
+          ],
+          keyScan: {
+            defaultCount: 200,
+            maxCount: 1000,
+            separator: "/",
+            cursor: "opaque",
+            pattern: "prefix",
+          },
+        },
+      } as unknown as ProviderMetadata,
+    });
+    const { queryByTestId } = render(<Sidebar {...props} />);
+    expect(queryByTestId("key-browser")).not.toBeNull();
+  });
+
+  test("an engine that does enumerate objects still opens on Objects", () => {
+    const props = createDefaultProps({
+      activeConnection: mockPostgresConnection,
+      metadata: walkMetadata(),
+    });
+    const { queryByTestId } = render(<Sidebar {...props} />);
+    expect(queryByTestId("key-browser")).toBeNull();
+  });
+
+  /**
+   * What MQTT and OPC UA declare, as its own fixture: the three tests below are about the default
+   * LEAVING this engine, so each of them needs the engine twice.
+   */
+  function enumeratesNothingMetadata(): ProviderMetadata {
+    return {
+      capabilities: {
+        queryLanguage: "json",
+        objectKinds: [
+          {
+            id: "node",
+            role: "relation",
+            label: "Node",
+            labelPlural: "Nodes",
+            enumeratedBy: "key-browser",
+          },
+        ],
+        keyScan: {
+          defaultCount: 200,
+          maxCount: 1000,
+          separator: "/",
+          cursor: "opaque",
+          pattern: "prefix",
+        },
+      },
+    } as unknown as ProviderMetadata;
+  }
+
+  /** The tab the sidebar has selected, read the way a reader reads it. */
+  function selectedTab(): string | null {
+    const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+    return tabs.find((tab) => tab.getAttribute("aria-selected") === "true")?.textContent ?? null;
+  }
+
+  /*
+   * A DEFAULT MUST NOT OUTLIVE THE CONNECTION IT WAS DERIVED FOR, which is what storing it did: the
+   * first version of the test above passed while one OPC UA or MQTT connection left `keys` in the
+   * sidebar's state for good, so the next Redis, etcd, Oxia or S3 connection opened on a key walk
+   * nobody asked for - on Redis an unrequested `SCAN` against whatever server that is - with the
+   * object tree absent until the reader found the tab. Two connections in ONE sidebar is the only
+   * shape that can see it; a test that renders one never will.
+   */
+  test("the Keys default does not follow the reader to an engine that enumerates objects", () => {
+    const { rerender, queryByTestId } = render(
+      <Sidebar
+        {...createDefaultProps({
+          activeConnection: mockPostgresConnection,
+          metadata: enumeratesNothingMetadata(),
+        })}
+      />,
+    );
+    expect(queryByTestId("key-browser")).not.toBeNull();
+
+    rerender(
+      <Sidebar
+        {...createDefaultProps({
+          activeConnection: mockMySQLConnection,
+          metadata: walkMetadata(),
+        })}
+      />,
+    );
+    expect(queryByTestId("object-tree")).not.toBeNull();
+    expect(queryByTestId("key-browser")).toBeNull();
+    expect(selectedTab()).toBe("Objects");
+  });
+
+  /* The reader's own choice still carries, which is the behaviour the stored default was hiding. */
+  test("a reader who chose Keys keeps Keys on the next connection", () => {
+    const { rerender, queryByTestId, getByText } = render(
+      <Sidebar
+        {...createDefaultProps({
+          activeConnection: mockPostgresConnection,
+          metadata: walkMetadata(),
+        })}
+      />,
+    );
+    fireEvent.click(getByText("Keys"));
+    expect(queryByTestId("key-browser")).not.toBeNull();
+
+    rerender(
+      <Sidebar
+        {...createDefaultProps({
+          activeConnection: mockMySQLConnection,
+          metadata: walkMetadata(),
+        })}
+      />,
+    );
+    expect(queryByTestId("key-browser")).not.toBeNull();
+    expect(selectedTab()).toBe("Keys");
+  });
+
+  /*
+   * And a choice of Objects is not carried ONTO an engine with nothing to enumerate: the reader who
+   * chose it chose it about another server, and the tab it names is empty there by design. Pressing
+   * it on THIS engine is a different thing, and the next test is that one.
+   */
+  test("a chosen Objects is not carried onto an engine that enumerates nothing", () => {
+    const { rerender, queryByTestId, getByText } = render(
+      <Sidebar
+        {...createDefaultProps({
+          activeConnection: mockPostgresConnection,
+          metadata: walkMetadata(),
+        })}
+      />,
+    );
+    fireEvent.click(getByText("Keys"));
+    fireEvent.click(getByText("Objects"));
+    expect(queryByTestId("object-tree")).not.toBeNull();
+
+    rerender(
+      <Sidebar
+        {...createDefaultProps({
+          activeConnection: mockMySQLConnection,
+          metadata: enumeratesNothingMetadata(),
+        })}
+      />,
+    );
+    expect(queryByTestId("key-browser")).not.toBeNull();
+    expect(selectedTab()).toBe("Keys");
+  });
+
+  /*
+   * A PATTERN BELONGS TO THE CONNECTION IT WAS ASKED FOR ON. `docs/BACKLOG.md` U108 recorded the
+   * opposite as deferred - a Browse Keys pattern carried to the next connection, where it reads
+   * `Scanned 0` - and the Keys default above turned it from "a reader who presses Keys meets it"
+   * into "it is the first screen after connecting", because MQTT and OPC UA open on that panel.
+   * Measured in a copy of the tree before the fix: the next engine's first screen carried `user:*`.
+   */
+  test("a Browse Keys pattern does not reach the next connection's panel", () => {
+    const props = createDefaultProps({ activeConnection: mockPostgresConnection, metadata: walkMetadata() });
+    const { rerender, queryByTestId } = render(<Sidebar {...props} />);
+    capturedBrowseKeys?.({ name: "user:*", path: ["user:*"] } as never);
+
+    rerender(
+      <Sidebar
+        {...createDefaultProps({ activeConnection: mockMySQLConnection, metadata: enumeratesNothingMetadata() })}
+      />,
+    );
+
+    expect(queryByTestId("key-browser")).not.toBeNull();
+    expect(queryByTestId("key-browser")?.getAttribute("data-request")).toBe("none");
+  });
+
+  /*
+   * AND IT TRAVELS TO THE NEXT SERVER OF THE SAME KIND. A reader who presses Objects on an OPC UA
+   * server has read what that tab says and asked for it anyway; switching to a second OPC UA server
+   * used to put them back on Keys, which is the opposite of what the Redis-to-Redis rule promises.
+   */
+  test("a chosen Objects travels between two engines that both enumerate nothing", () => {
+    const { rerender, queryByTestId, getByText } = render(
+      <Sidebar
+        {...createDefaultProps({ activeConnection: mockPostgresConnection, metadata: enumeratesNothingMetadata() })}
+      />,
+    );
+    fireEvent.click(getByText("Objects"));
+    expect(queryByTestId("object-tree")).not.toBeNull();
+
+    rerender(
+      <Sidebar
+        {...createDefaultProps({ activeConnection: mockMySQLConnection, metadata: enumeratesNothingMetadata() })}
+      />,
+    );
+    expect(queryByTestId("object-tree")).not.toBeNull();
+    expect(selectedTab()).toBe("Objects");
+  });
+
+  test("pressing Objects on an engine that enumerates nothing stays on Objects", () => {
+    const { queryByTestId, getByText } = render(
+      <Sidebar
+        {...createDefaultProps({
+          activeConnection: mockPostgresConnection,
+          metadata: enumeratesNothingMetadata(),
+        })}
+      />,
+    );
+    expect(queryByTestId("key-browser")).not.toBeNull();
+    fireEvent.click(getByText("Objects"));
+    expect(queryByTestId("object-tree")).not.toBeNull();
+    expect(selectedTab()).toBe("Objects");
+  });
+
   test("hands Browse Keys the bare prefix and its separator under a prefix declaration", () => {
     const props = createDefaultProps({
       activeConnection: mockPostgresConnection,
       // A walk that reads a literal prefix under `/` and declares no container level: what etcd answers.
+      // `objectKinds` is declared because etcd declares five: an engine that enumerates NOTHING now
+      // opens on the Keys tab (MQTT and OPC UA are the only two), and this test is about the
+      // handover FROM the object tree, which such an engine has no reason to draw.
       metadata: {
         capabilities: {
           queryLanguage: "json",
+          objectKinds: [
+            {
+              id: "prefix",
+              role: "container",
+              label: "Prefix",
+              labelPlural: "Prefixes",
+            },
+          ],
           keyScan: {
             defaultCount: 500,
             maxCount: 1000,
@@ -827,7 +1111,10 @@ describe("Sidebar", () => {
     // The group's advertised name loses only its star: the separator stays, so the walk does not also
     // read `/apisix/routes-v2/`, and nothing is escaped, because every byte of a prefix is data.
     act(() => {
-      capturedBrowseKeys?.({ name: "/apisix/routes/*", path: ["/apisix/routes/*"] });
+      capturedBrowseKeys?.({
+        name: "/apisix/routes/*",
+        path: ["/apisix/routes/*"],
+      });
     });
     expect(queryByTestId("key-browser")?.getAttribute("data-request")).toBe("/apisix/routes/");
     expect(queryByTestId("key-browser")?.getAttribute("data-request-database")).toBe("none");
@@ -835,7 +1122,10 @@ describe("Sidebar", () => {
     // Review Focus 1: a prefix holding a leading `-`, a space, both quotes, `#`, `$` and a glob
     // metacharacter is handed over as its string, with no escape.
     act(() => {
-      capturedBrowseKeys?.({ name: "/-a b'\"#$[x]/*", path: ["/-a b'\"#$[x]/*"] });
+      capturedBrowseKeys?.({
+        name: "/-a b'\"#$[x]/*",
+        path: ["/-a b'\"#$[x]/*"],
+      });
     });
     expect(queryByTestId("key-browser")?.getAttribute("data-request")).toBe("/-a b'\"#$[x]/");
   });
@@ -844,11 +1134,22 @@ describe("Sidebar", () => {
     const props = createDefaultProps({
       activeConnection: mockPostgresConnection,
       // A level walk under `/` with no container level: what an object store declares, its buckets being
-      // the key space's first segment.
+      // the key space's first segment. `objectKinds` is declared because S3 declares one (`object`
+      // is key-browser enumerated, and the bucket kind is what the tree draws): an engine that
+      // enumerates NOTHING now opens on the Keys tab, and this test is about the handover from the
+      // object tree.
       metadata: {
         capabilities: {
           queryLanguage: "json",
           containerLevels: [],
+          objectKinds: [
+            {
+              id: "bucket",
+              role: "container",
+              label: "Bucket",
+              labelPlural: "Buckets",
+            },
+          ],
           keyScan: {
             defaultCount: 500,
             maxCount: 1000,
@@ -914,13 +1215,29 @@ describe("Sidebar", () => {
     // The embedded workspace's host answers the tree's reads itself and ships no /api/db/keys/scan, so S3's level walk
     // (a `levels` declaration with the bucket as its root) is withheld exactly as a flat walk is.
     const props = createDefaultProps({
-      activeConnection: { ...mockPostgresConnection, id: "s3-1", type: "s3", port: 9000 },
+      activeConnection: {
+        ...mockPostgresConnection,
+        id: "s3-1",
+        type: "s3",
+        port: 9000,
+      },
       metadata: {
         capabilities: {
           queryLanguage: "json",
           containerLevels: [],
-          objectKinds: [{ id: "bucket", role: "config", label: "Bucket", labelPlural: "Buckets" }],
-          keyScan: { defaultCount: 500, maxCount: 1000, levels: { rootKind: "bucket" } },
+          objectKinds: [
+            {
+              id: "bucket",
+              role: "config",
+              label: "Bucket",
+              labelPlural: "Buckets",
+            },
+          ],
+          keyScan: {
+            defaultCount: 500,
+            maxCount: 1000,
+            levels: { rootKind: "bucket" },
+          },
         },
       } as unknown as ProviderMetadata,
       objectSource: async () => ({}),

@@ -56,6 +56,8 @@ const EXPECTED_CONTAINER_PATH_SHAPES: Readonly<
   // No container level at all: collections are object rows and deeper paths are Keys panel levels.
   firestore: "absent",
   rabbitmq: "exact",
+  // One connection is one server endpoint: there is no container level to shape (#1677).
+  opcua: "absent",
   libredb: "exact",
   duckdb: "prefixes",
   mssql: "prefixes",

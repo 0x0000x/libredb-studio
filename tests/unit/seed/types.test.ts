@@ -613,6 +613,87 @@ describe("SeedConnectionSchema: Kafka's SASL mechanism", () => {
 });
 
 /**
+ * OPC UA's five fields (#1677), and the reason this block exists at all.
+ *
+ * THE PIN IS THE PROVIDER'S WHOLE SAFETY PROPERTY, AND ZOD DROPPED IT IN SILENCE. Measured before
+ * the fields were declared: a seed file naming `securityMode: "SignAndEncrypt"` and a thumbprint
+ * parsed, validated and reached the provider with NEITHER - an unpinned connection, dialled with
+ * the library's default, which trusts a server on first sight and keeps trusting a replacement
+ * certificate after the server is rebuilt. An operator who seeded a pinned plant connection was
+ * handed the one thing the mode exists to prevent, and nothing anywhere said so.
+ */
+describe("SeedConnectionSchema: OPC UA's mode, pin and deployment paths", () => {
+  const opcua = {
+    id: "plant",
+    name: "Plant",
+    type: "opcua",
+    host: "opc.tcp://plc.ornek.net:4840/UA/Server",
+    ssl: { mode: "disable" },
+    roles: ["*"],
+  };
+
+  it("carries the mode, the pin and the three deployment paths through validation", () => {
+    const result = SeedConnectionSchema.safeParse({
+      ...opcua,
+      securityMode: "SignAndEncrypt",
+      serverCertificateThumbprint: "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD",
+      securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256",
+      clientCertificatePath: "/run/secrets/opcua/client.der",
+      clientPrivateKeyPath: "/run/secrets/opcua/client.pem",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.securityMode).toBe("SignAndEncrypt");
+    expect(result.data?.serverCertificateThumbprint).toBe(
+      "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD",
+    );
+    expect(result.data?.securityPolicyUri).toBe("http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256");
+    expect(result.data?.clientCertificatePath).toBe("/run/secrets/opcua/client.der");
+    expect(result.data?.clientPrivateKeyPath).toBe("/run/secrets/opcua/client.pem");
+  });
+
+  it.each(["None", "Sign", "SignAndEncrypt"])("accepts the mode %s, which is the server's own word", (mode) => {
+    const result = SeedConnectionSchema.safeParse({ ...opcua, securityMode: mode });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.securityMode).toBe(mode);
+  });
+
+  it.each([
+    ["a mode this engine does not have", "verify-full"],
+    ["a mode spelled in the wrong case", "signandencrypt"],
+    ["an empty mode", ""],
+    ["an environment reference, which is resolved for no such field", "${OPCUA_MODE}"],
+  ])("rejects %s, naming the field", (_label, mode) => {
+    const result = SeedConnectionSchema.safeParse({ ...opcua, securityMode: mode });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path.join("."))).toEqual(["securityMode"]);
+  });
+
+  it.each([
+    "securityMode",
+    "serverCertificateThumbprint",
+    "securityPolicyUri",
+    "clientCertificatePath",
+    "clientPrivateKeyPath",
+  ])("refuses %s on another engine, where no provider reads it", (field) => {
+    const result = SeedConnectionSchema.safeParse({
+      id: "pg",
+      name: "Postgres",
+      type: "postgres",
+      host: "db.ornek.net",
+      ssl: { mode: "verify-full" },
+      roles: ["*"],
+      [field]: field === "securityMode" ? "SignAndEncrypt" : "value",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path.join("."))).toContain(field);
+  });
+});
+
+/**
  * The read-only mode (#1089). Declared for the reason skipObjectScan is (zod strips an undeclared
  * key, and a seed file's mode would validate and vanish, leaving a connection that writes), accepted
  * only on an engine whose provider enforces it, never a reference, never a default, and only on a

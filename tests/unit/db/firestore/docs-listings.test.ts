@@ -41,7 +41,8 @@ describe("docs/providers/README.md", () => {
   });
 
   test("names Firestore among the providers split across modules", () => {
-    expect(index).toContain("S3, Kubernetes, Firestore and RabbitMQ are). The official product name");
+    // OPC UA joins the same sentence (#1677), so the tail this asserts moves with it.
+    expect(index).toContain("Kubernetes, MQTT, Firestore, RabbitMQ and OPC UA are). The official product name");
   });
 });
 
@@ -137,7 +138,7 @@ describe("the READMEs and Docker Hub", () => {
     const couchbase = lines.findIndex((line) => line.startsWith("| **Couchbase** |"));
     expect(lines[couchbase + 1]).toBe("| **Firestore** | none, REST | Read-only Admin SDK query chain |");
     expect(hub).toContain(
-      "Firestore, Prometheus, InfluxDB, Apache Kafka, MQTT, RabbitMQ, Oxia, S3-compatible object storage and Kubernetes are read-only too",
+      "Firestore, Prometheus, InfluxDB, Apache Kafka, MQTT, RabbitMQ, OPC UA, Oxia, S3-compatible object storage and Kubernetes are read-only too",
     );
   });
 });

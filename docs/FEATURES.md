@@ -162,7 +162,7 @@ Two components are described below and a claim true of one can be false of the o
 *   **Contextual Actions (schema tab):** Quick access menus for each table including "Select Top 50", "Generate Query", "Generate Count Query", and "Copy Name". Action labels adapt per provider (e.g. "Scan Keys" for Redis, "Find Documents" for MongoDB).
 *   **Generate Count Query (both explorers):** Opens an editable count statement in a new tab without running it, so a filter can be added before Run.
     SQL engines get a qualified, dialect-quoted `SELECT COUNT(*)` (`COUNT_BIG(*)` on SQL Server), and MongoDB gets its `count` document.
-    Redis, LibreDB, Prometheus, InfluxDB (InfluxQL), Apache Kafka, RabbitMQ, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage and Kubernetes have no count grammar here, and a derived key-prefix grouping has nothing to count, so they are not offered it.
+    Redis, LibreDB, Prometheus, InfluxDB (InfluxQL), Apache Kafka, MQTT, RabbitMQ, OPC UA, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage and Kubernetes have no count grammar here, and a derived key-prefix grouping has nothing to count, so they are not offered it.
 *   **DBA Quick Tools:** (Admin Only) Instant access to "Analyze Table" and "Vacuum Table" directly from the table context menu, on the providers whose rows are real objects. A key-value provider such as Redis, whose rows are derived key-prefix groupings, offers neither -- there is no table for the maintenance page to act on.
 *   **Visual Clarity:** Modern glassmorphic design with Framer Motion animations for smooth transitions.
 *   **Database Stats:** Integrated table counts and connection health monitoring directly in the sidebar.

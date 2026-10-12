@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,7 @@ import {
   type DatabaseUIConfig,
 } from "@/lib/db-ui-config";
 import { motion, AnimatePresence } from "framer-motion";
-import { useConnectionForm } from "@/hooks/use-connection-form";
+import { CONNECTION_FORM_DEFAULTS, useConnectionForm } from "@/hooks/use-connection-form";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { WireCompatibilityHint } from "@/components/WireCompatibilityHint";
 import { ConnectionImportPanel } from "@/components/ConnectionImportPanel";
@@ -210,6 +211,10 @@ export function ConnectionModal({
     namespaces,
     setNamespaces,
     tlsServerName,
+    securityMode,
+    setSecurityMode,
+    serverCertificateThumbprint,
+    setServerCertificateThumbprint,
     setTlsServerName,
     amqpPort,
     setAmqpPort,
@@ -290,7 +295,13 @@ export function ConnectionModal({
     dbTypes,
     readOnlyOffered,
     credentialWarning,
-  } = useConnectionForm({ isOpen, onClose, onConnect, editConnection, onTestConnection });
+  } = useConnectionForm({
+    isOpen,
+    onClose,
+    onConnect,
+    editConnection,
+    onTestConnection,
+  });
 
   // Couchbase pins one bucket per connection (issue #262, decision 4), so the shared
   // `database` field holds a bucket name and the form must say so.
@@ -332,6 +343,10 @@ export function ConnectionModal({
   // reads below exactly as it did before the declaration existed.
   const uiConfig = getDBConfig(type);
   const takesInsecureAuthConsent = takesConnectionField(type, "allowInsecureAuth");
+  /** Whether this engine's address has a port of its own, beside the host box. */
+  const takesPort = takesConnectionField(type, "port");
+  /** The answer panel, so the press that produced it can bring it on screen (below). */
+  const testResultRef = useRef<HTMLDivElement | null>(null);
   const databaseLabel = connectionFieldLabel(uiConfig, "database", `${databaseFieldLabel} Name`);
   // The port box shares the Host row's label; an engine that declares a port label of its own gets it drawn above the
   // box, and every other engine's row stays as it was.
@@ -544,9 +559,29 @@ export function ConnectionModal({
                   setType(db.value);
                   const cfg = getDBConfig(db.value);
                   if (cfg.defaultPort) setPort(cfg.defaultPort);
+                  /*
+                   * `localhost` IS NOT AN ENDPOINT URL, and this box held it. An engine whose whole
+                   * address is one URL - OPC UA is the only one that takes a host without a port -
+                   * was offered the generic host default, so a reader who picked it, typed nothing
+                   * and pressed Test Connection was refused for a value Studio put there. Measured
+                   * in a browser: the box read `localhost` under the label "Endpoint URL", beside a
+                   * placeholder showing `opc.tcp://plc.example.net:4840/`. Only the UNTOUCHED default
+                   * is cleared, so nothing a reader typed is lost, and it comes back when they pick
+                   * an engine that is addressed by host and port.
+                   */
+                  const addressIsOneUrl = !takesConnectionField(db.value, "port");
+                  if (addressIsOneUrl && host === CONNECTION_FORM_DEFAULTS.host) setHost("");
+                  if (!addressIsOneUrl && host === "") setHost(CONNECTION_FORM_DEFAULTS.host);
                   setTestResult(null);
                 }}
                 disabled={isEditMode}
+                /*
+                 * WHICH ENGINE IS CHOSEN IS SAID, not only drawn. The chosen card is a tint and a
+                 * glow and nothing else, so a screen reader was told the grid holds 33 buttons and
+                 * nothing about which one is active - found by reading the accessibility tree of the
+                 * dialog. The security-mode buttons three fields below already answer this way.
+                 */
+                aria-pressed={type === db.value}
                 className={cn(
                   "flex flex-col items-center justify-center p-3 md:p-4 rounded-xl border transition-all duration-200 gap-2 group",
                   type === db.value
@@ -692,26 +727,51 @@ export function ConnectionModal({
                           onDrop={(e) => {
                             if (takeHostAddress(e.dataTransfer.getData("text/plain"))) e.preventDefault();
                           }}
-                          placeholder="localhost"
+                          // An engine whose address is not a bare host name says so: OPC UA's whole
+                          // address is one endpoint URL, and "localhost" would be a wrong example.
+                          placeholder={connectionFieldPlaceholder(uiConfig, "host", "localhost")}
                           autoComplete="off"
+                          /*
+                           * AN ADDRESS IS NOT PROSE. A host box is never spell checked, corrected or
+                           * capitalised by the browser, and on an engine whose whole address is a URL
+                           * it is also a field that could carry a credential - which is why
+                           * `tests/components/ConnectionModal-secret-fields.test.tsx` holds every box
+                           * whose placeholder contains `://` to the same rule as a password.
+                           */
+                          spellCheck={false}
+                          autoCorrect="off"
+                          autoCapitalize="off"
                           aria-invalid={hostError === undefined ? undefined : true}
                           aria-describedby={
                             [describedByHint(uiConfig, "host"), hostError === undefined ? undefined : HOST_ERROR_ID]
                               .filter((id) => id !== undefined)
                               .join(" ") || undefined
                           }
-                          className="md:col-span-3 h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs"
+                          className={cn(
+                            "h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs",
+                            takesPort ? "md:col-span-3" : "md:col-span-4",
+                          )}
                         />
-                        {portLabel === "" ? (
-                          portBox
-                        ) : (
-                          <div className="space-y-2">
-                            <Label htmlFor="port" className="text-xs font-medium text-fg-muted">
-                              {portLabel}
-                            </Label>
-                            {portBox}
-                          </div>
-                        )}
+                        {/*
+                          THE PORT BOX IS DRAWN ONLY WHERE THE ENGINE TAKES ONE, by the same rule as
+                          every other field rather than for every engine with a host. OPC UA's whole
+                          address is one endpoint URL, which carries its own port, and this box was
+                          drawn beside it holding 4840: measured in a browser, a reader could type
+                          54840 into it and the dial went to the port in the URL, so the box offered a
+                          correction it could not make. The host takes the full row where it is gone,
+                          and an engine that declares a port label of its own still gets it.
+                        */}
+                        {takesPort &&
+                          (portLabel === "" ? (
+                            portBox
+                          ) : (
+                            <div className="space-y-2">
+                              <Label htmlFor="port" className="text-xs font-medium text-fg-muted">
+                                {portLabel}
+                              </Label>
+                              {portBox}
+                            </div>
+                          ))}
                       </div>
                       {hostError !== undefined && (
                         <p id={HOST_ERROR_ID} data-testid={HOST_ERROR_ID} role="alert" className="text-xs text-danger">
@@ -719,7 +779,7 @@ export function ConnectionModal({
                         </p>
                       )}
                       <DeclaredFieldHint config={uiConfig} field="host" />
-                      <DeclaredFieldHint config={uiConfig} field="port" />
+                      {takesPort && <DeclaredFieldHint config={uiConfig} field="port" />}
                     </div>
                   )}
 
@@ -1057,6 +1117,77 @@ export function ConnectionModal({
                         className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
                       />
                       <DeclaredFieldHint config={uiConfig} field="tlsServerName" />
+                    </div>
+                  )}
+
+                  {/*
+                    OPC UA's security mode: the server's own word, chosen rather than typed, because
+                    there are exactly three and a typo would otherwise be refused at connect time.
+                    The buttons read like the SSL Mode row below, which is the control an evaluator
+                    has already met; the pin beside it is a text box, because a thumbprint is pasted.
+                  */}
+                  {takesConnectionField(type, "securityMode") && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <ShieldCheck strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
+                        <Label htmlFor="securityMode" className="text-xs font-medium text-fg-muted">
+                          {connectionFieldLabel(uiConfig, "securityMode", "Security mode")}
+                        </Label>
+                      </div>
+                      {/*
+                       * A FIELDSET, AND IT POINTS AT ITS OWN HINT. Three buttons are one choice, so
+                       * the container is the element that groups them - `fieldset` rather than a
+                       * `div` with `role="group"`, which is the same semantics and what the a11y
+                       * rule asks for - and because a button group has no `aria-describedby` to
+                       * inherit, the hint that says a mode the server does not offer is refused is
+                       * wired here the way every input in this panel wires its own.
+                       */}
+                      <fieldset
+                        id="securityMode"
+                        aria-label={connectionFieldLabel(uiConfig, "securityMode", "Security mode")}
+                        aria-describedby={describedByHint(uiConfig, "securityMode")}
+                        className="flex flex-wrap gap-1.5 border-0 p-0 m-0"
+                      >
+                        {(["None", "Sign", "SignAndEncrypt"] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setSecurityMode(mode)}
+                            aria-pressed={securityMode === mode || (securityMode === "" && mode === "SignAndEncrypt")}
+                            className={cn(
+                              "px-2.5 py-1.5 rounded-md text-xs font-medium transition-all border",
+                              securityMode === mode || (securityMode === "" && mode === "SignAndEncrypt")
+                                ? "border-hue-emerald-tint/30 bg-hue-emerald-tint/10 text-hue-emerald"
+                                : "border-transparent text-fg-muted hover:text-fg-secondary hover:bg-fill",
+                            )}
+                          >
+                            {mode}
+                          </button>
+                        ))}
+                      </fieldset>
+                      <DeclaredFieldHint config={uiConfig} field="securityMode" />
+                    </div>
+                  )}
+
+                  {takesConnectionField(type, "serverCertificateThumbprint") && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <ShieldCheck strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
+                        <Label htmlFor="serverCertificateThumbprint" className="text-xs font-medium text-fg-muted">
+                          {connectionFieldLabel(uiConfig, "serverCertificateThumbprint", "Server certificate")}
+                        </Label>
+                      </div>
+                      <Input
+                        id="serverCertificateThumbprint"
+                        value={serverCertificateThumbprint}
+                        onChange={(e) => setServerCertificateThumbprint(e.target.value)}
+                        placeholder={connectionFieldPlaceholder(uiConfig, "serverCertificateThumbprint", "")}
+                        autoComplete="off"
+                        spellCheck={false}
+                        aria-describedby={describedByHint(uiConfig, "serverCertificateThumbprint")}
+                        className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
+                      />
+                      <DeclaredFieldHint config={uiConfig} field="serverCertificateThumbprint" />
                     </div>
                   )}
 
@@ -1580,20 +1711,50 @@ export function ConnectionModal({
             </div>
           )}
 
-          {/* Test Result */}
+          {/*
+            THE ANSWER COMES TO THE PRESS. This panel is the last child of the dialog's SCROLLING
+            body while the buttons that produce it are pinned to the bottom, so on a form as long as
+            this one the answer was painted under the footer: measured in a browser on OPC UA, 24 of
+            its 163 pixels were on screen and not one character was readable, at every window size
+            and in both themes - the reader pressed Test Connection and the screen did not change.
+            It is not this engine's defect (the same measurement reproduces on Redis and MQTT), and
+            it is the only feedback the connect path has, so it is fixed here rather than recorded:
+            when a result arrives, the panel scrolls itself into view.
+          */}
           <AnimatePresence>
             {testResult && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
+                /*
+                 * WHEN IT HAS A HEIGHT, not when it mounts. The panel opens from `height: 0`, so a
+                 * scroll on mount aims at a box of no height at the very bottom of the body and
+                 * lands it right back under the footer - which is what the first attempt at this did,
+                 * measured in a browser: the press still looked like nothing happened. Framer's own
+                 * completion callback is the moment the box is the size the reader will read.
+                 */
+                onAnimationComplete={() =>
+                  // `block: "center"` rather than `nearest`: the footer overlays the body's last
+                  // scroll position, so "just inside the viewport" is still behind the buttons.
+                  // INSTANT, not smooth: a smooth scroll is still travelling when the reader (and a
+                  // screenshot) looks, which is how the first two attempts at this still showed a
+                  // dialog that had not moved.
+                  testResultRef.current?.scrollIntoView({ block: "end", behavior: "auto" })
+                }
                 className="overflow-hidden"
               >
                 <div
+                  ref={testResultRef}
                   data-testid="connection-test-result"
                   data-tone={testResult.tone}
                   className={cn(
-                    "flex items-center gap-2 p-3 rounded-lg border text-xs",
+                    // `scroll-mb-28` is what keeps the scroll above the PINNED FOOTER: the footer
+                    // overlays the bottom of the scrolling body, so an element scrolled flush to the
+                    // container's bottom edge is still behind the buttons - measured, the answer
+                    // landed at y=618 of a 720 window with the footer starting near 600, inside the
+                    // window and unreadable. The margin is the footer's height and a little over.
+                    "scroll-mb-28 flex items-center gap-2 p-3 rounded-lg border text-xs",
                     testResult.tone === "success"
                       ? "bg-success-tint/5 border-success-tint/20 text-success"
                       : testResult.tone === "warning"

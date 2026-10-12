@@ -374,6 +374,24 @@ export async function createDatabaseProvider(
       return new RabbitMQProvider(connection, options);
     }
 
+    // OPC UA: an industrial address space, browsed level by level. Read-only whatever the flag says,
+    // so no execution context rides along, as for Kubernetes.
+    case "opcua": {
+      // The explicit /index specifier keeps this dynamic import statically analysable.
+      const { OpcuaProvider } = await import("./providers/industrial/opcua/index");
+      // THE LIBRARY IS IMPORTED BY THE FIRST CONNECT, NOT BY CONSTRUCTION, and that is measured
+      // rather than tidy: `node-opcua-hostname` calls `prepareFQDN()` at import time, un-awaited,
+      // and its `dns.lookupService` throws inside a callback where the library's own try/catch
+      // cannot see it. Under Node 24.14.0 here the hostname resolves to `::1` and nothing happens;
+      // under Bun 1.4.2 it resolved to a zone-indexed link-local address
+      // (`fe80::…%15`) and the error surfaced as an uncaught one. Constructing a provider must not
+      // depend on that, so the import happens when a session is actually opened.
+      return new OpcuaProvider(connection, options, async (read) => {
+        const { openLibrarySession } = await import("./providers/industrial/opcua/library");
+        return openLibrarySession(read);
+      });
+    }
+
     // Platforms - dynamically imported
     case "kubernetes": {
       // The explicit /index specifier keeps this dynamic import statically analysable. Read-only whatever the flag
@@ -393,7 +411,7 @@ export async function createDatabaseProvider(
         // This list is NOT type-checked against the union - a new case above with no
         // entry here is silent - so it is kept in the same order as the cases and
         // tests/isolated/factory.test.ts pins individual names in it by regex.
-        `Unknown database type: ${connection.type}. Supported types: postgres, mysql, sqlite, duckdb, libsql, oracle, db2, mssql, clickhouse, druid, trino, databend, bigquery, cassandra, elasticsearch, opensearch, mongodb, couchbase, firestore, redis, etcd, oxia, prometheus, influxdb, influxdb3, kafka, neo4j, milvus, qdrant, s3, mqtt, rabbitmq, kubernetes, libredb`,
+        `Unknown database type: ${connection.type}. Supported types: postgres, mysql, sqlite, duckdb, libsql, oracle, db2, mssql, clickhouse, druid, trino, databend, bigquery, cassandra, elasticsearch, opensearch, mongodb, couchbase, firestore, redis, etcd, oxia, prometheus, influxdb, influxdb3, kafka, neo4j, milvus, qdrant, s3, mqtt, opcua, rabbitmq, kubernetes, libredb`,
         connection.type,
       );
   }

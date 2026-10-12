@@ -451,6 +451,8 @@ const GRAMMAR_COVERAGE: Record<DatabaseType, "established" | "default"> = {
   mqtt: "default",
   firestore: "default",
   rabbitmq: "default",
+  // One JSON read request naming node ids, not SQL: no SQL grammar is established for it (#1677).
+  opcua: "default",
 };
 
 /**
@@ -709,6 +711,8 @@ const SQL_TEXT_COVERAGE: Record<DatabaseType, boolean> = {
   // A JavaScript-shaped query chain, not SQL text.
   firestore: false,
   rabbitmq: false,
+  // A read request is a JSON document, not SQL text.
+  opcua: false,
 };
 
 describe("readsSqlText", () => {

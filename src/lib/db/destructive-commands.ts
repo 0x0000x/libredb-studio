@@ -533,6 +533,11 @@ export const NON_SQL_DESTRUCTIVE_VOCABULARY: Readonly<Partial<Record<DatabaseTyp
   // RabbitMQ (#1656): a read request reads a stream's messages and nothing else, so no destructive verb exists to read
   // and nothing is posted for an AI analysis.
   rabbitmq: { operations: new Set<string>(), read: () => [], decidesAlone: true, safetyAnalysis: false },
+
+  // OPC UA (#1677): the console reads one JSON read request, so there is no destructive verb to find. The row
+  // exists because the record is exhaustive over every engine whose text is not SQL, and its operations list is
+  // empty by construction: the client seam names eight read services and none of them writes.
+  opcua: { operations: new Set<string>(), read: () => [], decidesAlone: true, safetyAnalysis: false },
   kubernetes: {
     operations: KUBERNETES_DESTRUCTIVE_OPERATIONS,
     read: readKubernetesOperations,
