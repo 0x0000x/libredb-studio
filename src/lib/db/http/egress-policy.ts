@@ -9,7 +9,8 @@ import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import { DatabaseConfigError } from "@/lib/db/errors";
 
 const FLAG = "DB_HTTP_BLOCK_PRIVATE_HOSTS";
-const BLOCKED_HOST = "Invalid host: this HTTP database destination is blocked by DB_HTTP_BLOCK_PRIVATE_HOSTS";
+/** The guard's refusal of a non-public destination, worded for any transport the guard serves: it names no protocol. */
+export const BLOCKED_HOST = "Invalid host: this database destination is blocked by DB_HTTP_BLOCK_PRIVATE_HOSTS";
 const BLOCKED_CONFIG = `Invalid ${FLAG}: expected true or false`;
 
 /**
@@ -67,12 +68,21 @@ function blockPrivateHttpHosts(): boolean {
   throw new DatabaseConfigError(BLOCKED_CONFIG);
 }
 
+/**
+ * Whether the guard refuses an address of family 4 or 6. An IPv6 address with a zone index is refused whatever its
+ * address: the zone makes it link-scoped, and Bun's BlockList ignores the zone, so ::1%lo would pass it there.
+ */
+function isBlocked(address: string, family: number): boolean {
+  if (family === 6 && address.includes("%")) return true;
+  return blocked.check(address, family === 4 ? "ipv4" : "ipv6");
+}
+
 /** Block all non-public address forms before a socket can be opened. */
 export function assertPublicLiteralHost(host: string): void {
   if (!blockPrivateHttpHosts()) return;
   const address = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
   const family = isIP(address);
-  if (family !== 0 && blocked.check(address, family === 4 ? "ipv4" : "ipv6")) {
+  if (family !== 0 && isBlocked(address, family)) {
     throw new DatabaseConfigError(BLOCKED_HOST);
   }
 }
@@ -84,7 +94,7 @@ export function assertPublicDnsAnswers(addresses: readonly LookupAddress[]): voi
     addresses.some(({ address, family }) => {
       if (family !== 4 && family !== 6) return true;
       if (isIP(address) !== family) return true;
-      return blocked.check(address, family === 4 ? "ipv4" : "ipv6");
+      return isBlocked(address, family);
     })
   )
     throw new DatabaseConfigError(BLOCKED_HOST);
@@ -123,9 +133,16 @@ export function guardedNodeOptions(hostname: string | null | undefined): Pick<Re
   return { lookup: publicAddressLookup, agent: false };
 }
 
-const LINK_LOCAL_HOST =
+export const LINK_LOCAL_HOST =
   "Invalid host: this connection never reaches a link-local address or AWS's IPv6 instance metadata address, whatever DB_HTTP_BLOCK_PRIVATE_HOSTS says";
-const UNUSABLE_ANSWER = "Invalid host: the name did not resolve to a usable IP address";
+export const UNUSABLE_ANSWER = "Invalid host: the name did not resolve to a usable IP address";
+
+/**
+ * The three sentences of the shared egress refusal. A provider that wraps its own failures passes a DatabaseConfigError
+ * whose message is one of these through unchanged, so the user reads the guard's own words. The invalid-flag sentence
+ * is not among them: it is a configuration fault of the server, not a refused destination.
+ */
+export const EGRESS_REFUSAL_SENTENCES: ReadonlySet<string> = new Set([BLOCKED_HOST, LINK_LOCAL_HOST, UNUSABLE_ANSWER]);
 
 /**
  * The addresses a byte transport never reaches, whatever DB_HTTP_BLOCK_PRIVATE_HOSTS says (byte transport design 3.9):
@@ -184,13 +201,28 @@ export const linkLocalRefusingLookup: LookupFunction = checkedLookup(assertNoLin
 
 /**
  * The byte transport's lookup with DB_HTTP_BLOCK_PRIVATE_HOSTS on: both checks on every answer, the guard's first, so
- * its sentence wins where both refuse. The guard's check alone is not enough here: it has no zone rule, and Bun's
- * BlockList does not match a zoned fe80::/10 address, so fe80::1%lo passed it and was dialled.
+ * its sentence wins where both refuse, a zoned address such as fe80::1%lo included.
  */
 export const guardedLinkLocalRefusingLookup: LookupFunction = checkedLookup((addresses) => {
   assertPublicDnsAnswers(addresses);
   assertNoLinkLocalDnsAnswer(addresses);
 });
+
+/**
+ * The egress rule for one socket dial to `host`, which may be an IPv6 literal with or without its brackets. The literal
+ * checks run first, because an IP literal never reaches a lookup: with DB_HTTP_BLOCK_PRIVATE_HOSTS on the guard's, which
+ * also refuses an empty host, and then with `refusesLinkLocal` the link-local check whatever the flag says, so the
+ * guard's sentence wins where both refuse. The answer is the lookup the socket dials through, which checks the address
+ * it dials and hands that address to the socket: both checks with the flag on and `refusesLinkLocal`, the link-local
+ * one alone with the flag off, the guard's alone without `refusesLinkLocal`, and undefined, the runtime's own lookup,
+ * with neither.
+ */
+export function socketEgress(host: string, rules: { readonly refusesLinkLocal: boolean }): LookupFunction | undefined {
+  const { lookup: guardLookup } = guardedNodeOptions(host);
+  if (!rules.refusesLinkLocal) return guardLookup;
+  assertNotLinkLocalLiteral(host);
+  return guardLookup === undefined ? linkLocalRefusingLookup : guardedLinkLocalRefusingLookup;
+}
 
 /**
  * The restricted mode uses Node's request socket so its DNS lookup can validate and

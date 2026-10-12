@@ -28,7 +28,7 @@ None of it is a GitHub issue.
 **Sections**
 
 - [SQL statement reading](#sql-statement-reading) — S2–S7 · 5
-- [Drivers and connections](#drivers-and-connections) — D1-D291, U17 · 193
+- [Drivers and connections](#drivers-and-connections) — D1-D292, U17 · 193
 - [Value interpolation](#value-interpolation) — V1
 - [Row editing](#row-editing) — R1–R3 · 3
 - [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U114 · 105
@@ -2757,16 +2757,6 @@ Found 2026-10-10 by the adversarial review of the S3 byte transport; pre-existin
 
 **Done when:** a form that cannot be serialised is refused before any socket slot is taken, with a `DatabaseConfigError` that names no value, and a node-transport test under `maxSockets: 1` asserts that refusal and that the next request completes.
 
-### D257. With the egress guard on, the text transport dials a zoned link-local DNS answer on Bun
-
-With `DB_HTTP_BLOCK_PRIVATE_HOSTS` on, the text transport's lookup is the guard's `publicAddressLookup`, whose check `assertPublicDnsAnswers` in `src/lib/db/http/egress-policy.ts` has no zone rule, and Bun's `BlockList` does not match a zoned address such as `fe80::1%lo` against `fe80::/10`, where Node's does.
-Measured 2026-10-10 on Bun 1.4.2 with `node:dns` mocked to answer `fe80::1%lo`: the text transport dialled it and failed with ECONNREFUSED instead of the guard's refusal.
-The byte transport runs the link-local check, which refuses any zoned IPv6 answer, after the guard's (`guardedLinkLocalRefusingLookup`), so it refuses the same answer.
-
-Found 2026-10-10 by the adversarial review of the S3 byte transport; pre-existing in the guard.
-
-**Done when:** the guard's answer check refuses an IPv6 answer with a zone index on every runtime, with an egress-policy test that mocks `node:dns` to answer `fe80::1%lo` and asserts the guard's sentence and that no socket is opened.
-
 ### D258. The text transport sends a queued request whose signal fired with the request ahead of it
 
 When one signal cancels a running request and the requests queued behind it, `EventTarget` calls their abort listeners in order, so the running request's failure frees its socket slot and the shared queue in `src/lib/db/http/node-transport.ts` starts the next request before that request's own listener has run.
@@ -3056,6 +3046,16 @@ The console reads the same pod (`podsOf` in `src/lib/db/providers/platform/kuber
 Found 2026-10-11 in the adversarial review of the pod-logs change (#1667); it is older than that change.
 
 **Done when:** a `kubectl logs TYPE/NAME` that resolves to more than one pod without `--all-pods` carries the notice as a result warning in kubectl's wording, with tests in `tests/unit/db/kubernetes/console/logs.test.ts` and the `logs` bullet of `docs/providers/kubernetes.md` updated.
+
+### D292. The MQTT dial is outside `DB_HTTP_BLOCK_PRIVATE_HOSTS` and reaches link-local addresses
+
+The MQTT provider opens its socket with `net.connect` or `tls.connect`, passes no `lookup` and checks no literal (`dialBroker` in `src/lib/db/providers/keyvalue/mqtt/session.ts`), so it reaches link-local addresses, the instance metadata address `169.254.169.254` among them, whatever `DB_HTTP_BLOCK_PRIVATE_HOSTS` says, and private and loopback addresses with the flag on.
+`socketEgress(host, { refusesLinkLocal: true })` in `src/lib/db/http/egress-policy.ts` is the rule for one socket dial: it refuses a blocked or link-local literal before the dial and returns the checked lookup the socket dials through, which hands the socket the address it checked.
+Through an SSH tunnel the MQTT socket dials the local forward, a loopback address, so the change also decides what the flag does to a tunnelled MQTT connection; the HTTP transports refuse one while the flag is on.
+
+Found 2026-10-12 while extracting the egress rule for a socket dial from the shared node transport.
+
+**Done when:** `dialBroker` calls `socketEgress(host, { refusesLinkLocal: true })` before it dials, passes the lookup to `net.connect` and `tls.connect` and lets its refusal through unchanged; `docs/providers/mqtt.md`, `docs/SECURITY.md` row 0.6 and "Known limits", the `DB_HTTP_BLOCK_PRIVATE_HOSTS` row of `docs/API_DOCS.md` and `.env.example` name the MQTT dial among what the flag covers; with tests for a link-local literal and a link-local DNS answer with the flag off, a private answer with the flag on, and a tunnelled connection.
 
 ## Value interpolation
 
