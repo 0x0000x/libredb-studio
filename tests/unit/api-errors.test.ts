@@ -77,6 +77,22 @@ describe("createErrorResponse", () => {
     expect(body.statusCode).toBe(401);
   });
 
+  test("a 401 carries the fix statement next to the error when the provider set one, and only then", async () => {
+    const withFix = createErrorResponse(
+      new AuthenticationError("refused", undefined, { fixStatement: "ALTER USER ADD KEY PAIR k PUBLIC_KEY = 'b'" }),
+    );
+    expect(withFix.status).toBe(401);
+    expect(await withFix.json()).toEqual({
+      error: "refused",
+      code: "AUTH_ERROR",
+      statusCode: 401,
+      fixStatement: "ALTER USER ADD KEY PAIR k PUBLIC_KEY = 'b'",
+    });
+    const plain = createErrorResponse(new AuthenticationError("refused"));
+    expect(Object.keys(await plain.json())).not.toContain("fixStatement");
+    expect(Object.hasOwn(new AuthenticationError("refused"), "fixStatement")).toBe(false);
+  });
+
   test("TimeoutError returns 408 with code TIMEOUT_ERROR", async () => {
     const err = new TimeoutError("query took too long", "postgres", 30000);
     const res = createErrorResponse(err);

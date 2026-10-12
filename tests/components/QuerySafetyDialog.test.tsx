@@ -2260,3 +2260,114 @@ describe("QuerySafetyDialog and a column the engine only inferred from sampled d
     expect(argument.schemaContext).not.toContain(SAMPLED_MARKER);
   });
 });
+
+describe("Snowflake's confirmation forms", () => {
+  const FORMS = [
+    "CREATE OR REPLACE TABLE t AS SELECT 1",
+    "INSERT OVERWRITE INTO t SELECT 1",
+    "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE",
+    "COPY INTO @s FROM t",
+    "REMOVE @s/a",
+    "RM @s/a",
+    "EXECUTE IMMEDIATE 'SELECT 1'",
+    "EXECUTE TASK t",
+    "CALL p()",
+    "CREATE WAREHOUSE w",
+    "CREATE TASK t AS SELECT 1",
+    "CREATE USER u",
+    "CREATE ROLE r",
+    "CREATE NETWORK POLICY n",
+    "CREATE OR ALTER TABLE t (a INT)",
+    "EXECUTE ALERT a",
+    "EXECUTE NOTEBOOK n()",
+    "EXECUTE JOB SERVICE IN COMPUTE POOL p FROM SPECIFICATION $$ spec: {} $$",
+    "EXECUTE DBT PROJECT p",
+    "CREATE COMPUTE POOL p MIN_NODES = 1 MAX_NODES = 1 INSTANCE_FAMILY = GPU_NV_L",
+    "CREATE SERVICE s IN COMPUTE POOL p FROM SPECIFICATION $$ spec: {} $$",
+    "CREATE DYNAMIC TABLE d TARGET_LAG = '1 minute' WAREHOUSE = w AS SELECT 1",
+    "CREATE TRANSIENT DYNAMIC TABLE d TARGET_LAG = '1 minute' WAREHOUSE = w AS SELECT 1",
+    "CREATE ALERT a WAREHOUSE = w SCHEDULE = '1 MINUTE' IF (EXISTS (SELECT 1)) THEN SELECT 1",
+    "CREATE MATERIALIZED VIEW mv AS SELECT 1",
+    "CREATE SECURE MATERIALIZED VIEW mv AS SELECT 1",
+    "CREATE PIPE p AUTO_INGEST = TRUE AS COPY INTO t FROM @s",
+    "CREATE EXTERNAL ACCESS INTEGRATION i ALLOWED_NETWORK_RULES = (r) ENABLED = TRUE",
+    "CREATE API INTEGRATION i API_PROVIDER = AWS_API_GATEWAY API_AWS_ROLE_ARN = 'arn:aws:iam::1:role/r' API_ALLOWED_PREFIXES = ('https://example.com') ENABLED = TRUE",
+    "CREATE NETWORK RULE r MODE = EGRESS TYPE = HOST_PORT VALUE_LIST = ('example.com')",
+    "CREATE REPLICATION GROUP g OBJECT_TYPES = DATABASES ALLOWED_DATABASES = d ALLOWED_ACCOUNTS = o.a",
+  ];
+
+  test.each(FORMS)("asks for %s, in any case and behind any comment", (sql) => {
+    for (const text of [sql, sql.toLowerCase()]) {
+      for (const lead of ["", "-- x\n", "// x\n", "/* x */ "]) {
+        expect(isDangerousQuery(`${lead}${text}`, "snowflake")).toBe(true);
+      }
+    }
+  });
+
+  test("a form's later words may sit behind comments and line breaks, and a cut-off form does not ask", () => {
+    expect(isDangerousQuery("CREATE /* x */ OR ALTER TABLE t (a INT)", "snowflake")).toBe(true);
+    expect(isDangerousQuery("CREATE -- x\nOR\n  ALTER TABLE t (a INT)", "snowflake")).toBe(true);
+    expect(isDangerousQuery("EXECUTE // x\n ALERT a", "snowflake")).toBe(true);
+    expect(isDangerousQuery("CREATE OR", "snowflake")).toBe(false);
+    expect(isDangerousQuery("CREATE OR /* x */", "snowflake")).toBe(false);
+    expect(isDangerousQuery("EXECUTE 'ALERT'", "snowflake")).toBe(false);
+  });
+
+  test("a form after a read, inside a block, behind a procedure definition or a SYSTEM$ call asks", () => {
+    expect(isDangerousQuery("SELECT 1; EXECUTE IMMEDIATE 'SELECT 2'", "snowflake")).toBe(true);
+    expect(isDangerousQuery("BEGIN CREATE OR REPLACE TABLE t AS SELECT 1; END", "snowflake")).toBe(true);
+    expect(isDangerousQuery("BEGIN COPY INTO @s FROM t; END", "snowflake")).toBe(true);
+    expect(isDangerousQuery("BEGIN CREATE OR ALTER TABLE t (a INT); END", "snowflake")).toBe(true);
+    expect(isDangerousQuery("SELECT 1; EXECUTE ALERT a", "snowflake")).toBe(true);
+    expect(isDangerousQuery("BEGIN CREATE API INTEGRATION i ENABLED = TRUE; END", "snowflake")).toBe(true);
+    expect(
+      isDangerousQuery(
+        "WITH p AS PROCEDURE () RETURNS INT LANGUAGE SQL AS $$ BEGIN RETURN 1; END $$ CALL p()",
+        "snowflake",
+      ),
+    ).toBe(true);
+    expect(isDangerousQuery("SELECT SYSTEM$CLUSTERING_INFORMATION('t')", "snowflake")).toBe(true);
+    expect(isDangerousQuery("select system$clustering_information('t')", "snowflake")).toBe(true);
+    // A quoted upper-case name resolves as the bare name does, so a quoted SYSTEM$ call asks too.
+    expect(isDangerousQuery('SELECT "SYSTEM$WAIT"(10)', "snowflake")).toBe(true);
+    expect(isDangerousQuery('SELECT "SYSTEM$WAIT" /* x */ (10)', "snowflake")).toBe(true);
+    expect(isDangerousQuery('SELECT SNOWFLAKE.."SYSTEM$WAIT"(10)', "snowflake")).toBe(true);
+  });
+
+  test.each([
+    "SELECT 'MERGE INTO t'",
+    "SELECT 'SYSTEM$X'",
+    'SELECT "SYSTEM$X" FROM t',
+    'SELECT "system$wait"(10)',
+    'SELECT "SYSTEM$X" AS a, f(1) FROM t',
+    "SELECT 1 /* CALL p() */",
+    "SHOW TABLES",
+    "CREATE TABLE t2 CLONE t",
+    "UNDROP TABLE t",
+    "SELECT 1 AS a // note; DROP TABLE t",
+    "// MERGE INTO t\nSELECT 1",
+    "SELECT my_system$x FROM t",
+    "BEGIN SELECT 1; END",
+  ])("does not ask for %s", (sql) => {
+    expect(isDangerousQuery(sql, "snowflake")).toBe(false);
+  });
+
+  // Today's answers on four other engines, measured before the forms existed, so the forms reach no other dialect.
+  test.each([
+    ["postgres", false],
+    ["mssql", false],
+    ["databend", false],
+    ["bigquery", false],
+  ] as const)("%s keeps its verdicts", (type, expected) => {
+    expect(isDangerousQuery("CREATE OR REPLACE VIEW v AS SELECT 1", type)).toBe(expected);
+    expect(isDangerousQuery("MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE", type)).toBe(expected);
+    expect(isDangerousQuery("CALL p()", type)).toBe(expected);
+    expect(isDangerousQuery("COPY INTO t FROM @s", type)).toBe(expected);
+    expect(isDangerousQuery("SELECT SYSTEM$X()", type)).toBe(expected);
+    expect(isDangerousQuery("MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET a = 1", type)).toBe(true);
+  });
+
+  test("SQL Server's procedure call still runs unasked", () => {
+    expect(isDangerousQuery("EXEC sp_cleanup", "mssql")).toBe(false);
+  });
+});

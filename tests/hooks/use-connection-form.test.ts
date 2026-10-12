@@ -25,6 +25,7 @@ const DEFAULT_PORTS: Record<string, string> = {
   oxia: "6648",
   databend: "8000",
   s3: "9000",
+  snowflake: "",
 };
 
 // The engines whose addressing fields diverge from the networked default. Spelled out
@@ -77,6 +78,19 @@ const MOCK_CONNECTION_FIELDS: Record<string, string[]> = {
   // The project, the database and one credential; no host, port, user or connection string (Firestore spec 4.1).
   firestore: ["database", "schema", "password"],
   rabbitmq: ["host", "port", "user", "password", "amqpPort", "apiPath", "allowInsecureAuth"],
+  // The account in Host with no port, the sign-in method and its two credentials, and the role: Snowflake's own fields.
+  snowflake: [
+    "host",
+    "user",
+    "authMethod",
+    "privateKey",
+    "privateKeyPassphrase",
+    "password",
+    "warehouse",
+    "database",
+    "schema",
+    "role",
+  ],
 };
 const mockFields = (type: string): string[] =>
   MOCK_CONNECTION_FIELDS[type] ?? ["host", "port", "user", "password", "database"];
@@ -107,12 +121,32 @@ const mockFieldRefusal = (config: { label: string }, connection: Record<string, 
   return undefined;
 };
 
+// Snowflake's one-credential-at-a-time declaration, as in the real table, and a reader that mirrors the real one: an
+// unset controlling field reads as its first option. tests/unit/lib/db-ui-config.test.ts tests the real reader.
+const MOCK_SHOWN_WHEN: Record<string, Record<string, { field: string; equals: string }>> = {
+  snowflake: {
+    privateKey: { field: "authMethod", equals: "keypair" },
+    privateKeyPassphrase: { field: "authMethod", equals: "keypair" },
+    password: { field: "authMethod", equals: "pat" },
+  },
+};
+const MOCK_FIRST_OPTIONS: Record<string, Record<string, string>> = { snowflake: { authMethod: "keypair" } };
+const mockFieldShown = (config: { label: string }, field: string, connection: Record<string, unknown>): boolean => {
+  const type = config.label.toLowerCase();
+  const condition = MOCK_SHOWN_WHEN[type]?.[field];
+  if (condition === undefined) return true;
+  return String(connection[condition.field] ?? MOCK_FIRST_OPTIONS[type]?.[condition.field]) === condition.equals;
+};
+
 mock.module("@/lib/db-ui-config", () => ({
   getDBConfig: (type: string) => ({
+    ...(MOCK_SHOWN_WHEN[type] ? { fieldShownWhen: MOCK_SHOWN_WHEN[type] } : {}),
     label: type.charAt(0).toUpperCase() + type.slice(1),
     icon: "Database",
     color: "#000",
     defaultPort: DEFAULT_PORTS[type] ?? "5432",
+    // Mirrors the real config: Snowflake's Account opens empty when it is chosen after another engine.
+    ...(type === "snowflake" ? { defaultHost: "" } : {}),
     // Mirrors the real config: the URI-addressed providers offer the toggle.
     showConnectionStringToggle: type === "mongodb" || type === "couchbase",
     // Mirrors the real config: the file-addressed engines take a path and nothing
@@ -123,6 +157,7 @@ mock.module("@/lib/db-ui-config", () => ({
   }),
   takesConnectionField: (type: string, field: string) => mockFields(type).includes(field),
   connectionFieldRefusal: mockFieldRefusal,
+  connectionFieldShown: mockFieldShown,
   // Mirrors the real table: `kafka` is the one entry that declares `showSshTunnel: false`.
   offersSshTunnel: (type: string) => type !== "kafka" && type !== "bigquery" && type !== "firestore",
   offersSslPanel: (type: string) => type !== "bigquery" && type !== "firestore",
@@ -132,6 +167,7 @@ import { CONNECTION_FORM_DEFAULTS, offersReadOnlyToggle, useConnectionForm } fro
 import { resolveAgentRunConnectionId } from "@/hooks/use-connection-payload";
 import { ENVIRONMENT_LABELS, type DatabaseConnection, type DatabaseType } from "@/lib/types";
 import {
+  SNOWFLAKE_PASTE_SENTENCES,
   DATABEND_DSN_CAUTIONS,
   DATABEND_DSN_REFUSALS,
   DATABEND_SSLMODE_NOTICES,
@@ -1984,6 +2020,7 @@ describe("useConnectionForm", () => {
     mqtt: true,
     firestore: true,
     rabbitmq: true,
+    snowflake: true,
   };
 
   test("dbTypes offers every database type a connection can carry", () => {
@@ -3745,6 +3782,247 @@ describe("the warehouse field (Databend design 6.1)", () => {
   });
 });
 
+describe("Snowflake's sign-in method, key, passphrase and role", () => {
+  const props = {
+    isOpen: true,
+    onClose: mock(() => {}),
+    onConnect: mock<(connection: DatabaseConnection) => void>(() => {}),
+    onTestConnection: async () => ({ success: true }),
+    editConnection: null as DatabaseConnection | null,
+  };
+  beforeEach(() => {
+    props.onConnect.mockClear();
+  });
+
+  const saved = async (result: { current: ReturnType<typeof useConnectionForm> }) => {
+    await act(async () => {
+      await result.current.handleConnect();
+    });
+    expect(props.onConnect).toHaveBeenCalledTimes(1);
+    return props.onConnect.mock.calls[0][0];
+  };
+
+  const PEM = "-----BEGIN PRIVATE KEY-----\r\nstand-in\r\n-----END PRIVATE KEY-----\n";
+
+  test("buildConnection carries the four fields byte for byte for a type that takes them", async () => {
+    const { result } = renderHook(() => useConnectionForm(props));
+    act(() => result.current.setType("snowflake"));
+    act(() => result.current.setHost("myorg-myaccount"));
+    act(() => result.current.setUser("studio_svc"));
+    act(() => result.current.setPrivateKey(PEM));
+    act(() => result.current.setPrivateKeyPassphrase("stand-in-pass"));
+    act(() => result.current.setRole('"Studio RO"'));
+    const connection = await saved(result);
+    expect(connection.authMethod).toBe("keypair");
+    expect(connection.privateKey).toBe(PEM);
+    expect(connection.privateKeyPassphrase).toBe("stand-in-pass");
+    expect(connection.role).toBe('"Studio RO"');
+  });
+
+  test("empty boxes write no key, and a type that does not take the fields drops them", async () => {
+    const empty = renderHook(() => useConnectionForm(props));
+    act(() => empty.result.current.setType("snowflake"));
+    const blank = await saved(empty.result);
+    for (const field of ["privateKey", "privateKeyPassphrase", "role"]) expect(blank).not.toHaveProperty(field);
+
+    props.onConnect.mockClear();
+    const switched = renderHook(() => useConnectionForm(props));
+    act(() => switched.result.current.setType("snowflake"));
+    act(() => switched.result.current.setAuthMethod("pat"));
+    act(() => switched.result.current.setPrivateKey(PEM));
+    act(() => switched.result.current.setRole("STUDIO_RO"));
+    act(() => switched.result.current.setType("postgres"));
+    const other = await saved(switched.result);
+    for (const field of ["authMethod", "privateKey", "privateKeyPassphrase", "role"]) {
+      expect(other).not.toHaveProperty(field);
+    }
+  });
+
+  test("editing loads the stored four, and a connection without them shows the defaults", () => {
+    const stored: DatabaseConnection = {
+      id: "c1",
+      name: "Account",
+      type: "snowflake",
+      host: "myorg-myaccount",
+      authMethod: "pat",
+      privateKey: PEM,
+      privateKeyPassphrase: "stand-in-pass",
+      role: "STUDIO_RO",
+      createdAt: new Date(),
+    };
+    const bare: DatabaseConnection = {
+      ...stored,
+      id: "c2",
+      authMethod: undefined,
+      privateKey: undefined,
+      privateKeyPassphrase: undefined,
+      role: undefined,
+    };
+    const { result, rerender } = renderHook((p) => useConnectionForm(p), {
+      initialProps: { ...props, editConnection: stored },
+    });
+    expect(result.current.authMethod).toBe("pat");
+    expect(result.current.privateKey).toBe(PEM);
+    expect(result.current.privateKeyPassphrase).toBe("stand-in-pass");
+    expect(result.current.role).toBe("STUDIO_RO");
+    rerender({ ...props, editConnection: bare });
+    expect(result.current.authMethod).toBe("keypair");
+    expect(result.current.privateKey).toBe("");
+    expect(result.current.privateKeyPassphrase).toBe("");
+    expect(result.current.role).toBe("");
+  });
+
+  const keyPairForm = () => {
+    const rendered = renderHook(() => useConnectionForm(props));
+    act(() => rendered.result.current.setType("snowflake"));
+    act(() => rendered.result.current.setHost("myorg-myaccount"));
+    act(() => rendered.result.current.setUser("studio_svc"));
+    act(() => rendered.result.current.setRole("STUDIO_RO"));
+    return rendered;
+  };
+
+  test("a key pair saves the key and the passphrase byte for byte and no token", async () => {
+    const { result } = keyPairForm();
+    act(() => result.current.setPrivateKey(PEM));
+    act(() => result.current.setPrivateKeyPassphrase("stand-in-pass"));
+    // A value typed into the hidden token box under another method is never saved with a key pair.
+    act(() => result.current.setPassword("left-behind"));
+    const connection = await saved(result);
+    expect(connection.authMethod).toBe("keypair");
+    expect(connection.privateKey).toBe(PEM);
+    expect(connection.privateKeyPassphrase).toBe("stand-in-pass");
+    expect(connection.role).toBe("STUDIO_RO");
+    expect(connection).not.toHaveProperty("password");
+  });
+
+  test("switching to an access token clears the key and the passphrase, and saves the token alone", async () => {
+    const { result } = keyPairForm();
+    act(() => result.current.setPrivateKey(PEM));
+    act(() => result.current.setPrivateKeyPassphrase("stand-in-pass"));
+    act(() => result.current.setAuthMethod("pat"));
+    expect(result.current.privateKey).toBe("");
+    expect(result.current.privateKeyPassphrase).toBe("");
+    act(() => result.current.setPassword("S-TOKEN"));
+    const connection = await saved(result);
+    expect(connection.authMethod).toBe("pat");
+    expect(connection.password).toBe("S-TOKEN");
+    expect(connection).not.toHaveProperty("privateKey");
+    expect(connection).not.toHaveProperty("privateKeyPassphrase");
+  });
+
+  test("switching back to a key pair clears the token", () => {
+    const { result } = keyPairForm();
+    act(() => result.current.setAuthMethod("pat"));
+    act(() => result.current.setPassword("S-TOKEN"));
+    act(() => result.current.setAuthMethod("keypair"));
+    expect(result.current.password).toBe("");
+    expect(result.current.authMethod).toBe("keypair");
+  });
+
+  test("an edited key-pair connection switched to a token and back holds no key until one is pasted again", async () => {
+    const stored: DatabaseConnection = {
+      id: "c1",
+      name: "Account",
+      type: "snowflake",
+      host: "myorg-myaccount",
+      user: "studio_svc",
+      authMethod: "keypair",
+      privateKey: PEM,
+      privateKeyPassphrase: "stand-in-pass",
+      role: "STUDIO_RO",
+      createdAt: new Date(),
+    };
+    const { result } = renderHook(() => useConnectionForm({ ...props, editConnection: stored }));
+    expect(result.current.privateKey).toBe(PEM);
+    act(() => result.current.setAuthMethod("pat"));
+    act(() => result.current.setAuthMethod("keypair"));
+    expect(result.current.privateKey).toBe("");
+    expect(result.current.privateKeyPassphrase).toBe("");
+    act(() => result.current.setAuthMethod("pat"));
+    act(() => result.current.setPassword("S-TOKEN"));
+    const connection = await saved(result);
+    expect(connection).toMatchObject({ authMethod: "pat", password: "S-TOKEN" });
+    expect(connection).not.toHaveProperty("privateKey");
+    expect(connection).not.toHaveProperty("privateKeyPassphrase");
+  });
+
+  test("a method set on a type that declares no conditional field clears nothing", () => {
+    const { result } = renderHook(() => useConnectionForm(props));
+    act(() => result.current.setPassword("pw"));
+    act(() => result.current.setAuthMethod("keypair"));
+    expect(result.current.password).toBe("pw");
+  });
+
+  test("a refusal's fix statement reaches the result the dialog reads, from the route and from an adapter", async () => {
+    const statement = "ALTER USER STUDIO_SVC SET RSA_PUBLIC_KEY = 'MIIB'";
+    mockGlobalFetch({
+      "/api/db/test-connection": {
+        status: 401,
+        ok: false,
+        json: { error: "Snowflake refused the key.", code: "AUTH_ERROR", statusCode: 401, fixStatement: statement },
+      },
+    });
+    try {
+      const { result } = renderHook(() => useConnectionForm({ ...props, onTestConnection: undefined }));
+      act(() => result.current.setHost("db"));
+      await act(async () => {
+        await result.current.handleTestConnection();
+      });
+      expect(result.current.testResult).toEqual({
+        tone: "error",
+        message: "Snowflake refused the key.",
+        fixStatement: statement,
+        latency: undefined,
+      });
+      await act(async () => {
+        await result.current.handleConnect();
+      });
+      expect(result.current.testResult).toEqual({
+        tone: "error",
+        message: "Snowflake refused the key.",
+        fixStatement: statement,
+      });
+    } finally {
+      restoreGlobalFetch();
+    }
+
+    const adapted = renderHook(() =>
+      useConnectionForm({
+        ...props,
+        onTestConnection: async () => ({ success: false, error: "Refused.", fixStatement: statement }),
+      }),
+    );
+    await act(async () => {
+      await adapted.result.current.handleTestConnection();
+    });
+    expect(adapted.result.current.testResult?.fixStatement).toBe(statement);
+
+    // A refusal without one carries no key, and neither does a success.
+    const plain = renderHook(() =>
+      useConnectionForm({ ...props, onTestConnection: async () => ({ success: false, error: "Refused." }) }),
+    );
+    await act(async () => {
+      await plain.result.current.handleTestConnection();
+    });
+    expect(plain.result.current.testResult).not.toHaveProperty("fixStatement");
+  });
+
+  test("closing the dialog resets them", () => {
+    const { result, rerender } = renderHook((p) => useConnectionForm(p), {
+      initialProps: { ...props, isOpen: true },
+    });
+    act(() => result.current.setAuthMethod("pat"));
+    act(() => result.current.setPrivateKey(PEM));
+    act(() => result.current.setRole("STUDIO_RO"));
+    rerender({ ...props, isOpen: false });
+    rerender({ ...props, isOpen: true, editConnection: null });
+    expect(result.current.authMethod).toBe("keypair");
+    expect(result.current.privateKey).toBe("");
+    expect(result.current.role).toBe("");
+    expect(CONNECTION_FORM_DEFAULTS.authMethod).toBe("keypair");
+  });
+});
+
 describe("Kubernetes' namespace list, API path and TLS server name", () => {
   const props = {
     isOpen: true,
@@ -4412,5 +4690,102 @@ describe("a databend:// paste (Databend design 6.2)", () => {
   test("the unparsed-paste sentence names databend://", () => {
     const result = paste("ftp://nowhere");
     expect(result.current.testResult!.message).toContain("databend://");
+  });
+});
+
+describe("a Snowflake paste, applied field by field", () => {
+  const props = {
+    isOpen: true,
+    onClose: mock(() => {}),
+    onConnect: mock((_connection: DatabaseConnection) => {}),
+    onTestConnection: mock(async (_connection: DatabaseConnection) => ({ success: true })),
+    editConnection: null as DatabaseConnection | null,
+  };
+  const paste = (text: string, setup?: (form: ReturnType<typeof useConnectionForm>) => void) => {
+    const { result } = renderHook(() => useConnectionForm(props));
+    if (setup) act(() => setup(result.current));
+    act(() => result.current.setShowPasteInput(true));
+    act(() => result.current.setPasteInput(text));
+    act(() => result.current.handlePasteConnectionString());
+    return result;
+  };
+
+  test("a JDBC URL with a token fills Account, User, Warehouse and the token, signs in by token and keeps no text", async () => {
+    const result = paste(
+      "jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?user=u&token=S-SENT&warehouse=wh&db=SALES&schema=PUBLIC&role=STUDIO_RO",
+    );
+    expect(result.current.type).toBe("snowflake");
+    expect(result.current.host).toBe("myorg-myacct.snowflakecomputing.com");
+    expect(result.current.user).toBe("u");
+    expect(result.current.warehouse).toBe("wh");
+    expect(result.current.database).toBe("SALES");
+    expect(result.current.schema).toBe("PUBLIC");
+    expect(result.current.role).toBe("STUDIO_RO");
+    expect(result.current.password).toBe("S-SENT");
+    expect(result.current.authMethod).toBe("pat");
+    expect(result.current.connectionString).toBe("");
+    expect(result.current.pasteInput).toBe("");
+    expect(result.current.showPasteInput).toBe(false);
+    expect(result.current.testResult?.tone).toBe("success");
+
+    await act(async () => {
+      await result.current.handleConnect();
+    });
+    const saved = props.onConnect.mock.calls.at(-1)?.[0];
+    expect(saved).not.toHaveProperty("connectionString");
+    expect(saved).toMatchObject({ type: "snowflake", authMethod: "pat", password: "S-SENT" });
+    expect(JSON.stringify(saved)).not.toContain("jdbc:");
+  });
+
+  test("a token paste over a key pair clears the key and the passphrase", () => {
+    const result = paste("jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?user=u&token=S-SENT", (form) => {
+      form.setType("snowflake");
+    });
+    expect(result.current.authMethod).toBe("pat");
+    const keyed = renderHook(() => useConnectionForm(props));
+    act(() => keyed.result.current.setType("snowflake"));
+    act(() => keyed.result.current.setPrivateKey("-----BEGIN PRIVATE KEY-----"));
+    act(() => keyed.result.current.setPrivateKeyPassphrase("pass"));
+    act(() => keyed.result.current.setPasteInput("jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?token=S-SENT"));
+    act(() => keyed.result.current.handlePasteConnectionString());
+    expect(keyed.result.current.authMethod).toBe("pat");
+    expect(keyed.result.current.password).toBe("S-SENT");
+    expect(keyed.result.current.privateKey).toBe("");
+    expect(keyed.result.current.privateKeyPassphrase).toBe("");
+  });
+
+  test("a key-pair paste carries the passphrase to its field, and a paste that names no role leaves none behind", () => {
+    const result = paste(
+      "jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?user=u&authenticator=SNOWFLAKE_JWT&private_key_pwd=PW",
+      (form) => {
+        form.setType("snowflake");
+        form.setAuthMethod("pat");
+        form.setPassword("old-token");
+        form.setRole("OLD_ROLE");
+      },
+    );
+    expect(result.current.authMethod).toBe("keypair");
+    expect(result.current.privateKeyPassphrase).toBe("PW");
+    expect(result.current.password).toBe("");
+    expect(result.current.role).toBe("");
+  });
+
+  test("an inline key is refused by name, and nothing of the paste is applied", () => {
+    const result = paste(
+      "jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?user=u&token=S-SENT&private_key_base64=K-SENTINEL",
+    );
+    expect(result.current.testResult).toEqual({
+      tone: "error",
+      message: SNOWFLAKE_PASTE_SENTENCES.inlineKey("private_key_base64"),
+    });
+    expect(result.current.testResult?.message).not.toContain("K-SENTINEL");
+    // The text may hold a secret, so it does not stay in the paste box to be corrected.
+    expect(result.current.pasteInput).toBe("");
+    // The form shows Snowflake's fields, so the Private key box the sentence names is in view, and fills none of them.
+    expect(result.current.type).toBe("snowflake");
+    expect(result.current.host).toBe("");
+    expect(result.current.user).toBe("");
+    expect(result.current.password).toBe("");
+    expect(result.current.authMethod).toBe("keypair");
   });
 });

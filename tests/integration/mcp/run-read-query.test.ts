@@ -12,6 +12,7 @@ import { open, table } from "@libredb/libredb";
 import { getServerAuditBuffer } from "@/lib/audit";
 import { LibreDBProvider } from "@/lib/db/providers/embedded/libredb";
 import { DuckDBProvider } from "@/lib/db/providers/sql/duckdb";
+import { SnowflakeProvider } from "@/lib/db/providers/sql/snowflake/index";
 import { SQLiteProvider } from "@/lib/db/providers/sql/sqlite";
 import type { DatabaseProvider } from "@/lib/db/types";
 import { logger } from "@/lib/logger";
@@ -284,6 +285,40 @@ describe("the boundary", () => {
       expect(writes.calls).toBe(0);
     } finally {
       writes.restore();
+    }
+  });
+
+  test("a Snowflake connection is listed for inspect_schema, and run_read_query refuses it before connect()", async () => {
+    // A warehouse connection opted in to MCP: listed, so inspect_schema can reach it, while the profile refuses the
+    // statement path before any provider is connected, since Snowflake declares no read-only statement boundary.
+    const warehouse = {
+      id: "warehouse",
+      type: "snowflake",
+      host: "myorg-myaccount",
+      user: "studio_svc",
+      role: "STUDIO_RO",
+      authMethod: "pat",
+      password: "stand-in-token",
+    };
+    writeSeedFile(dir, [warehouse]);
+    const session = await connectClient(serve, { negotiation: "legacy" });
+    try {
+      const listed = (await session.client.callTool({ name: "list_connections", arguments: {} })) as Answered;
+      expect(listed.structuredContent?.connections).toEqual([
+        { id: "seed:warehouse", name: "warehouse", engine: "snowflake" },
+      ]);
+    } finally {
+      await session.close();
+    }
+    const connects = countMethod(SnowflakeProvider.prototype, "connect");
+    try {
+      const result = await direct({ connection_id: "seed:warehouse", sql: "SELECT 1" });
+      expect(result.content[0].text).toContain(
+        'run_read_query cannot run on this connection: Provider type "snowflake" has no database-native read-only execution profile.',
+      );
+      expect(connects.calls).toBe(0);
+    } finally {
+      connects.restore();
     }
   });
 

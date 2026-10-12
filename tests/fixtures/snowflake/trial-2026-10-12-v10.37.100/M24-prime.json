@@ -1,0 +1,14 @@
+{
+  "item": "M24'",
+  "step": 4,
+  "asks": "Which certificate does the host serve for the name Studio dials (SNI selection)?",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "certificate": {
+    "coversHost": true,
+    "authorized": true,
+    "wildcardNames": 6,
+    "issuerOrganization": "DigiCert Inc",
+    "validTo": "Dec 17 23:59:59 2026 GMT"
+  },
+  "exchanges": []
+}

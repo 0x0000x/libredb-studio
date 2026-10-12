@@ -1,4 +1,4 @@
-import type { SSLConfig } from "@/lib/types";
+import type { DatabaseConnection, SSLConfig } from "@/lib/types";
 import type { SeedConnection, SeedDefaults, ManagedConnection } from "./types";
 
 export function mergeDefaults(conn: SeedConnection, defaults: SeedDefaults | undefined): SeedConnection {
@@ -99,10 +99,18 @@ export function filterByRoles(connections: SeedConnection[], userRoles: string[]
         // Oxia's data servers (O6), copied for the reason skipObjectScan is: dropped here, a seeded cluster would be
         // refused by the provider for leaders the file did list.
         dataServers: conn.dataServers,
-        // Databend's warehouse, copied for the reason skipObjectScan is: dropped here, a seeded Databend Cloud
-        // connection would be refused for the warehouse the file did name.
+        // The warehouse, copied for the reason skipObjectScan is: dropped here, a seeded Databend Cloud connection
+        // would be refused for the warehouse the file did name, and a seeded Snowflake one would run on the user's
+        // default warehouse instead.
         warehouse: conn.warehouse,
         location: conn.location,
+        // Snowflake's sign-in method, key, passphrase and role, copied for the reason skipObjectScan is: dropped here,
+        // a seeded Snowflake connection would be refused for a credential or a role the file did name. The method is a
+        // string in the seed schema, so that a reference resolves; the provider refuses any value it does not know.
+        authMethod: conn.authMethod as DatabaseConnection["authMethod"],
+        privateKey: conn.privateKey,
+        privateKeyPassphrase: conn.privateKeyPassphrase,
+        role: conn.role,
         // S3's signing region, copied for the reason skipObjectScan is: dropped here, a seeded connection to Garage or a
         // MinIO with a site region would be refused for the region the file did name.
         region: conn.region,

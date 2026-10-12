@@ -1,0 +1,8 @@
+{
+  "item": "M78",
+  "step": 5,
+  "asks": "Does the provider doc's read-only setup recipe run as written, MATERIALIZED VIEWS as a grant type included? The operator runs it under its own placeholder names.",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "operator": "pending: the operator's answer is added to this file by hand",
+  "exchanges": []
+}

@@ -51,13 +51,17 @@ export function DatabaseShowcase({ variant }: DatabaseShowcaseProps) {
  * 1366x768 back on five rows and scrolled it by 13px at both the 12px and the 10px column gap;
  * at the 6px gap it holds four rows and the page measured 800, 768, 900 and 1080px of 800, 768,
  * 900 and 1080, needing 798, 759, 759 and 701px of them.
+ * The thirty-fifth entry (Snowflake) wrapped the list into a sixth row at 1280x800 and scrolled the
+ * page to 804px; 1366x768 and 1440x900 stayed on five rows needing 765px, 1920x1080 on four needing
+ * 707. No column gap down to 4px buys the row back, so the row gap pays: at 4px the four sizes need
+ * 794, 757, 757 and 701px of 800, 768, 900 and 1080.
  */
 function DesktopDatabases() {
   return (
     <ul
       aria-label="Supported databases"
       data-testid="database-showcase-desktop"
-      className="flex flex-wrap gap-x-1.5 gap-y-1.5 pointer-events-none select-none"
+      className="flex flex-wrap gap-x-1.5 gap-y-1 pointer-events-none select-none"
     >
       {listShowcaseDatabases().map((db) => {
         const Icon = db.icon;

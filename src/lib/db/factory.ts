@@ -231,6 +231,13 @@ export async function createDatabaseProvider(
       return new BigQueryProvider(connection, options);
     }
 
+    case "snowflake": {
+      // The explicit /index specifier keeps this dynamic import statically analysable. Two arguments only: the
+      // transport deps are a test's seam, and the origin comes from the Account field alone.
+      const { SnowflakeProvider } = await import("./providers/sql/snowflake/index");
+      return new SnowflakeProvider(connection, options);
+    }
+
     case "cassandra": {
       // The explicit /index specifier keeps this dynamic import statically
       // analysable: a bare directory resolves only at runtime, which the bundler
@@ -393,7 +400,7 @@ export async function createDatabaseProvider(
         // This list is NOT type-checked against the union - a new case above with no
         // entry here is silent - so it is kept in the same order as the cases and
         // tests/isolated/factory.test.ts pins individual names in it by regex.
-        `Unknown database type: ${connection.type}. Supported types: postgres, mysql, sqlite, duckdb, libsql, oracle, db2, mssql, clickhouse, druid, trino, databend, bigquery, cassandra, elasticsearch, opensearch, mongodb, couchbase, firestore, redis, etcd, oxia, prometheus, influxdb, influxdb3, kafka, neo4j, milvus, qdrant, s3, mqtt, rabbitmq, kubernetes, libredb`,
+        `Unknown database type: ${connection.type}. Supported types: postgres, mysql, sqlite, duckdb, libsql, oracle, db2, mssql, clickhouse, druid, trino, databend, bigquery, snowflake, cassandra, elasticsearch, opensearch, mongodb, couchbase, firestore, redis, etcd, oxia, prometheus, influxdb, influxdb3, kafka, neo4j, milvus, qdrant, s3, mqtt, rabbitmq, kubernetes, libredb`,
         connection.type,
       );
   }

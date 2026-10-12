@@ -103,15 +103,18 @@ export const SHOWCASE_RANK: Record<DatabaseType, number> = {
   // Behind Firestore and ahead of libSQL (#1656): the message broker a team runs beside its databases, met beside them
   // rather than as one of them, and the newest name on this page, so only libSQL and the embedded store move.
   rabbitmq: 31,
+  // Behind RabbitMQ and ahead of libSQL: the third cloud data warehouse on this page, and the newest name, so only
+  // libSQL and the embedded store move, as they did for RabbitMQ and the rest.
+  snowflake: 32,
   // Behind etcd and ahead of the embedded store: libSQL is the name on this page an
   // evaluator is least likely to have met, but it is a product name (Turso's server)
   // rather than our own, so it goes ahead of `libredb`.
-  libsql: 32,
+  libsql: 33,
   // Last on purpose: the embedded store is the least recognisable name here. It is
   // still shown - it is a shipped provider with a doc (docs/providers/libredb.md), an
   // icon and a slot in the connection picker, so omitting it would make the login page
   // contradict the app (issue #425, step 2).
-  libredb: 33,
+  libredb: 34,
 };
 
 /**

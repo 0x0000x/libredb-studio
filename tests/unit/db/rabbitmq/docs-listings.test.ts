@@ -31,8 +31,8 @@ describe("docs/ADDING_A_PROVIDER.md", () => {
   });
 
   test("the driver-free ids count rabbitmq", () => {
-    expect(guide).toContain("nineteen shipped ids do:");
-    expect(guide).toContain("`databend`, `kubernetes`, `bigquery`, `firestore` and `rabbitmq`");
+    expect(guide).toContain("twenty shipped ids do:");
+    expect(guide).toContain("`databend`, `kubernetes`, `bigquery`, `firestore`, `rabbitmq` and `snowflake`");
   });
 });
 

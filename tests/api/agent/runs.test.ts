@@ -308,6 +308,47 @@ describe("POST /api/agent/runs", () => {
     }
   });
 
+  // The same decline for a role edit: the role decides what every statement may read, so a conversation started
+  // under one role is not carried under another although the record and its address are unchanged.
+  test("a follow-up after the connection's role changed declines as re-pointed", async () => {
+    const original = mockResolveConnection.getMockImplementation();
+    const underRole = (role: string) => async (body: { connectionId?: string }) => ({
+      id: body.connectionId ?? "seed:sales",
+      name: "Sales",
+      type: "postgres",
+      role,
+    });
+    try {
+      mockResolveConnection.mockImplementation(underRole("A"));
+      await POST(startRequest(VALID_BODY));
+      const establishedIdentity = mockStart.mock.calls.at(-1)?.[0].connectionIdentity;
+      expect(establishedIdentity).toEqual(expect.any(String));
+      runs.set(
+        "arun_1",
+        fakeRun({
+          status: "succeeded",
+          connectionIdentity: establishedIdentity,
+          events: [
+            {
+              kind: "report-composed",
+              atMs: 1,
+              claims: [{ claim: "A fact", evidence: [{ source: "artifact", correlationId: "corr_1" }] }],
+            },
+          ],
+        }),
+      );
+
+      mockResolveConnection.mockImplementation(underRole("B"));
+      const res = await POST(startRequest({ ...VALID_BODY, previousRunId: "arun_1" }));
+
+      expect(res.status).toBe(202);
+      expect(mockStart.mock.calls.at(-1)?.[0].thread).toMatchObject({ steps: [], text: "", declined: "repointed" });
+      expect(mockStart.mock.calls.at(-1)?.[0].connectionIdentity).not.toBe(establishedIdentity);
+    } finally {
+      if (original !== undefined) mockResolveConnection.mockImplementation(original);
+    }
+  });
+
   /*
     The SCOPE of the decline (#512), which is what the rail's sentence had wrong: it read
     as a persisting condition, and the route makes it a one-question event. The run

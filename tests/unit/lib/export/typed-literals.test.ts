@@ -306,3 +306,63 @@ describe("typedLiteral: databend", () => {
     expect(typedLiteral("616263", undefined, "databend", scalar)).toBeUndefined();
   });
 });
+
+describe("typedLiteral: snowflake (provisional until a replay on an account)", () => {
+  test("a semi-structured cell is PARSE_JSON of its text, and a structured or VECTOR type is cast to its declaration", () => {
+    expect(typedLiteral('{"a":1}', "VARIANT", "snowflake", scalar)).toBe(`PARSE_JSON('{"a":1}')`);
+    expect(typedLiteral({ k: [1, null] }, "OBJECT", "snowflake", scalar)).toBe(`PARSE_JSON('{"k":[1,null]}')`);
+    expect(typedLiteral("[1,2]", "array", "snowflake", scalar)).toBe("PARSE_JSON('[1,2]')");
+    expect(typedLiteral('{"a":1}', "MAP", "snowflake", scalar)).toBe(`PARSE_JSON('{"a":1}')`);
+    expect(typedLiteral("[1,2]", "VECTOR(FLOAT, 2)", "snowflake", scalar)).toBe(
+      "PARSE_JSON('[1,2]')::VECTOR(FLOAT, 2)",
+    );
+    expect(typedLiteral("[1,2]", "ARRAY(NUMBER(38,0))", "snowflake", scalar)).toBe(
+      "PARSE_JSON('[1,2]')::ARRAY(NUMBER(38,0))",
+    );
+    expect(typedLiteral('"it\'s\\"', "VARIANT", "snowflake", scalar)).toBe("PARSE_JSON('\"it''s\\\\\"')");
+  });
+
+  test("a VECTOR without its dimension, or a cast that is not a type, skips the row", () => {
+    expect(() => typedLiteral("[1,2]", "VECTOR", "snowflake", scalar)).toThrow(UnwritableValue);
+    expect(() => typedLiteral("[1]", "ARRAY(INT)'; DROP TABLE t; --", "snowflake", scalar)).toThrow(UnwritableValue);
+  });
+
+  test("dates, times and timestamps go through TO_* with a mask matching the text's fraction digits", () => {
+    expect(typedLiteral("0001-01-01", "DATE", "snowflake", scalar)).toBe("TO_DATE('0001-01-01', 'YYYY-MM-DD')");
+    expect(typedLiteral("13:45:30", "TIME(0)", "snowflake", scalar)).toBe("TO_TIME('13:45:30', 'HH24:MI:SS')");
+    expect(typedLiteral("13:45:30.5", "TIME(1)", "snowflake", scalar)).toBe("TO_TIME('13:45:30.5', 'HH24:MI:SS.FF1')");
+    expect(typedLiteral("2026-10-12 01:02:03", "TIMESTAMP_NTZ(0)", "snowflake", scalar)).toBe(
+      "TO_TIMESTAMP_NTZ('2026-10-12 01:02:03', 'YYYY-MM-DD HH24:MI:SS')",
+    );
+    expect(typedLiteral("2026-10-12 01:02:03.123456+00:00", "TIMESTAMP_LTZ(6)", "snowflake", scalar)).toBe(
+      "TO_TIMESTAMP_LTZ('2026-10-12 01:02:03.123456+00:00', 'YYYY-MM-DD HH24:MI:SS.FF6TZH:TZM')",
+    );
+    expect(typedLiteral("2026-10-12 01:02:03-05:30", "TIMESTAMP_TZ(0)", "snowflake", scalar)).toBe(
+      "TO_TIMESTAMP_TZ('2026-10-12 01:02:03-05:30', 'YYYY-MM-DD HH24:MI:SSTZH:TZM')",
+    );
+  });
+
+  test("a temporal cell not in the decoder's form, or not text, is refused", () => {
+    expect(() => typedLiteral("12/10/2026", "DATE", "snowflake", scalar)).toThrow(
+      "a DATE that is not in the form Studio reads",
+    );
+    expect(() => typedLiteral(new Date(0), "TIMESTAMP_NTZ(3)", "snowflake", scalar)).toThrow(UnwritableValue);
+    expect(() => typedLiteral("2026-10-12 01:02:03", "TIMESTAMP_TZ(0)", "snowflake", scalar)).toThrow(UnwritableValue);
+  });
+
+  test("a NUMBER or DECFLOAT text is written bare; anything else falls to the generic writer", () => {
+    expect(typedLiteral("12.50", "NUMBER(10,2)", "snowflake", scalar)).toBe("12.50");
+    expect(typedLiteral("123456789012345678901234567890", "NUMBER(38,0)", "snowflake", scalar)).toBe(
+      "123456789012345678901234567890",
+    );
+    expect(typedLiteral("-1.5e-300", "DECFLOAT", "snowflake", scalar)).toBe("-1.5e-300");
+    expect(typedLiteral("x", "NUMBER(10,2)", "snowflake", scalar)).toBe("<x>");
+    expect(typedLiteral(7, "NUMBER(38,0)", "snowflake", scalar)).toBeUndefined();
+    expect(typedLiteral(1.5, "FLOAT", "snowflake", scalar)).toBeUndefined();
+    expect(typedLiteral("a", "VARCHAR(10)", "snowflake", scalar)).toBeUndefined();
+    expect(typedLiteral(true, "BOOLEAN", "snowflake", scalar)).toBeUndefined();
+    expect(typedLiteral(new Uint8Array([1]), "BINARY", "snowflake", scalar)).toBeUndefined();
+    expect(typedLiteral("POINT(1 2)", "GEOGRAPHY", "snowflake", scalar)).toBeUndefined();
+    expect(typedLiteral("x", undefined, "snowflake", scalar)).toBeUndefined();
+  });
+});

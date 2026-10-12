@@ -236,6 +236,8 @@ describe("providerCacheKey frames every public field that decides who a connecti
     ["location", { ...base, location: "EU" }, { ...base, location: "US" }],
     ["region", { ...base, region: "eu-central-1" }, { ...base, region: "us-east-1" }],
     ["namespaces", { ...base, namespaces: "shop" }, { ...base, namespaces: "web" }],
+    ["role", { ...base, role: "STUDIO_RO" }, { ...base, role: "STUDIO_RW" }],
+    ["authMethod", { ...base, authMethod: "keypair" }, { ...base, authMethod: "pat" }],
     [
       "sshTunnel.authMethod",
       { ...base, sshTunnel: { ...tunnel, authMethod: "privateKey" } },

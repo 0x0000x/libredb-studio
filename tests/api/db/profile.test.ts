@@ -896,6 +896,27 @@ describe("POST /api/db/profile", () => {
     expect(sqlProvider.query).toHaveBeenCalled();
   });
 
+  test("refuses an SQL connection declaring supportsColumnProfiling false, and sends nothing", async () => {
+    const declined = createMockProvider({ capabilities: { queryLanguage: "sql", supportsColumnProfiling: false } });
+    const sqlProvider = createMockProvider({ capabilities: { queryLanguage: "sql" } });
+    mockGetOrCreateProvider.mockResolvedValueOnce(declined);
+    mockGetOrCreateProvider.mockResolvedValueOnce(sqlProvider);
+    const body = { connection: validConnection, tablePath: ["refusal_probe_table"], columns: ["refusal_probe_column"] };
+
+    const refused = await POST(createMockRequest("/api/db/profile", { method: "POST", body }) as never);
+    const data = await parseResponseJSON<{ error: string; code: string }>(refused);
+
+    expect(refused.status).toBe(400);
+    expect(data.code).toBe("CONFIG_ERROR");
+    expect(data.error).toBe("This connection does not offer column profiling, so nothing was sent.");
+    expect(declined.query).toHaveBeenCalledTimes(0);
+
+    // The control: the same request against SQL without the field is profiled, and its statements run.
+    const profiled = await POST(createMockRequest("/api/db/profile", { method: "POST", body }) as never);
+    expect(profiled.status).toBe(200);
+    expect(sqlProvider.query).toHaveBeenCalled();
+  });
+
   test("refuses JSON in a dialect of its own, which is not the document the route builds", async () => {
     const redisProvider = createMockProvider({ capabilities: { queryLanguage: "json", queryDialect: "redis" } });
     const mongoProvider = createMockProvider({ capabilities: { queryLanguage: "json" } });

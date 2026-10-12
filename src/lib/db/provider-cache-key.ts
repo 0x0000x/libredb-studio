@@ -113,7 +113,7 @@ export async function providerCacheKey(
  * or the fingerprint, and `tests/unit/lib/db/provider-cache-key.test.ts` walks those maps to hold it,
  * because this list is hand-kept and the API key pair was once missing from it. The public fields
  * below (the agent user, what TLS presents and trusts, the mechanism, the auth database, the consent,
- * the data servers, the warehouse, the region, the tunnel's auth method and host key) are outside that walk, so the same file
+ * the data servers, the warehouse, the region, the sign-in method, the role, the tunnel's auth method and host key) are outside that walk, so the same file
  * holds them in a table of their own, one row per field.
  *
  * - `password` is the connection's own secret. `connectionString` is NOT here because the
@@ -155,6 +155,10 @@ export async function providerCacheKey(
  * - `namespaces` decides which namespaces a Kubernetes provider lists as containers, and a cached provider holds the
  *   list it was opened with, so a connection whose list changed must not be handed one that draws the old list. It
  *   changes no identity: the fingerprint and `connectionIdentity` leave it out.
+ * - `authMethod`, `privateKey`, `privateKeyPassphrase` and `role` decide who a Snowflake connection signs in as and
+ *   which role every statement runs as, so a connection differing in any of them must not be handed a provider opened
+ *   with the other; the two secrets are also held by the census through `CONNECTION_FIELDS`, and `role` and
+ *   `authMethod` by the public-field table.
  * - The tunnel's SECRETS and `hostKeyFingerprint`. Its ROUTE is deliberately absent: `tunnelRoute`
  *   frames the four route values inside the fingerprint already, and this is the half that file
  *   explicitly leaves out as "a credential, not a route".
@@ -181,6 +185,10 @@ async function credentialDigest(connection: DatabaseConnection): Promise<string>
     connection.location ?? "",
     connection.region ?? "",
     connection.namespaces ?? "",
+    connection.authMethod ?? "",
+    connection.privateKey ?? "",
+    connection.privateKeyPassphrase ?? "",
+    connection.role ?? "",
     tunnel?.authMethod ?? "",
     tunnel?.password ?? "",
     tunnel?.privateKey ?? "",

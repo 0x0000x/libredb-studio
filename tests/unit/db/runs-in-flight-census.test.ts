@@ -9,12 +9,14 @@ import { CENSUS_CONNECTION } from "../../helpers/census-connection";
  * idle cached provider.
  *
  * A provider declares it when its `disconnect()` ends a statement still running, so that closing it while a run polls
- * would cancel a run somebody is waiting on. No provider declares it yet; a provider that does flips its row here in
- * the same change. Nothing here connects: `createDatabaseProvider` builds each provider over `CENSUS_CONNECTION`.
+ * would cancel a run somebody is waiting on. Snowflake declares it: its `disconnect()` cancels every statement still
+ * running or waiting. A provider that starts to declare it flips its row here in the same change. Nothing here
+ * connects: `createDatabaseProvider` builds each provider over `CENSUS_CONNECTION`.
  */
-const DECLARES: Record<DatabaseType, boolean> = Object.fromEntries(
-  SHIPPED_DATABASE_TYPES.map((type) => [type, false]),
-) as Record<DatabaseType, boolean>;
+const DECLARES: Record<DatabaseType, boolean> = {
+  ...Object.fromEntries(SHIPPED_DATABASE_TYPES.map((type) => [type, false])),
+  snowflake: true,
+} as Record<DatabaseType, boolean>;
 
 describe("hasRunsInFlight across the shipped providers", () => {
   test.each([...SHIPPED_DATABASE_TYPES])("%s declares it only where the record says so", async (type) => {

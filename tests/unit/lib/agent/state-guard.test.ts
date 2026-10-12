@@ -348,6 +348,7 @@ describe("assertPersistableState — CREDENTIAL_KEY", () => {
         "agentPassword",
         "clientKey",
         "privateKey",
+        "privateKeyPassphrase",
         "passphrase",
         "apiKeyId",
         "apiKeySecret",

@@ -1,12 +1,12 @@
 # LibreDB Studio
 
-LibreDB Studio is an MIT-licensed, AI-assisted open source SQL IDE that connects to thirty-three database engines directly from the browser.
+LibreDB Studio is an MIT-licensed, AI-assisted open source SQL IDE that connects to thirty-four database engines directly from the browser.
 
 Use cases:
 
 * Browser-based database management
-  * Browse schemas and run queries across thirty-three engines: PostgreSQL, MySQL, Oracle, Db2 LUW, SQL Server, SQLite, libSQL, DuckDB, MongoDB, Redis, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Databend, BigQuery, Apache Cassandra, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage, Kubernetes, MQTT and RabbitMQ. Editing data follows the engine rather than the IDE: inline row editing on PostgreSQL, MySQL, Oracle, SQL Server, SQLite, libSQL and DuckDB, and everywhere else the controls are reported as unsupported rather than offered and then failed.
+  * Browse schemas and run queries across thirty-four engines: PostgreSQL, MySQL, Oracle, Db2 LUW, SQL Server, SQLite, libSQL, DuckDB, MongoDB, Redis, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, Databend, BigQuery, Snowflake, Apache Cassandra, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage, Kubernetes, MQTT and RabbitMQ. Editing data follows the engine rather than the IDE: inline row editing on PostgreSQL, MySQL, Oracle, SQL Server, SQLite, libSQL and DuckDB, and everywhere else the controls are reported as unsupported rather than offered and then failed.
 * AI-assisted querying
-  * An optional AI assistant (bring your own key: Gemini, OpenAI, or a local model) explains a query in plain English from the engine's own EXPLAIN plan, on PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Couchbase, ClickHouse, Apache Druid, Trino, Databend and BigQuery. It also runs a read-only investigation agent on PostgreSQL, SQLite, DuckDB and SQL Server that never writes: the database, not the IDE, is what refuses writes and DDL. It stays off unless you configure a provider.
+  * An optional AI assistant (bring your own key: Gemini, OpenAI, or a local model) explains a query in plain English from the engine's own EXPLAIN plan, on PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Couchbase, ClickHouse, Apache Druid, Trino, Databend, BigQuery and Snowflake. It also runs a read-only investigation agent on PostgreSQL, SQLite, DuckDB and SQL Server that never writes: the database, not the IDE, is what refuses writes and DDL. It stays off unless you configure a provider.
 * Self-hosted data
   * Runs entirely on your own infrastructure, so no external database is required to operate the IDE itself. Installs from the Rancher Apps catalog with default values: first-run admin credentials are generated automatically and printed to the pod log.

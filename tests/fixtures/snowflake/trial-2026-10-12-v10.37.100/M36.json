@@ -1,0 +1,226 @@
+{
+  "item": "M36",
+  "step": 4,
+  "asks": "Does ALTER SESSION carry to the next request?",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "stateBefore": "STARTED",
+  "stateAfter": "STARTED",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000111",
+        "headers": {
+          "authorization": "Bearer <token-33>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "ALTER SESSION SET QUERY_TAG = 'probe-carry'",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000112",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000112"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000112",
+        "headers": {
+          "authorization": "Bearer <token-33>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 1,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 1,
+                "uncompressedSize": 36
+              }
+            ],
+            "rowType": [
+              {
+                "name": "status",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              }
+            ]
+          },
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000112?requestId=00000000-0000-0000-0000-000000000111",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000112",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791842694045
+        },
+        "dropped": [
+          "requestId"
+        ],
+        "rows": {
+          "wireBytes": 888,
+          "decodedBytes": 888,
+          "rowCount": 1,
+          "firstRow": [
+            "Statement executed successfully."
+          ],
+          "lastRow": [
+            "Statement executed successfully."
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000113",
+        "headers": {
+          "authorization": "Bearer <token-33>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "SELECT CURRENT_QUERY_TAG() AS t",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000114",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000114"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000114",
+        "headers": {
+          "authorization": "Bearer <token-33>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 1,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 1,
+                "uncompressedSize": 27
+              }
+            ],
+            "rowType": [
+              {
+                "name": "T",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 134217728,
+                "scale": null,
+                "nullable": true,
+                "length": 134217728,
+                "type": "text"
+              }
+            ]
+          },
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000114?requestId=00000000-0000-0000-0000-000000000113",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000114",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791842694597
+        },
+        "dropped": [
+          "requestId"
+        ],
+        "rows": {
+          "wireBytes": 876,
+          "decodedBytes": 876,
+          "rowCount": 1,
+          "firstRow": [
+            "libredb-studio:evidence"
+          ],
+          "lastRow": [
+            "libredb-studio:evidence"
+          ]
+        }
+      }
+    }
+  ]
+}

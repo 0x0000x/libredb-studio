@@ -14,8 +14,8 @@ const RESOLVABLE_FIELDS = [
   "database",
   // Oxia's data servers (O6): addresses a deployment keeps out of the seed file, as `host` is.
   "dataServers",
-  // Databend's warehouse (I16): the compute a Cloud DSN names, which a deployment keeps beside its host, so a
-  // seeded `${DATABEND_WAREHOUSE}` is resolved rather than sent to Cloud as a literal warehouse name.
+  // The warehouse (I16): the compute a Databend Cloud DSN or a Snowflake account names, which a deployment keeps
+  // beside its host, so a seeded `${DATABEND_WAREHOUSE}` is resolved rather than sent as a literal warehouse name.
   "warehouse",
   // S3's signing region, kept beside the endpoint in a deployment's environment, so a seeded `${S3_REGION}` is
   // resolved rather than signed for literally.
@@ -27,6 +27,13 @@ const RESOLVABLE_FIELDS = [
   // An AMQP port: part of the address a deployment keeps beside its host, so a seeded `${AMQP_PORT}` is resolved
   // rather than sent as a literal port.
   "amqpPort",
+  // Snowflake's sign-in method, PEM key, passphrase and role. The key and its passphrase are the credential a
+  // deployment keeps in a Secret, and a multi-line PEM passes through unchanged, as the TLS material below does; the
+  // method and the role sit beside them in the same environment.
+  "authMethod",
+  "privateKey",
+  "privateKeyPassphrase",
+  "role",
   // Elasticsearch API key pair (#708). A seeded `${ELASTIC_API_KEY_ID}` / `${vault:...}`
   // that is not on this list is sent literally and the cluster answers 401 on a key
   // that works. Both halves, not one: either left unresolved is a half-filled pair
@@ -67,6 +74,10 @@ interface VaultResolvableConnection {
   apiPath?: string;
   tlsServerName?: string;
   amqpPort?: string;
+  authMethod?: string;
+  privateKey?: string;
+  privateKeyPassphrase?: string;
+  role?: string;
   apiKeyId?: string;
   apiKeySecret?: string;
   ssl?: ResolvableSsl;

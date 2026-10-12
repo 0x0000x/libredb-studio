@@ -110,12 +110,39 @@ describe("the connection dialog's secret fields turn spell checking, autocorrect
     expect(offending(found)).toEqual([]);
   });
 
+  test("on Snowflake's key-pair and access-token sign-in methods", () => {
+    // Each sign-in method draws its own credential, so each is walked on Snowflake's own form: the key and its
+    // passphrase for a key pair, the token in the password box for an access token. The Host box counts as well,
+    // since it takes a pasted account URL.
+    renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: getDBConfig("snowflake").label }));
+    const drawn: Record<string, string[]> = {};
+    const found = new Map<string, Field>();
+    for (const method of ["keypair", "pat"]) {
+      fireEvent.change(document.getElementById("authMethod") as HTMLSelectElement, { target: { value: method } });
+      const fields = new Map<string, Field>();
+      collect(fields);
+      drawn[method] = [...fields.keys()].sort();
+      for (const [key, field] of fields) {
+        found.set(`${method}:${key}`, field);
+        reached.set(key, field);
+      }
+    }
+    expect(drawn).toEqual({
+      keypair: ["host", "privateKey", "privateKeyPassphrase"],
+      pat: ["host", "password"],
+    });
+    expect(offending(found)).toEqual([]);
+  });
+
   // Runs after the tests above, in file order: the walk reached every kind of secret field the dialog has today.
   test("and the walk above reached every kind of secret field", () => {
     const keys = [...reached.keys()];
     for (const expected of [
       "password",
       "apiKeySecret",
+      "privateKey",
+      "privateKeyPassphrase",
       "connectionString",
       "••••••••",
       "Key passphrase (if encrypted)",

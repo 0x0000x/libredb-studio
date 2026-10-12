@@ -262,7 +262,7 @@ QueryEditor                      /api/db/query
 
 ## Supported Databases
 
-Thirty-four type-ids are supported by thirty-two provider modules: two pairs share one, `elasticsearch` and `opensearch` in `providers/sql/search/`, and `influxdb` and `influxdb3` in `providers/timeseries/influxdb/`.
+Thirty-five type-ids are supported by thirty-three provider modules: two pairs share one, `elasticsearch` and `opensearch` in `providers/sql/search/`, and `influxdb` and `influxdb3` in `providers/timeseries/influxdb/`.
 The count is derived from the exhaustive `SHIPPED` record in
 [`src/lib/db/compatibility.ts`](../src/lib/db/compatibility.ts) rather than written here twice. For
 the per-provider reference (driver, pooling, query format,
@@ -512,7 +512,7 @@ Provider-specific behaviour — pooling model, SSL/encryption, pagination, monit
 maintenance operations, and known limitations — is documented per provider under
 [`docs/providers/`](./providers/README.md). Start there for anything specific to PostgreSQL, MySQL,
 Oracle, Db2 LUW, SQL Server, SQLite, libSQL, DuckDB, Redis, MongoDB, Couchbase, ClickHouse, Apache Druid,
-Elasticsearch, OpenSearch, Trino, Apache Cassandra, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL),
+Elasticsearch, OpenSearch, Trino, Snowflake, Apache Cassandra, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL),
 Apache Kafka, RabbitMQ, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage, Kubernetes, or LibreDB.
 
 Not every provider has every feature, and the docs record the absences rather than glossing over

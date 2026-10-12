@@ -848,6 +848,21 @@ describe("TableItem", () => {
       expect(dropdown.queryByText("Generate Test Data")).not.toBeNull();
     });
 
+    test("an SQL declaration with supportsColumnProfiling false hides Profile Table and keeps Generate Code", () => {
+      const { getByTestId } = render(
+        <TableItem
+          table={largeTable}
+          isExpanded={false}
+          onToggle={mock(() => {})}
+          isAdmin={false}
+          capabilities={{ ...sqlCaps, supportsColumnProfiling: false }}
+        />,
+      );
+      const dropdown = within(getByTestId("dropdown"));
+      expect(dropdown.queryByText("Profile Table")).toBeNull();
+      expect(dropdown.queryByText("Generate Code")).not.toBeNull();
+    });
+
     test("offers no per-row maintenance at all when rows are derived groupings (#427)", () => {
       // The issue's own symptom: Redis declares `analyze`, so "Key Info" survived
       // a declared-operation gate and still called onOpenMaintenance("tables",

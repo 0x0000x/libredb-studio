@@ -9,6 +9,11 @@ import { clearRateLimitState } from "@/lib/api/rate-limit";
 import { agentReadSqlInput } from "@/lib/db/operations/statement-guard";
 import { OXIA_MAX_TEXT_BYTES } from "@/lib/db/providers/keyvalue/oxia/constants";
 import {
+  SNOWFLAKE_ERROR_SENTENCES,
+  SnowflakeError,
+  toDatabaseError as toSnowflakeDatabaseError,
+} from "@/lib/db/providers/sql/snowflake/errors";
+import {
   QueryError,
   TimeoutError,
   DatabaseError,
@@ -478,6 +483,28 @@ describe("POST /api/db/query", () => {
 
     expect(res.status).toBe(408);
     expect(data.error).toContain("timed out");
+  });
+
+  test("a Snowflake statement past its deadline answers 400 QUERY_ERROR, not 408, so the client sends nothing again", async () => {
+    // A 408 is retryable, and a resend would start the statement on the warehouse a second time; the Snowflake
+    // provider cancels the statement at its deadline and throws a QueryError naming the timeout instead.
+    const sql = "SELECT SYSTEM$WAIT(700000)";
+    (mockProvider.query as ReturnType<typeof mock>).mockRejectedValueOnce(
+      toSnowflakeDatabaseError(new SnowflakeError("query", SNOWFLAKE_ERROR_SENTENCES.deadline(604_800)), sql),
+    );
+
+    const req = createMockRequest("/api/db/query", {
+      method: "POST",
+      body: { connection: validConnection, sql },
+    });
+
+    const res = await POST(req as never);
+    const data = await parseResponseJSON<{ error: string; code: string }>(res);
+
+    expect(res.status).toBe(400);
+    expect(res.status).not.toBe(408);
+    expect(data.code).toBe("QUERY_ERROR");
+    expect(data.error).toBe(SNOWFLAKE_ERROR_SENTENCES.deadline(604_800));
   });
 
   test("returns 500 for DatabaseError", async () => {

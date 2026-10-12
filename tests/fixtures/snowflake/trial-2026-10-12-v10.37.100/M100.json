@@ -1,0 +1,134 @@
+{
+  "item": "M100",
+  "step": 1,
+  "asks": "Does the role check need a running warehouse, and does it resume one? If neither, the check moves into connect().",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "coldStart": "SUSPENDED",
+  "stateBefore": "SUSPENDED",
+  "stateAfter": "SUSPENDED",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000023",
+        "headers": {
+          "authorization": "Bearer <token-7>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "SELECT CURRENT_ROLE() AS r, CURRENT_SECONDARY_ROLES() AS s",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RO",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000024",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000024"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000024",
+        "headers": {
+          "authorization": "Bearer <token-7>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 1,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 1,
+                "uncompressedSize": 61
+              }
+            ],
+            "rowType": [
+              {
+                "name": "R",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 134217728,
+                "precision": null,
+                "length": 134217728,
+                "type": "text"
+              },
+              {
+                "name": "S",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 134217728,
+                "precision": null,
+                "length": 134217728,
+                "type": "text"
+              }
+            ]
+          },
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000024?requestId=00000000-0000-0000-0000-000000000023",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000024",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791841685029
+        },
+        "dropped": [
+          "requestId"
+        ],
+        "rows": {
+          "wireBytes": 1184,
+          "decodedBytes": 1184,
+          "rowCount": 1,
+          "firstRow": [
+            "STUDIO_RO",
+            "{\"roles\":\"STUDIO_NOWH\",\"value\":\"ALL\"}"
+          ],
+          "lastRow": [
+            "STUDIO_RO",
+            "{\"roles\":\"STUDIO_NOWH\",\"value\":\"ALL\"}"
+          ]
+        }
+      }
+    }
+  ]
+}

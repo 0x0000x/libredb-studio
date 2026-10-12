@@ -21,6 +21,7 @@ const EVERY_FORMAT: Record<ExplainFormat, true> = {
   "duckdb-json": true,
   "databend-text": true,
   "bigquery-dryrun": true,
+  "snowflake-json": true,
   "firestore-explain": true,
 };
 
@@ -57,6 +58,10 @@ describe("getExplainStrategy", () => {
 
   test("resolves mysql-text", () => {
     expect(getExplainStrategy("mysql-text")?.format).toBe("mysql-text");
+  });
+
+  test("resolves snowflake-json", () => {
+    expect(getExplainStrategy("snowflake-json")?.format).toBe("snowflake-json");
   });
 
   test("resolves firestore-explain", () => {
