@@ -11,6 +11,7 @@ import { positionalPlaceholder, quoteLiteral } from "@/lib/sql/values";
 import { appFetch } from "@/lib/config/base-path";
 import { buildConnectionPayload } from "@/hooks/use-connection-payload";
 import { asBytes } from "@/lib/export/binary";
+import { MSSQL_DATETIME_TEXT } from "@/lib/export/typed-literals";
 import { generatedFieldNames } from "@/components/results-grid/utils";
 
 interface UseInlineEditingParams {
@@ -295,20 +296,13 @@ const EXACT_DECIMAL_TYPE_NAMES: ReadonlySet<string> = new Set([
 const NO_EXACT_DECIMAL_DIALECTS: ReadonlySet<DatabaseConnection["type"]> = new Set(["sqlite", "libsql"]);
 
 /**
- * Reads one declared type down to its first word.
+ * One declared type in lower case with its wrappers off.
  *
  * ClickHouse spells a nullable or dictionary-encoded column by WRAPPING the real type —
  * `Nullable(DateTime64(6, 'UTC'))`, `LowCardinality(Nullable(String))` — so the wrappers
- * come off first, and only then the parameters: `DateTime64(6, 'UTC')` is `datetime64`,
- * Trino's `timestamp(3) with time zone` is `timestamp`, and `character varying` is
- * `character`, which is in no set here.
- *
- * The DIALECT is read alongside the word, because one word is two widths across engines:
- * `REAL` is 64 bits on SQLite and 32 on PostgreSQL, and the same declaration therefore
- * settles the question on one and settles nothing on the other.
+ * come off before anything else is read.
  */
-function keyColumnKind(declaredType: string | undefined, dialect: DatabaseConnection["type"]): KeyColumnKind {
-  if (declaredType === undefined) return "undeclared";
+function unwrappedType(declaredType: string): string {
   let name = declaredType.trim().toLowerCase();
   for (;;) {
     // Each turn strips a whole `wrapper(` and its `)`, so the name shortens every time and
@@ -317,7 +311,29 @@ function keyColumnKind(declaredType: string | undefined, dialect: DatabaseConnec
     if (wrapper === null) break;
     name = wrapper[1].trim();
   }
-  const first = name.split("(")[0].trim().split(/\s+/)[0];
+  return name;
+}
+
+/**
+ * The first word of an unwrapped declared type, its parameters off: `DateTime64(6, 'UTC')`
+ * is `datetime64`, Trino's `timestamp(3) with time zone` is `timestamp`, and `character
+ * varying` is `character`, which is in no set here.
+ */
+function firstWord(name: string): string {
+  return name.split("(")[0].trim().split(/\s+/)[0];
+}
+
+/**
+ * Reads one declared type down to its first word, and that word down to a kind.
+ *
+ * The DIALECT is read alongside the word, because one word is two widths across engines:
+ * `REAL` is 64 bits on SQLite and 32 on PostgreSQL, and the same declaration therefore
+ * settles the question on one and settles nothing on the other.
+ */
+function keyColumnKind(declaredType: string | undefined, dialect: DatabaseConnection["type"]): KeyColumnKind {
+  if (declaredType === undefined) return "undeclared";
+  const name = unwrappedType(declaredType);
+  const first = firstWord(name);
   if (!NO_INSTANT_TYPE_DIALECTS.has(dialect) && INSTANT_TYPE_NAMES.has(first)) return "date-time";
   if (FLOAT64_TYPE_NAMES.has(first)) return "float64";
   if (!NO_EXACT_DECIMAL_DIALECTS.has(dialect) && EXACT_DECIMAL_TYPE_NAMES.has(first)) {
@@ -791,6 +807,34 @@ function declaredTypeOf(result: QueryResult, field: string): string | undefined 
   return typeof declared === "string" ? declared : undefined;
 }
 
+/**
+ * The SQL Server types that read `yyyy-mm-dd hh:mi:ss` through the session's DATEFORMAT.
+ * `datetime2` and `date` read it the same under every DATEFORMAT, so they are not here.
+ */
+const MSSQL_DATEFORMAT_TYPES: ReadonlySet<string> = new Set(["datetime", "smalldatetime"]);
+
+/**
+ * The edited text as it is bound: as typed, except the one form SQL Server reads by DATEFORMAT.
+ *
+ * The provider reads a `datetime` and a `smalldatetime` as the engine's own
+ * `yyyy-mm-dd hh:mi:ss[.mmm]` text (#1452), and the grid opens its editor on that text. Bound
+ * as it is, the nvarchar parameter reaches those two columns through the session's DATEFORMAT.
+ * MEASURED 2026-10-12 on SQL Server 2022 CU27 (16.0.4295.3), this hook's own `UPDATE ... SET
+ * [dt] = @p1` in a session under `british`: `2026-10-04 12:34:57.123` was stored as April 10th
+ * and `2026-10-25 23:59:58.997` was refused as out of range, while the same text with a `T`
+ * was stored as written, and a `smalldatetime` the same. This provider's own sessions read
+ * `mdy` today - tedious opens each one with `set dateformat mdy` and `set language
+ * us_english`, and a `SET LANGUAGE` a user runs ends with its own `sp_executesql` call - so the
+ * `T` keeps the edit from leaning on that driver default, the way the SQL INSERT export does
+ * (`typed-literals.ts`). Text in any other shape is bound as typed.
+ */
+function boundEditText(text: string, declaredType: string | undefined, dialect: DatabaseConnection["type"]): string {
+  if (dialect !== "mssql" || declaredType === undefined) return text;
+  return MSSQL_DATEFORMAT_TYPES.has(firstWord(unwrappedType(declaredType))) && MSSQL_DATETIME_TEXT.test(text)
+    ? text.replace(" ", "T")
+    : text;
+}
+
 export function useInlineEditing({
   activeConnection,
   currentTab,
@@ -945,6 +989,7 @@ export function useInlineEditing({
     }
 
     // Generate UPDATE statements
+    const result = currentTab.result;
     const statements: Array<{ sql: string; params: unknown[]; rowIndex: number }> = [];
     for (const [rowIndex, changes] of changesByRow) {
       const row = currentTab.result.rows[rowIndex];
@@ -971,7 +1016,8 @@ export function useInlineEditing({
         // what the engine reports and can be quoted: that keeps a name holding a
         // space or a reserved word legal, and keeps one that spells SQL inert.
         // NULL stays a keyword: it is not a value, so it takes no parameter.
-        return `${quote(c.columnId)} = ${isNull ? "NULL" : emit(c.newValue)}`;
+        const value = isNull ? "NULL" : emit(boundEditText(c.newValue, declaredTypeOf(result, c.columnId), dialect));
+        return `${quote(c.columnId)} = ${value}`;
       });
       // The key keeps the number/text split it always had — a number goes to the
       // driver as a number — but neither form is written into the statement now.

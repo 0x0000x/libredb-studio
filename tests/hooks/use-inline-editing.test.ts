@@ -761,6 +761,123 @@ describe("useInlineEditing", () => {
     expect(updateCalls()[0][3]).toEqual({ skipSafety: true, params: ["2024-03-01", "2024-12-31 23:59:58.999999", 1] });
   });
 
+  // ── SQL Server datetime and smalldatetime text (#1452) ──────────────────
+  //
+  // The provider reads both types as the engine's `yyyy-mm-dd hh:mi:ss[.mmm]` text, and SQL
+  // Server reads that text into them through the session's DATEFORMAT: under `british` the
+  // hook's own `UPDATE ... SET [dt] = @p1` stored `2026-10-04 12:34:57.123` as April 10th
+  // (measured on SQL Server 2022 CU27). The same text with a `T` is read the same under every
+  // DATEFORMAT, and `datetime2` reads either form the same, so its text is left as typed.
+
+  /** Edits one row of a SQL Server result and returns the one UPDATE and its parameters. */
+  async function applyMssqlEdits(
+    columnTypes: Record<string, string> | undefined,
+    edits: Array<{ columnId: string; newValue: string }>,
+    type: DatabaseConnection["type"] = "mssql",
+  ) {
+    const row = { id: 1, dt: "2026-10-04 12:00:00.000", sdt: "2026-10-04 12:00:00", dt2: "2026-10-04 12:00:00.000" };
+    const { result } = renderHook(() =>
+      useInlineEditing({
+        activeConnection: makeConnection({ type }),
+        currentTab: makeTab({
+          query: "SELECT * FROM events",
+          result: makeResult({
+            fields: ["id", "dt", "sdt", "dt2"],
+            rows: [row],
+            rowCount: 1,
+            ...(columnTypes !== undefined && { columnTypes }),
+          }),
+        }),
+        executeQuery: mockExecuteQuery as (sql: string) => void,
+      }),
+    );
+    act(() => {
+      for (const { columnId, newValue } of edits) {
+        result.current.handleCellChange(
+          makeChange({ columnId, originalValue: row[columnId as keyof typeof row], newValue }),
+        );
+      }
+    });
+    await act(async () => {
+      await result.current.handleApplyChanges();
+    });
+    expect(updateCalls()).toHaveLength(1);
+    const [sql, , , options] = updateCalls()[0];
+    return { sql: String(sql), params: (options as { params: unknown[] }).params };
+  }
+
+  const MSSQL_TYPES = { id: "int", dt: "datetime", sdt: "smalldatetime", dt2: "datetime2" };
+
+  test("an edit of a SQL Server datetime or smalldatetime cell binds the engine's text with a T (#1452)", async () => {
+    const { sql, params } = await applyMssqlEdits(MSSQL_TYPES, [
+      { columnId: "dt", newValue: "2026-10-04 12:34:56.123" },
+      { columnId: "sdt", newValue: "2026-10-04 12:34:56.123" },
+      { columnId: "dt2", newValue: "2026-10-04 12:34:56.123" },
+    ]);
+
+    expect(sql).toBe("UPDATE events SET [dt] = @p1, [sdt] = @p2, [dt2] = @p3 WHERE [id] = @p4");
+    expect(params).toEqual(["2026-10-04T12:34:56.123", "2026-10-04T12:34:56.123", "2026-10-04 12:34:56.123", 1]);
+  });
+
+  test.each([
+    ["a smalldatetime's own text, no fraction", "sdt", "2026-10-25 08:16:00", "2026-10-25T08:16:00"],
+    ["a fraction typed one digit long", "dt", "2026-10-04 12:34:56.5", "2026-10-04T12:34:56.5"],
+    ["no fraction typed", "dt", "2026-10-04 12:34:56", "2026-10-04T12:34:56"],
+  ])("a datetime edit in the engine's text form is bound with a T: %s", async (_name, columnId, newValue, bound) => {
+    const { params } = await applyMssqlEdits(MSSQL_TYPES, [{ columnId, newValue }]);
+
+    expect(params).toEqual([bound, 1]);
+  });
+
+  test("the declared type is read the way the key check reads it, so its case does not matter", async () => {
+    const { params } = await applyMssqlEdits({ ...MSSQL_TYPES, dt: "DATETIME" }, [
+      { columnId: "dt", newValue: "2026-10-04 12:34:56.123" },
+    ]);
+
+    expect(params).toEqual(["2026-10-04T12:34:56.123", 1]);
+  });
+
+  test.each([
+    ["a bare date", MSSQL_TYPES, "dt", "2026-10-04"],
+    ["text that already has the T", MSSQL_TYPES, "dt", "2026-10-04T12:34:56.123"],
+    ["four fraction digits, more than a datetime prints", MSSQL_TYPES, "dt", "2026-10-04 12:34:56.1234"],
+    ["a day-first spelling", MSSQL_TYPES, "dt", "04/10/2026 12:34:56"],
+    ["a space before the date", MSSQL_TYPES, "dt", " 2026-10-04 12:34:56.123"],
+    ["a datetimeoffset column", { ...MSSQL_TYPES, dt: "datetimeoffset" }, "dt", "2026-10-04 12:34:56.123"],
+    ["a date column", { ...MSSQL_TYPES, dt: "date" }, "dt", "2026-10-04 12:34:56.123"],
+    ["a text column holding that text", { ...MSSQL_TYPES, dt: "nvarchar" }, "dt", "2026-10-04 12:34:56.123"],
+    ["a column the result declared nothing for", { id: "int" }, "dt", "2026-10-04 12:34:56.123"],
+  ])("a SQL Server edit is bound as typed: %s", async (_name, columnTypes, columnId, newValue) => {
+    const { params } = await applyMssqlEdits(columnTypes, [{ columnId, newValue }]);
+
+    expect(params).toEqual([newValue, 1]);
+  });
+
+  test("a SQL Server edit is bound as typed where the result carries no column types", async () => {
+    const { params } = await applyMssqlEdits(undefined, [{ columnId: "dt", newValue: "2026-10-04 12:34:56.123" }]);
+
+    expect(params).toEqual(["2026-10-04 12:34:56.123", 1]);
+  });
+
+  test("a datetime column on another dialect keeps the text as typed", async () => {
+    // MySQL reads `yyyy-mm-dd hh:mi:ss` the same whatever the session, and its pool hands the
+    // grid that text (#1388), so only SQL Server's two types are rewritten.
+    const { params } = await applyMssqlEdits(
+      MSSQL_TYPES,
+      [{ columnId: "dt", newValue: "2026-10-04 12:34:56.123" }],
+      "mysql",
+    );
+
+    expect(params).toEqual(["2026-10-04 12:34:56.123", 1]);
+  });
+
+  test("a SQL Server datetime set to NULL stays the keyword and takes no parameter", async () => {
+    const { sql, params } = await applyMssqlEdits(MSSQL_TYPES, [{ columnId: "dt", newValue: "NULL" }]);
+
+    expect(sql).toBe("UPDATE events SET [dt] = NULL WHERE [id] = @p1");
+    expect(params).toEqual([1]);
+  });
+
   test("a backslash-escaping dialect cannot read the edited value as SQL", async () => {
     // The issue #290 payload: interpolated into a MySQL statement it closed the
     // literal early and `WHERE 1=1` became the real predicate, so every row in the
