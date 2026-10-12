@@ -13,6 +13,7 @@ import { duckdbJsonStrategy } from "./duckdb-json";
 import { databendTextStrategy } from "./databend-text";
 import { bigqueryDryRunStrategy } from "./bigquery-dryrun";
 import { firestoreExplainStrategy } from "./firestore-explain";
+import { snowflakeJsonStrategy } from "./snowflake-json";
 
 export type { ExplainMode, ExplainStrategy } from "./types";
 export type { ExplainPlanInput } from "./types";
@@ -33,6 +34,7 @@ const registry: Record<ExplainFormat, ExplainStrategy> = {
   "duckdb-json": duckdbJsonStrategy,
   "databend-text": databendTextStrategy,
   "bigquery-dryrun": bigqueryDryRunStrategy,
+  "snowflake-json": snowflakeJsonStrategy,
   "firestore-explain": firestoreExplainStrategy,
 };
 

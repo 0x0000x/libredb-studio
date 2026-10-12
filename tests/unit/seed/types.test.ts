@@ -636,7 +636,8 @@ describe("SeedConnectionSchema: OPC UA's mode, pin and deployment paths", () => 
     const result = SeedConnectionSchema.safeParse({
       ...opcua,
       securityMode: "SignAndEncrypt",
-      serverCertificateThumbprint: "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD",
+      serverCertificateThumbprint:
+        "B9:43:2E:D1:31:E3:00:92:D2:A0:61:92:84:76:3A:40:3C:33:FC:39:29:54:67:28:86:4B:27:B4:75:C9:52:9A",
       securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256",
       clientCertificatePath: "/run/secrets/opcua/client.der",
       clientPrivateKeyPath: "/run/secrets/opcua/client.pem",
@@ -645,7 +646,7 @@ describe("SeedConnectionSchema: OPC UA's mode, pin and deployment paths", () => 
     expect(result.success).toBe(true);
     expect(result.data?.securityMode).toBe("SignAndEncrypt");
     expect(result.data?.serverCertificateThumbprint).toBe(
-      "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD",
+      "B9:43:2E:D1:31:E3:00:92:D2:A0:61:92:84:76:3A:40:3C:33:FC:39:29:54:67:28:86:4B:27:B4:75:C9:52:9A",
     );
     expect(result.data?.securityPolicyUri).toBe("http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256");
     expect(result.data?.clientCertificatePath).toBe("/run/secrets/opcua/client.der");

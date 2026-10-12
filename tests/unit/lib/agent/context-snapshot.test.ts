@@ -3504,7 +3504,7 @@ describe("the identity a held inventory is filed under", () => {
     }
   });
 
-  test("a different role is a different identity, because it sees a different catalog", () => {
+  test("a different user is a different identity, because it sees a different catalog", () => {
     // Over-keying is the safe direction: a miss costs one catalog read, and a plan run
     // captures its own inventory when the hold has nothing. A false hit costs an answer.
     expect(repointed({ user: "readonly" })).not.toBe(connectionIdentity(CONNECTION));
@@ -3550,7 +3550,7 @@ describe("the identity a held inventory is filed under", () => {
   test("a different auth database is a different identity, because it is a different user record", () => {
     // MongoDB looks the user up in the database `authSource` names, so the same name
     // against `admin` and against the data database is two principals with two catalog
-    // views - the same reason the role fields are keyed.
+    // views - the same reason the user fields are keyed.
     expect(repointed({ authSource: "admin" })).not.toBe(connectionIdentity(CONNECTION));
   });
 
@@ -3582,6 +3582,30 @@ describe("the identity a held inventory is filed under", () => {
 
     expect(identity).not.toContain("hunter2");
     expect(identity).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("a different Snowflake role or sign-in method is a different identity; an unset one moves nothing", () => {
+    // A role decides what every statement may read, and a method signs in as another principal. Tagged and appended
+    // only when set, so a connection that sets neither keeps the identity it had before either field existed.
+    expect(repointed({ role: "A" })).not.toBe(repointed({ role: "B" }));
+    expect(repointed({ role: "A" })).not.toBe(connectionIdentity(CONNECTION));
+    expect(repointed({ authMethod: "keypair" })).not.toBe(repointed({ authMethod: "pat" }));
+    expect(repointed({ role: "" })).toBe(connectionIdentity(CONNECTION));
+  });
+
+  test("a rotated Snowflake key or passphrase is the SAME identity, on the password rule", () => {
+    expect(repointed({ privateKey: "k-2", privateKeyPassphrase: "p-2" })).toBe(
+      repointed({ privateKey: "k-1", privateKeyPassphrase: "p-1" }),
+    );
+  });
+
+  test("a reading held under one role is not served under another", async () => {
+    forgetHeldSnapshots();
+    const snapshot = await captured("postgres");
+    holdSnapshotForConnection(snapshot, repointed({ role: "A" }));
+
+    expect(heldSnapshotForConnection(repointed({ role: "B" }))).toBeNull();
+    expect(heldSnapshotForConnection(repointed({ role: "A" }))).toEqual(snapshot);
   });
 
   test("a re-pointed connection is not served the previous reading", async () => {

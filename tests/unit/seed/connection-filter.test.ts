@@ -182,7 +182,7 @@ describe("filterByRoles: engine-specific fields", () => {
           type: "opcua",
           host: "opc.tcp://plc.ornek.net:4840/UA/Server",
           securityMode: "SignAndEncrypt",
-          serverCertificateThumbprint: "aabbccddeeff00112233445566778899aabbccdd",
+          serverCertificateThumbprint: "b9432ed131e30092d2a0619284763a403c33fc3929546728864b27b475c9529a",
           securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256",
           clientCertificatePath: "/run/secrets/opcua/client.der",
           clientPrivateKeyPath: "/run/secrets/opcua/client.pem",
@@ -193,7 +193,9 @@ describe("filterByRoles: engine-specific fields", () => {
     const [none] = filterByRoles([{ ...baseConn, type: "opcua", host: "opc.tcp://plc:4840" }], ["user"]);
 
     expect(managed.securityMode).toBe("SignAndEncrypt");
-    expect(managed.serverCertificateThumbprint).toBe("aabbccddeeff00112233445566778899aabbccdd");
+    expect(managed.serverCertificateThumbprint).toBe(
+      "b9432ed131e30092d2a0619284763a403c33fc3929546728864b27b475c9529a",
+    );
     expect(managed.securityPolicyUri).toBe("http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256");
     expect(managed.clientCertificatePath).toBe("/run/secrets/opcua/client.der");
     expect(managed.clientPrivateKeyPath).toBe("/run/secrets/opcua/client.pem");

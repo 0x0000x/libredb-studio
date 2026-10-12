@@ -381,6 +381,9 @@ const NO_TRANSACTION_WRAPPER: ReadonlySet<DatabaseType> = new Set<DatabaseType>(
   "databend",
   // BigQuery runs a statement as its own job; BEGIN TRANSACTION exists only inside a multi-statement script.
   "bigquery",
+  // On Databend's reason: a DDL statement commits the open transaction, and each SQL API statement runs in its own
+  // session, so a `BEGIN;` brackets nothing it could roll back.
+  "snowflake",
   "s3",
   "kubernetes",
   // No table DDL to wrap either (#1635): a broker keeps no schema.
@@ -434,6 +437,8 @@ const NO_PORTABLE_INDEX_DDL: Partial<Record<DatabaseType, string>> = {
   databend: DATABEND_INDEX_REFUSAL,
   bigquery:
     "BigQuery: Cannot generate index DDL. BigQuery has search and vector indexes only; write the index change by hand.",
+  snowflake:
+    "Snowflake: Cannot generate index DDL. Snowflake has indexes only on hybrid tables; write the index change by hand.",
 };
 const NO_FOREIGN_KEYS: Partial<Record<DatabaseType, string>> = {
   clickhouse: "ClickHouse",
@@ -821,6 +826,25 @@ function generateAlterTable(table: TableDiff, dialect: DatabaseType): string {
           } else {
             lines.push(
               `-- ClickHouse: Cannot remove the ${kind} property of column "${commentName(col.columnName)}". REMOVE accepts DEFAULT, MATERIALIZED or ALIAS only; recreate the column.`,
+            );
+          }
+        }
+      } else if (dialect === "snowflake") {
+        // Snowflake's ALTER COLUMN spells a type change SET DATA TYPE, and sets a default only to a sequence's
+        // NEXTVAL, so any other default is declined in words; dropping one is plain.
+        const column = escapeIdentifier(col.columnName, dialect);
+        if (col.sourceType !== col.targetType) {
+          lines.push(`ALTER TABLE ${id} ALTER COLUMN ${column} SET DATA TYPE ${col.targetType};`);
+        }
+        if (col.sourceNullable !== col.targetNullable) {
+          lines.push(`ALTER TABLE ${id} ALTER COLUMN ${column} ${col.targetNullable ? "DROP" : "SET"} NOT NULL;`);
+        }
+        if (col.sourceDefault !== col.targetDefault) {
+          if (defaultSql(col) === undefined) {
+            lines.push(`ALTER TABLE ${id} ALTER COLUMN ${column} DROP DEFAULT;`);
+          } else {
+            lines.push(
+              `-- Snowflake: Cannot set the default of column "${commentName(col.columnName)}". ALTER COLUMN sets a default only to a sequence's NEXTVAL; recreate the column with its default.`,
             );
           }
         }

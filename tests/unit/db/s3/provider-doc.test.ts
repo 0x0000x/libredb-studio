@@ -1967,13 +1967,15 @@ describe("the agent docs count the type-ids and name S3 where they list engines"
       "- On S3-compatible object storage the grounding carries bucket names only, never an object key, a prefix, a size or any object content (objects are listed by the Keys panel, not by the object walk).",
     );
     /*
-     * TWENTY-SEVEN, COUNTED FROM THE DECLARATIONS AND NOT FROM THE SENTENCE. `declaresForeignKeys:
-     * false` appears in 27 shipped type-ids (`grep -rn 'declaresForeignKeys: false'
-     * src/lib/db/providers/`, with `sql/search` serving two), which is every shipped type-id but the
-     * eight SQL engines that do declare them. The sentence said twenty-four and named twenty-four:
-     * BigQuery had been missing since its own merge, Firestore since its own, and OPC UA since this one.
+     * TWENTY-EIGHT, COUNTED FROM THE DECLARATIONS AND NOT FROM THE SENTENCE. `declaresForeignKeys:
+     * false` is set by every shipped type-id but the eight SQL engines that declare them, so the
+     * number is `SHIPPED_DATABASE_TYPES.length - 8`. It was twenty-seven at thirty-five type-ids and
+     * is twenty-eight at thirty-six, because Snowflake sets it false too
+     * (`src/lib/db/providers/sql/snowflake/index.ts`). The sentence had said twenty-four and named
+     * twenty-four: BigQuery had been missing since its own merge, Firestore since its own, OPC UA
+     * since ours and Snowflake since theirs.
      */
-    expect(flow).toContain("On the twenty-seven engines that declare no foreign keys at all");
+    expect(flow).toContain("On the twenty-eight engines that declare no foreign keys at all");
     expect(flow).toContain(
       "Qdrant, Oxia, Databend, S3-compatible object storage and Kubernetes) this block carries no relations",
     );
@@ -2001,15 +2003,16 @@ describe("the complete engine lists outside the agent docs", () => {
     expect(read("README_ko.md")).toContain(
       "InfluxDB 3 (SQL), Oxia, S3-compatible object storage, Kubernetes에 연결할 수 있으며",
     );
-    // The newest-engine history names OPC UA as the newest in README.md, RabbitMQ one step back, Firestore before
+    // The newest-engine history names OPC UA as the newest in README.md, Snowflake one step back, Firestore before
     // RabbitMQ, MQTT before Firestore, Kubernetes before MQTT, S3 before Kubernetes and Databend before S3; the
     // translations carry the shorter chain, which runs from OPC UA straight back to MQTT. The chain is a claim about
     // ORDER, so each link is pinned at both ends: an engine added without moving the head leaves the previous head
     // claiming a title it no longer holds, which is exactly what this change did to Kubernetes until the `not`
     // assertions below were added.
     expect(readme).toContain("OPC UA is the newest: one `opc.tcp` session reads");
+    expect(readme).not.toContain("Snowflake is the newest");
+    expect(readme).toContain("Snowflake came before OPC UA: SQL typed in the editor");
     expect(readme).not.toContain("RabbitMQ is the newest");
-    expect(readme).toContain("RabbitMQ came before OPC UA: the management API browses");
     expect(readme).not.toContain("Firestore is the newest");
     expect(readme).toContain("Firestore came before RabbitMQ: the Admin SDK query chain");
     expect(readme).not.toContain("MQTT is the newest");

@@ -25,6 +25,7 @@ in lockstep with the code (see the tri-sync rule in [`../../CLAUDE.md`](../../CL
 | Trino | `trino` | SQL (federated query engine) | none (HTTP: the client protocol, `POST /v1/statement`) | SQL (Trino) | [trino.md](./trino.md) |
 | Databend | `databend` | SQL (analytics) | none, HTTP over the shared `node:http(s)` transport (the query API, `POST /v1/query`) | SQL (Databend) | [databend.md](./databend.md) |
 | BigQuery | `bigquery` | SQL (analytics) | none, REST over the shared `node:https` transport (`jobs.query`); `jose` signs service-account tokens | SQL (GoogleSQL) | [bigquery.md](./bigquery.md) |
+| Snowflake | `snowflake` | SQL (analytics) | none, the SQL API v2 over the shared `node:https` transport; `node:crypto` signs the key-pair JWT | SQL (Snowflake) | [snowflake.md](./snowflake.md) |
 | Apache Cassandra | `cassandra` | SQL (wide-column) | `cassandra-driver` (pure JS) | SQL-shaped (CQL) | [cassandra.md](./cassandra.md) |
 | Prometheus | `prometheus` | Time series | none (HTTP: the Prometheus HTTP API, `/api/v1/*`) | PromQL | [prometheus.md](./prometheus.md) |
 | Apache Kafka | `kafka` | Stream | `@platformatic/kafka` (pure TypeScript) | JSON (a read request) | [kafka.md](./kafka.md) |
@@ -46,7 +47,7 @@ in lockstep with the code (see the tri-sync rule in [`../../CLAUDE.md`](../../CL
 
 - **Filename = canonical type-id** (`postgres.md`, `mssql.md`, …), mirroring the source file
   (`src/lib/db/providers/<family>/<type-id>.ts`, or a `<type-id>/` directory when a provider is
-  split across modules, as Couchbase, ClickHouse, Druid, Trino, Cassandra, libSQL, DuckDB, Db2, Prometheus, Kafka, etcd, Neo4j, Milvus, Qdrant, InfluxDB, Oxia, Databend, S3, Kubernetes, MQTT, Firestore, RabbitMQ and OPC UA are). The official product name (e.g.
+  split across modules, as Couchbase, ClickHouse, Druid, Trino, Snowflake, Cassandra, libSQL, DuckDB, Db2, Prometheus, Kafka, etcd, Neo4j, Milvus, Qdrant, InfluxDB, Oxia, Databend, S3, Kubernetes, MQTT, Firestore, RabbitMQ and OPC UA are). The official product name (e.g.
   "SQL Server") is used only in each doc's title and prose. **One directory may serve two type-ids**
   — `providers/sql/search/` is `elasticsearch` and `opensearch`, and `providers/timeseries/influxdb/` is
   `influxdb` and `influxdb3`, two classes on two base classes sharing one connection layer — and each type-id still gets its own
@@ -205,11 +206,12 @@ PlanetScale, Azure Cosmos DB and Amazon DocumentDB. Their status is tracked in
 
 ## SSH tunnels: bastion host key verification
 
-Any connection but a Kafka one may reach its database through an SSH tunnel (`sshTunnel` on the connection,
+Any connection but a Kafka, BigQuery, Firestore or Snowflake one may reach its database through an SSH tunnel (`sshTunnel` on the connection,
 [`src/lib/ssh/tunnel.ts`](../../src/lib/ssh/tunnel.ts)). This is the only layer that can verify who
 terminated the SSH hop: past it the database driver is handed `127.0.0.1` and a local port, so the
 connection's own SSL settings say nothing about the bastion.
 A Kafka connection refuses a tunnel: a Kafka client reaches every broker at the address that broker advertises, which a tunnel forwarding one address does not carry, so the dialog offers no SSH panel for it and the provider refuses a tunnelled connection ([kafka.md §4.5](./kafka.md#45-no-ssh-tunnel)).
+BigQuery, Firestore and Snowflake offer no SSH panel either: each reaches its vendor's own API hosts over TLS, and its provider doc says why a tunnel is not offered.
 
 **The policy is trust-on-first-use (TOFU), pinned per connection.** Not "refuse anything unknown":
 requiring a pasted fingerprint before the first connection makes tunnelling unusable for someone

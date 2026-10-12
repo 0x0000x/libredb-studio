@@ -201,17 +201,17 @@ describe("the allowInsecureAuth field names every engine that reads it", () => {
 });
 
 describe("the warehouse field", () => {
-  test("docs/API_DOCS.md names it among the fields the server reads, as Databend's, in the source's field order", () => {
-    expect(API_DOCS).toContain("`dataServers` (Oxia), `warehouse` (Databend)");
+  test("docs/API_DOCS.md names it among the fields the server reads, as Databend's and Snowflake's, in the source's field order", () => {
+    expect(API_DOCS).toContain("`dataServers` (Oxia), `warehouse` (Databend, Snowflake)");
     const fields = topLevelFields(DATA_TYPES, "DatabaseConnection");
     expect(fields.indexOf("warehouse")).toBe(fields.indexOf("dataServers") + 1);
-    expect(DATA_TYPES).toMatch(/warehouse\?: string; +\/\/ Databend only:/);
+    expect(DATA_TYPES).toMatch(/warehouse\?: string; +\/\/ Databend and Snowflake:/);
   });
 });
 
 describe("the region field", () => {
   test("docs/API_DOCS.md names it among the fields the server reads, as S3's, right after the warehouse", () => {
-    expect(API_DOCS).toContain("`warehouse` (Databend), `region` (S3)");
+    expect(API_DOCS).toContain("`warehouse` (Databend, Snowflake), `region` (S3)");
     const fields = topLevelFields(DATA_TYPES, "DatabaseConnection");
     expect(fields.indexOf("region")).toBe(fields.indexOf("warehouse") + 1);
     expect(DATA_TYPES).toMatch(/region\?: string; +\/\/ S3-compatible object storage only:/);

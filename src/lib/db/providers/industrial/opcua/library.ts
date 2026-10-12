@@ -81,7 +81,9 @@ const SECURITY_MODES: Readonly<Record<OpcuaConnectionOptions["mode"], MessageSec
  * certificate needs a second preimage, which SHA-1 still resists, but there is no reason to write a
  * NEW pin in a hash whose collision resistance is broken. Nothing shipped with a SHA-1 pin, so
  * nothing had to be kept working. An operator reads the value out of
- * `openssl x509 -fingerprint -sha256`, which is what current openssl prints by default.
+ * `openssl x509 -fingerprint -sha256`, and the digest HAS TO BE NAMED: measured on OpenSSL 3.6.3,
+ * `-fingerprint` with no digest still prints the SHA-1 one. That command prints upper case with
+ * colons, `B9:43:2E:...`, which `normaliseThumbprint` takes as it stands.
  */
 function thumbprintOf(der: Buffer | Uint8Array | null | undefined): string | undefined {
   if (der === null || der === undefined || der.length === 0) return undefined;

@@ -1,0 +1,254 @@
+{
+  "item": "M51",
+  "step": 4,
+  "asks": "In which encoding are partitions 1 to n sent, and is the chunk size enforced?",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "stateBefore": "SUSPENDED",
+  "stateAfter": "SUSPENDED",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000135",
+        "headers": {
+          "authorization": "Bearer <token-41>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "SELECT * FROM STUDIO_DEMO.PROBE.BIG LIMIT 300000",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000136",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000136"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000136",
+        "headers": {
+          "authorization": "Bearer <token-41>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 100001,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 4905,
+                "uncompressedSize": 116622,
+                "compressedSize": 19709
+              },
+              {
+                "rowCount": 37605,
+                "uncompressedSize": 935040,
+                "compressedSize": 150414
+              },
+              {
+                "rowCount": 39240,
+                "uncompressedSize": 981009,
+                "compressedSize": 154979
+              },
+              {
+                "rowCount": 18251,
+                "uncompressedSize": 456286,
+                "compressedSize": 71988
+              }
+            ],
+            "rowType": [
+              {
+                "name": "ID",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "BIG",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 20,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "PAD",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "BIG",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 67108864,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              }
+            ]
+          },
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000136?requestId=00000000-0000-0000-0000-000000000135",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000136",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791843335003
+        },
+        "dropped": [
+          "requestId"
+        ],
+        "rows": {
+          "wireBytes": 118108,
+          "decodedBytes": 118108,
+          "rowCount": 4905,
+          "firstRow": [
+            "1",
+            "pad-0000001"
+          ],
+          "lastRow": [
+            "4905",
+            "pad-0004905"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000136?partition=1",
+        "headers": {
+          "authorization": "Bearer <token-41>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "content-encoding": "gzip"
+        },
+        "body": {},
+        "dropped": [],
+        "rows": {
+          "wireBytes": 150414,
+          "decodedBytes": 935040,
+          "rowCount": 37605,
+          "firstRow": [
+            "4906",
+            "pad-0004906"
+          ],
+          "lastRow": [
+            "42510",
+            "pad-0042510"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000136?partition=2",
+        "headers": {
+          "authorization": "Bearer <token-41>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "content-encoding": "gzip"
+        },
+        "body": {},
+        "dropped": [],
+        "rows": {
+          "wireBytes": 154979,
+          "decodedBytes": 981009,
+          "rowCount": 39240,
+          "firstRow": [
+            "42511",
+            "pad-0042511"
+          ],
+          "lastRow": [
+            "81750",
+            "pad-0081750"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000136?partition=3",
+        "headers": {
+          "authorization": "Bearer <token-41>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "content-encoding": "gzip"
+        },
+        "body": {},
+        "dropped": [],
+        "rows": {
+          "wireBytes": 71988,
+          "decodedBytes": 456286,
+          "rowCount": 18251,
+          "firstRow": [
+            "81751",
+            "pad-0081751"
+          ],
+          "lastRow": [
+            "100001",
+            "pad-0100001"
+          ]
+        }
+      }
+    }
+  ]
+}

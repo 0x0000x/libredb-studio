@@ -192,6 +192,9 @@ const connectionManagerAnswer = {
   fetchSchema: () => {},
   objectScanDeferred: false,
   loadObjects: () => {},
+  /** The page opened this connection by itself and the person has not used it yet (CL-CORE-2). */
+  activeAwaitsUse: false,
+  markActiveUsed: mock(() => {}),
 };
 
 mock.module("@/hooks/use-connection-manager", () => ({
@@ -371,6 +374,7 @@ mock.module("@/components/ui/resizable", () => ({
 
 const { default: Studio } = await import("@/components/Studio");
 const { PREVIEW_PAGE_SIZE } = await import("@/hooks/use-tab-manager");
+const { SOURCE_BILLED_COMPUTE_HOLD } = await import("@/components/object-source/ObjectSourceView");
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -551,6 +555,8 @@ beforeEach(() => {
   releaseApply = undefined;
   mockToast.mockClear();
   connectionManagerAnswer.activeConnection = pgConn;
+  connectionManagerAnswer.activeAwaitsUse = false;
+  connectionManagerAnswer.markActiveUsed.mockClear();
   mockExecuteQuery.mockClear();
   mockExecuteHandedOverStatement.mockClear();
   installFetch();
@@ -761,6 +767,70 @@ describe("View Source opens a tab that reads the definition", () => {
  * Every test here writes its CONTROL on the ordinary tab first, so a gate that simply broke
  * the entry point for everyone could not pass.
  */
+describe("a Source tab restored on a connection held for billed compute", () => {
+  const realNodeEnv = process.env.NODE_ENV;
+
+  /** The page reload's state: this Source tab persisted as the active one, restored on mount. */
+  function persistSourceTab(): void {
+    localStorage.setItem(
+      `libredb_workspace_tabs_v1:${pgConn.id}`,
+      JSON.stringify({
+        activeTabId: "src-1",
+        tabs: [
+          { id: "q-1", name: "Query 1", query: "", type: "sql" },
+          {
+            id: "src-1",
+            name: "Source: app.order_total(integer)",
+            query: "",
+            type: "sql",
+            source: { path: ROUTINE.path, kind: "function" },
+          },
+        ],
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    // The tab manager restores tabs only outside tests; the restore is the subject here.
+    (process.env as Record<string, string | undefined>).NODE_ENV = "development";
+    persistSourceTab();
+  });
+
+  afterEach(() => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = realNodeEnv;
+  });
+
+  test("reads nothing until the person asks, then reads once and marks the connection used", async () => {
+    capabilitiesOverride = { objectKinds: KINDS, resumesBilledCompute: true };
+    buildMetadata();
+    connectionManagerAnswer.activeAwaitsUse = true;
+    const { rerender } = render(<Studio />);
+
+    await waitFor(() => expect(screen.getByTestId("object-source-held")).toBeTruthy());
+    expect(screen.getByTestId("object-source-held").textContent).toContain(SOURCE_BILLED_COMPUTE_HOLD);
+    expect(tabNames()).toEqual(["Query 1", "Source: app.order_total(integer)"]);
+    await afterPreviewRuns();
+    expect(sourceReads).toEqual([]);
+    expect(screen.queryByTestId("object-source-loading")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("object-source-held-read"));
+    expect(connectionManagerAnswer.markActiveUsed).toHaveBeenCalledTimes(1);
+    // The manager answers the use by lifting the hold, which is a new render of the shell.
+    connectionManagerAnswer.activeAwaitsUse = false;
+    rerender(<Studio />);
+    await waitFor(() => expect(screen.getByTestId("source-editor")).toBeTruthy());
+    expect(sourceReads).toEqual([{ path: ["app", "order_total(integer)"], kind: "function" }]);
+  });
+
+  test("a restored connection whose requests bill nothing reads the tab at once", async () => {
+    connectionManagerAnswer.activeAwaitsUse = true;
+    render(<Studio />);
+    await waitFor(() => expect(screen.getByTestId("source-editor")).toBeTruthy());
+    expect(screen.queryByTestId("object-source-held")).toBeNull();
+    expect(sourceReads).toEqual([{ path: ["app", "order_total(integer)"], kind: "function" }]);
+  });
+});
+
 describe("no statement runs while the tab on screen is a definition", () => {
   /** One captured prop, called the way its own component calls it. */
   function fire(props: Record<string, unknown>, name: string, argument?: string): void {

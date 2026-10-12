@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ import {
   connectionFieldHint,
   connectionFieldLabel,
   connectionFieldPlaceholder,
+  connectionFieldShown,
   getDBConfig,
   isFileBased,
   offersSshTunnel,
@@ -116,12 +117,15 @@ function DeclaredFieldSelect({
   fallbackLabel,
   value,
   onChange,
+  offerNone = true,
 }: {
   readonly config: DatabaseUIConfig;
   readonly field: ConnectionField;
   readonly fallbackLabel: string;
   readonly value: string;
   readonly onChange: (value: string) => void;
+  /** False for a field that always holds one of its choices, such as Snowflake's sign-in method: no None is offered. */
+  readonly offerNone?: boolean;
 }) {
   return (
     <div className="space-y-2">
@@ -138,7 +142,7 @@ function DeclaredFieldSelect({
         aria-describedby={describedByHint(config, field)}
         className="h-10 w-full rounded-md bg-panel border border-hairline focus:border-brand-tint/50 transition-all text-xs text-fg px-3"
       >
-        <option value="">None</option>
+        {offerNone && <option value="">None</option>}
         {(config.fieldOptions?.[field] ?? []).map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -146,6 +150,40 @@ function DeclaredFieldSelect({
         ))}
       </select>
       <DeclaredFieldHint config={config} field={field} />
+    </div>
+  );
+}
+
+/**
+ * A statement that fixes a refusal, under the refusal's sentence: monospace, wrapped anywhere so a long key never
+ * scrolls the dialog sideways, with a Copy button that writes exactly the statement. The sentence above still holds
+ * the statement, so a host that shows only the message loses nothing.
+ */
+function FixStatement({ statement }: { readonly statement: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="space-y-2">
+      <pre
+        data-testid="connection-fix-statement"
+        className="whitespace-pre-wrap break-all rounded-md border border-hairline bg-panel p-2 font-mono text-xs text-fg"
+      >
+        {statement}
+      </pre>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            void navigator.clipboard.writeText(statement).then(() => setCopied(true));
+          }}
+          className="h-7 px-3 text-xs"
+        >
+          Copy
+        </Button>
+        <output data-testid="connection-fix-statement-copied" className="text-xs text-fg-muted">
+          {copied ? "Copied" : ""}
+        </output>
+      </div>
     </div>
   );
 }
@@ -158,7 +196,7 @@ interface ConnectionModalProps {
   /** Optional API adapter: when provided, bypasses the built-in /api/db/test-connection fetch. */
   onTestConnection?: (
     connection: DatabaseConnection,
-  ) => Promise<{ success: boolean; latency?: number; error?: string }>;
+  ) => Promise<{ success: boolean; latency?: number; error?: string; fixStatement?: string }>;
 }
 
 export function ConnectionModal({
@@ -204,6 +242,14 @@ export function ConnectionModal({
     setWarehouse,
     location,
     setLocation,
+    authMethod,
+    setAuthMethod,
+    privateKey,
+    setPrivateKey,
+    privateKeyPassphrase,
+    setPrivateKeyPassphrase,
+    role,
+    setRole,
     region,
     setRegion,
     apiPath,
@@ -362,6 +408,134 @@ export function ConnectionModal({
     />
   );
 
+  const derivedHostHint = uiConfig.hostHint?.(host);
+  /**
+   * Whether the dialog draws a field: the engine takes it, and the condition it declares on another field's value
+   * holds (`fieldShownWhen`), the rule `buildConnection` writes by. Read from the form's own values, never the type.
+   */
+  const drawsField = (field: ConnectionField) =>
+    takesConnectionField(type, field) &&
+    connectionFieldShown(uiConfig, field, {
+      host,
+      port,
+      user,
+      password,
+      database,
+      schema,
+      warehouse,
+      location,
+      region,
+      saslMechanism,
+      authMethod,
+      privateKey,
+      privateKeyPassphrase,
+      role,
+    });
+  /**
+   * Where the engine takes a sign-in method, its credential follows the method's select rather than sharing the
+   * User row, so the boxes read in the order they are filled in.
+   */
+  const credentialFollowsSignIn = takesConnectionField(type, "authMethod");
+  /** Warehouse drawn before Database where the engine lists it first, as Snowflake does. */
+  const warehouseBeforeDatabase =
+    uiConfig.connectionFields.includes("warehouse") &&
+    uiConfig.connectionFields.indexOf("warehouse") < uiConfig.connectionFields.indexOf("database");
+
+  /**
+   * The Password box, drawn where the engine takes the field: beside Username, or after the sign-in method where the
+   * engine takes one, and there only while that method signs in with it (`drawsField`).
+   */
+  const passwordInUserRow = !credentialFollowsSignIn && takesConnectionField(type, "password");
+  const passwordBlock = (
+    <div className={passwordInUserRow && !takesConnectionField(type, "user") ? "space-y-2 md:col-span-2" : "space-y-2"}>
+      <div className="flex items-center gap-2 mb-1">
+        <ShieldCheck strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
+        <Label htmlFor="password" className="text-xs font-medium text-fg-muted">
+          {connectionFieldLabel(uiConfig, "password", passwordFieldLabel)}
+        </Label>
+      </div>
+      <Input
+        id="password"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder={connectionFieldPlaceholder(uiConfig, "password", "***")}
+        // Server credential, not the user's own login: "new-password" is the only
+        // value Chrome honours to keep saved site passwords out of the field.
+        autoComplete="new-password"
+        spellCheck={false}
+        autoCorrect="off"
+        autoCapitalize="off"
+        aria-describedby={describedByHint(uiConfig, "password")}
+        className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs"
+      />
+      <DeclaredFieldHint config={uiConfig} field="password" />
+      {/*
+        A credential the engine declares a warning for (src/lib/db/credential-warnings.ts),
+        drawn before Test Connection and apart from its result: a caution about what was
+        typed, which blocks nothing. An `output` rather than a p with role="status": it
+        carries the polite live region natively, and jsx-a11y's prefer-tag-over-role is an
+        error in this repository.
+      */}
+      {credentialWarning !== undefined && (
+        <output
+          id="credential-warning"
+          data-testid="credential-warning"
+          className="flex items-start gap-1.5 text-xs text-warning"
+        >
+          <TriangleAlert strokeWidth={1.5} className="w-3.5 h-3.5 shrink-0" />
+          <span>{credentialWarning}</span>
+        </output>
+      )}
+      {/*
+        Measured on Trino 476 with authentication DISABLED: a request
+        carrying `Authorization: Basic` over plain HTTP is answered 401,
+        "Password not allowed for insecure authentication". So a
+        password is a TLS-only credential here, and typing one into an
+        http:// connection BREAKS a connection that would otherwise
+        work. The provider refuses the combination outright; this says
+        so before the user reaches that error.
+      */}
+      {isLibSQL && (
+        <p className="text-xs text-fg-muted">
+          Turso Cloud mints this per database (`turso db tokens create`). A self-hosted libSQL server started without
+          authentication takes none - leave it empty.
+        </p>
+      )}
+      {isTrino && (
+        <p className="text-xs text-fg-muted">
+          Trino refuses a password over plain HTTP. Enable TLS below, or leave this empty to connect as an
+          unauthenticated user.
+        </p>
+      )}
+    </div>
+  );
+
+  /**
+   * The Warehouse box, drawn where the engine takes the field: after Database for Databend, before it where the engine
+   * lists it first (`warehouseBeforeDatabase`). The provider checks the text and names the field when it refuses it.
+   */
+  const warehouseBlock = takesConnectionField(type, "warehouse") && (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-1">
+        <Server strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
+        <Label htmlFor="warehouse" className="text-xs font-medium text-fg-muted">
+          {connectionFieldLabel(uiConfig, "warehouse", "Warehouse")}
+        </Label>
+      </div>
+      <Input
+        id="warehouse"
+        value={warehouse}
+        onChange={(e) => setWarehouse(e.target.value)}
+        autoComplete="off"
+        spellCheck={false}
+        aria-describedby={describedByHint(uiConfig, "warehouse")}
+        className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
+      />
+      <DeclaredFieldHint config={uiConfig} field="warehouse" />
+    </div>
+  );
+
   const formContent = (
     <>
       {/* Progress bar — fixed top */}
@@ -418,6 +592,7 @@ export function ConnectionModal({
                     value={pasteInput}
                     onChange={(e) => setPasteInput(e.target.value)}
                     placeholder="postgres://user:pass@host:5432/db  or  mongodb://...  or  databend://..."
+                    // A pasted URL can carry a password or a token: never offered back by the browser, never spell-checked.
                     autoComplete="off"
                     spellCheck={false}
                     autoCorrect="off"
@@ -434,7 +609,8 @@ export function ConnectionModal({
                   </Button>
                 </div>
                 <p className="text-xs text-fg-muted">
-                  Supports: postgres://, mysql://, mongodb://, redis://, oracle://, mssql://, db2://, databend://
+                  Supports: postgres://, mysql://, mongodb://, redis://, oracle://, mssql://, db2://, databend://,
+                  jdbc:snowflake://, snowflake://, a Snowflake account URL
                 </p>
               </div>
             </motion.div>
@@ -730,6 +906,7 @@ export function ConnectionModal({
                           // An engine whose address is not a bare host name says so: OPC UA's whole
                           // address is one endpoint URL, and "localhost" would be a wrong example.
                           placeholder={connectionFieldPlaceholder(uiConfig, "host", "localhost")}
+                          // An engine's Host box can take a pasted URL, Snowflake's an account URL among them.
                           autoComplete="off"
                           /*
                            * AN ADDRESS IS NOT PROSE. A host box is never spell checked, corrected or
@@ -743,7 +920,10 @@ export function ConnectionModal({
                           autoCapitalize="off"
                           aria-invalid={hostError === undefined ? undefined : true}
                           aria-describedby={
-                            [describedByHint(uiConfig, "host"), hostError === undefined ? undefined : HOST_ERROR_ID]
+                            [
+                              derivedHostHint === undefined ? describedByHint(uiConfig, "host") : fieldHintId("host"),
+                              hostError === undefined ? undefined : HOST_ERROR_ID,
+                            ]
                               .filter((id) => id !== undefined)
                               .join(" ") || undefined
                           }
@@ -759,7 +939,8 @@ export function ConnectionModal({
                           drawn beside it holding 4840: measured in a browser, a reader could type
                           54840 into it and the dial went to the port in the URL, so the box offered a
                           correction it could not make. The host takes the full row where it is gone,
-                          and an engine that declares a port label of its own still gets it.
+                          and an engine that declares a port label of its own still gets it. Snowflake
+                          takes none either: an account is reached on 443 alone.
                         */}
                         {takesPort &&
                           (portLabel === "" ? (
@@ -778,7 +959,14 @@ export function ConnectionModal({
                           {hostError}
                         </p>
                       )}
-                      <DeclaredFieldHint config={uiConfig} field="host" />
+                      {/* The host the typed text derives, where the engine declares a reader for it; else the static hint. */}
+                      {derivedHostHint === undefined ? (
+                        <DeclaredFieldHint config={uiConfig} field="host" />
+                      ) : (
+                        <p id={fieldHintId("host")} data-testid={fieldHintId("host")} className="text-xs text-fg-muted">
+                          {derivedHostHint}
+                        </p>
+                      )}
                       {takesPort && <DeclaredFieldHint config={uiConfig} field="port" />}
                     </div>
                   )}
@@ -806,7 +994,7 @@ export function ConnectionModal({
                       `buildConnection` would then discard.
                     */}
                     {takesConnectionField(type, "user") && (
-                      <div className="space-y-2">
+                      <div className={passwordInUserRow ? "space-y-2" : "space-y-2 md:col-span-2"}>
                         <div className="flex items-center gap-2 mb-1">
                           <Key strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
                           <Label htmlFor="user" className="text-xs font-medium text-fg-muted">
@@ -817,7 +1005,7 @@ export function ConnectionModal({
                           id="user"
                           value={user}
                           onChange={(e) => setUser(e.target.value)}
-                          placeholder="user"
+                          placeholder={connectionFieldPlaceholder(uiConfig, "user", "user")}
                           autoComplete="off"
                           aria-describedby={describedByHint(uiConfig, "user")}
                           className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs"
@@ -825,69 +1013,74 @@ export function ConnectionModal({
                         <DeclaredFieldHint config={uiConfig} field="user" />
                       </div>
                     )}
-                    <div className={takesConnectionField(type, "user") ? "space-y-2" : "space-y-2 md:col-span-2"}>
+                    {passwordInUserRow && passwordBlock}
+                  </div>
+
+                  {/*
+                    The sign-in method and the credential it signs in with, each drawn while the engine takes the
+                    field and its declared condition holds (`drawsField`): Snowflake's key and passphrase for a key
+                    pair, its token for an access token. The key is a textarea, so a pasted PEM keeps its line breaks.
+                  */}
+                  {credentialFollowsSignIn && (
+                    <DeclaredFieldSelect
+                      config={uiConfig}
+                      field="authMethod"
+                      fallbackLabel="Sign-in"
+                      value={authMethod}
+                      offerNone={false}
+                      onChange={(value) => setAuthMethod(value as NonNullable<DatabaseConnection["authMethod"]>)}
+                    />
+                  )}
+                  {drawsField("privateKey") && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Key strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
+                        <Label htmlFor="privateKey" className="text-xs font-medium text-fg-muted">
+                          {connectionFieldLabel(uiConfig, "privateKey", "Private key")}
+                        </Label>
+                      </div>
+                      <textarea
+                        id="privateKey"
+                        value={privateKey}
+                        onChange={(e) => setPrivateKey(e.target.value)}
+                        placeholder={connectionFieldPlaceholder(uiConfig, "privateKey", "")}
+                        autoComplete="off"
+                        spellCheck={false}
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        rows={5}
+                        aria-describedby={describedByHint(uiConfig, "privateKey")}
+                        className="w-full rounded-md bg-panel border border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono text-fg p-3"
+                      />
+                      <DeclaredFieldHint config={uiConfig} field="privateKey" />
+                    </div>
+                  )}
+                  {drawsField("privateKeyPassphrase") && (
+                    <div className="space-y-2">
                       <div className="flex items-center gap-2 mb-1">
                         <ShieldCheck strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
-                        <Label htmlFor="password" className="text-xs font-medium text-fg-muted">
-                          {connectionFieldLabel(uiConfig, "password", passwordFieldLabel)}
+                        <Label htmlFor="privateKeyPassphrase" className="text-xs font-medium text-fg-muted">
+                          {connectionFieldLabel(uiConfig, "privateKeyPassphrase", "Passphrase")}
                         </Label>
                       </div>
                       <Input
-                        id="password"
+                        id="privateKeyPassphrase"
                         type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="***"
-                        // Server credential, not the user's own login: "new-password" is the only
-                        // value Chrome honours to keep saved site passwords out of the field.
+                        value={privateKeyPassphrase}
+                        onChange={(e) => setPrivateKeyPassphrase(e.target.value)}
                         autoComplete="new-password"
                         spellCheck={false}
                         autoCorrect="off"
                         autoCapitalize="off"
-                        aria-describedby={describedByHint(uiConfig, "password")}
+                        aria-describedby={describedByHint(uiConfig, "privateKeyPassphrase")}
                         className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs"
                       />
-                      <DeclaredFieldHint config={uiConfig} field="password" />
-                      {/*
-                        A credential the engine declares a warning for (src/lib/db/credential-warnings.ts),
-                        drawn before Test Connection and apart from its result: a caution about what was
-                        typed, which blocks nothing. An `output` rather than a p with role="status": it
-                        carries the polite live region natively, and jsx-a11y's prefer-tag-over-role is an
-                        error in this repository.
-                      */}
-                      {credentialWarning !== undefined && (
-                        <output
-                          id="credential-warning"
-                          data-testid="credential-warning"
-                          className="flex items-start gap-1.5 text-xs text-warning"
-                        >
-                          <TriangleAlert strokeWidth={1.5} className="w-3.5 h-3.5 shrink-0" />
-                          <span>{credentialWarning}</span>
-                        </output>
-                      )}
-                      {/*
-                        Measured on Trino 476 with authentication DISABLED: a request
-                        carrying `Authorization: Basic` over plain HTTP is answered 401,
-                        "Password not allowed for insecure authentication". So a
-                        password is a TLS-only credential here, and typing one into an
-                        http:// connection BREAKS a connection that would otherwise
-                        work. The provider refuses the combination outright; this says
-                        so before the user reaches that error.
-                      */}
-                      {isLibSQL && (
-                        <p className="text-xs text-fg-muted">
-                          Turso Cloud mints this per database (`turso db tokens create`). A self-hosted libSQL server
-                          started without authentication takes none - leave it empty.
-                        </p>
-                      )}
-                      {isTrino && (
-                        <p className="text-xs text-fg-muted">
-                          Trino refuses a password over plain HTTP. Enable TLS below, or leave this empty to connect as
-                          an unauthenticated user.
-                        </p>
-                      )}
+                      <DeclaredFieldHint config={uiConfig} field="privateKeyPassphrase" />
                     </div>
-                  </div>
+                  )}
+                  {credentialFollowsSignIn && drawsField("password") && passwordBlock}
+
+                  {warehouseBeforeDatabase && warehouseBlock}
 
                   {/*
                     Only when the engine takes it. Druid and the two search engines address
@@ -957,26 +1150,7 @@ export function ConnectionModal({
                     The warehouse a statement runs on (Databend design 6.1), drawn where the engine takes the field,
                     the way the data servers are. The provider checks the text and names the field when it refuses it.
                   */}
-                  {takesConnectionField(type, "warehouse") && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Server strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
-                        <Label htmlFor="warehouse" className="text-xs font-medium text-fg-muted">
-                          {connectionFieldLabel(uiConfig, "warehouse", "Warehouse")}
-                        </Label>
-                      </div>
-                      <Input
-                        id="warehouse"
-                        value={warehouse}
-                        onChange={(e) => setWarehouse(e.target.value)}
-                        autoComplete="off"
-                        spellCheck={false}
-                        aria-describedby={describedByHint(uiConfig, "warehouse")}
-                        className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
-                      />
-                      <DeclaredFieldHint config={uiConfig} field="warehouse" />
-                    </div>
-                  )}
+                  {!warehouseBeforeDatabase && warehouseBlock}
 
                   {takesConnectionField(type, "location") && (
                     <div className="space-y-2">
@@ -1203,15 +1377,43 @@ export function ConnectionModal({
                         id="schema"
                         value={schema}
                         onChange={(e) => setSchema(e.target.value)}
-                        placeholder="default"
+                        placeholder={connectionFieldPlaceholder(uiConfig, "schema", "default")}
                         aria-describedby={describedByHint(uiConfig, "schema")}
                         className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
                       />
                       <DeclaredFieldHint config={uiConfig} field="schema" />
-                      <p className="text-xs text-fg-muted">
-                        Used for unqualified table names in queries and Create Table. Leave empty to qualify names
-                        yourself. Run SHOW SCHEMAS to list the catalog's schemas.
-                      </p>
+                      {/*
+                        The dialog's own copy for this box, its `default` example and this sentence, written together
+                        for Trino: an engine that declares an example of its own says the rest in its hint.
+                      */}
+                      {uiConfig.fieldPlaceholders?.schema === undefined && (
+                        <p className="text-xs text-fg-muted">
+                          Used for unqualified table names in queries and Create Table. Leave empty to qualify names
+                          yourself. Run SHOW SCHEMAS to list the catalog's schemas.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* The role every statement runs as, drawn where the engine takes the field. */}
+                  {takesConnectionField(type, "role") && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <ShieldCheck strokeWidth={1.5} className="w-3 h-3 text-fg-muted" />
+                        <Label htmlFor="role" className="text-xs font-medium text-fg-muted">
+                          {connectionFieldLabel(uiConfig, "role", "Role")}
+                        </Label>
+                      </div>
+                      <Input
+                        id="role"
+                        value={role}
+                        onChange={(e) => setRole(e.target.value)}
+                        autoComplete="off"
+                        spellCheck={false}
+                        aria-describedby={describedByHint(uiConfig, "role")}
+                        className="h-10 bg-panel border-hairline focus:border-brand-tint/50 transition-all text-xs font-mono"
+                      />
+                      <DeclaredFieldHint config={uiConfig} field="role" />
                     </div>
                   )}
 
@@ -1769,7 +1971,16 @@ export function ConnectionModal({
                   ) : (
                     <CircleX strokeWidth={1.5} className="w-3.5 h-3.5 shrink-0" />
                   )}
-                  <span className="leading-relaxed">{testResult.message}</span>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    {/*
+                      A block that breaks a word longer than the line: a key-pair refusal carries a fingerprint and
+                      public-key bodies with no space in them, which the banner's overflow-hidden parent would clip.
+                    */}
+                    <p data-testid="connection-test-message" className="leading-relaxed break-words">
+                      {testResult.message}
+                    </p>
+                    {testResult.fixStatement !== undefined && <FixStatement statement={testResult.fixStatement} />}
+                  </div>
                 </div>
               </motion.div>
             )}

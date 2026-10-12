@@ -230,6 +230,14 @@ export async function createSSHTunnel(
       sshClient.end();
     };
 
+    // ssh2 (1.17.0) dials the bastion with Nagle left on, so under Node every small request
+    // through the tunnel waited out the peer's delayed ACK: measured through POST /api/db/query
+    // against PostgreSQL behind OpenSSH, SELECT 1 took a median 46 ms tunnelled and 3 ms direct.
+    // Bun was unaffected. 'connect' is ssh2's own event for the socket being up.
+    sshClient.on("connect", () => {
+      sshClient.setNoDelay(true);
+    });
+
     sshClient.on("ready", () => {
       // Create a local TCP server that forwards to the remote host through SSH
       localServer = net.createServer((socket) => {

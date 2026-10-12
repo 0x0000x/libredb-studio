@@ -1,0 +1,471 @@
+{
+  "item": "M42",
+  "step": 4,
+  "asks": "What does a status GET answer while a statement runs, and with what Retry-After?",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "stateBefore": "STARTED",
+  "stateAfter": "STARTED",
+  "notes": [
+    {
+      "statement": "SELECT SYSTEM$WAIT(20)",
+      "polls": [
+        {
+          "afterMs": 561,
+          "status": 202,
+          "retryAfter": null
+        },
+        {
+          "afterMs": 1179,
+          "status": 202,
+          "retryAfter": null
+        },
+        {
+          "afterMs": 2378,
+          "status": 202,
+          "retryAfter": null
+        },
+        {
+          "afterMs": 4658,
+          "status": 202,
+          "retryAfter": null
+        },
+        {
+          "afterMs": 6849,
+          "status": 202,
+          "retryAfter": null
+        },
+        {
+          "afterMs": 8973,
+          "status": 202,
+          "retryAfter": null
+        },
+        {
+          "afterMs": 11094,
+          "status": 202,
+          "retryAfter": null
+        },
+        {
+          "afterMs": 13277,
+          "status": 202,
+          "retryAfter": null
+        },
+        {
+          "afterMs": 15461,
+          "status": 202,
+          "retryAfter": null
+        },
+        {
+          "afterMs": 17593,
+          "status": 202,
+          "retryAfter": null
+        },
+        {
+          "afterMs": 19713,
+          "status": 202,
+          "retryAfter": null
+        },
+        {
+          "afterMs": 21820,
+          "status": 200,
+          "retryAfter": null
+        }
+      ]
+    }
+  ],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000127",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "SELECT SYSTEM$WAIT(20)",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000128",
+        "headers": {
+          "authorization": "Bearer <token-37>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 1,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 1,
+                "uncompressedSize": 21
+              }
+            ],
+            "rowType": [
+              {
+                "name": "SYSTEM$WAIT(20)",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": false,
+                "scale": null,
+                "byteLength": 134217728,
+                "precision": null,
+                "length": 134217728,
+                "type": "text"
+              }
+            ]
+          },
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000128?requestId=00000000-0000-0000-0000-000000000127",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000128",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791842704958
+        },
+        "dropped": [
+          "requestId"
+        ],
+        "rows": {
+          "wireBytes": 885,
+          "decodedBytes": 885,
+          "rowCount": 1,
+          "firstRow": [
+            "waited 20 seconds"
+          ],
+          "lastRow": [
+            "waited 20 seconds"
+          ]
+        }
+      }
+    }
+  ]
+}

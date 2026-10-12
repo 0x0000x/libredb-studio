@@ -90,6 +90,9 @@ export const EXPECTED_EDIT_ABSTAINERS: readonly DatabaseType[] = Object.freeze([
   // No kind declares acceptsRowWrites or acceptsSourceEdits: v1 reads only, whatever readOnly says, which
   // docs/providers/s3.md names.
   "s3",
+  // No kind declares acceptsRowWrites or acceptsSourceEdits: DDL commits implicitly and ALTER COLUMN is limited, so
+  // v1 offers no object edit, which docs/providers/snowflake.md names.
+  "snowflake",
   "sqlite",
 ] as const);
 

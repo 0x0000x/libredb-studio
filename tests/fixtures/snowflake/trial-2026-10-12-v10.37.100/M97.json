@@ -1,0 +1,728 @@
+{
+  "item": "M97",
+  "step": 2,
+  "asks": "Which registration statement works for a user on itself, and what answers a second ADD KEY PAIR of the same key under the same name? Records both self-service forms: ADD KEY PAIR, twice, and SET RSA_PUBLIC_KEY_2.",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000052",
+        "headers": {
+          "authorization": "Bearer <token-13>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "SHOW USER KEY PAIRS",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000053",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000053"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000053",
+        "headers": {
+          "authorization": "Bearer <token-13>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 1,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 1,
+                "uncompressedSize": 158
+              }
+            ],
+            "rowType": [
+              {
+                "name": "name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "user_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "fingerprint",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "role_scope",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "status",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "comment",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "created_on",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 3,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "created_by",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "last_used_on",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 3,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "expires_at",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 3,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "rotated_to",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              }
+            ]
+          },
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000053?requestId=00000000-0000-0000-0000-000000000052",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000053",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791842655327
+        },
+        "dropped": [
+          "requestId"
+        ],
+        "rows": {
+          "wireBytes": 3799,
+          "decodedBytes": 3799,
+          "rowCount": 1,
+          "firstRow": [
+            "LIBREDB_STUDIO",
+            "<user-1>",
+            "SHA256:zIJnxn6wBJLAEMkuhZ1lQUdK47H91dV2HO2Sl8bPlKA=",
+            null,
+            "ACTIVE",
+            null,
+            "1791830948.383",
+            "<user-4>",
+            "1791842655.382",
+            null,
+            null
+          ],
+          "lastRow": [
+            "LIBREDB_STUDIO",
+            "<user-1>",
+            "SHA256:zIJnxn6wBJLAEMkuhZ1lQUdK47H91dV2HO2Sl8bPlKA=",
+            null,
+            "ACTIVE",
+            null,
+            "1791830948.383",
+            "<user-4>",
+            "1791842655.382",
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000054",
+        "headers": {
+          "authorization": "Bearer <token-13>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "ALTER USER ADD KEY PAIR libredb_studio_cc8267c6 PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5f3lUWiASrTq6jC1nnRM3nP6ajX2SH9bCgo816aukdo8O1UOQ37GuVlmJogsyO7/BXnnWn3MnJAjrsnRa69pGj4kk9Bn32qLw8Gz1NhbMgZ6P5KM2Irh1kQlLVA17b0ortKp3qb0TCg+rdwexjo6c5wLRpH4xVbtdSp46XPeOQJml787+L1LqHTjVJoJyLdb7Nu1OMrX7irzyffOagv9HMybnv8V6qoArn4h7S3I6LoSqnRc19+fDr56fl921BW9hnz2bNI+wg4y1lHSYEITKKeth29t+pyZUn8ZpK3ZocaQBp62oE4Y6CwkUQLR+0yb0/zN2QVUaWVSZaW8BKLOLQIDAQAB'",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000055",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000055"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000055",
+        "headers": {
+          "authorization": "Bearer <token-13>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 422,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "003001",
+          "message": "SQL access control error:\nInsufficient privileges to operate on user '<user-1>'. Your primary role STUDIO_RW or one of your secondary roles must have MODIFY PROGRAMMATIC AUTHENTICATION METHODS granted on USER <user-1>.",
+          "sqlState": "42501",
+          "statementHandle": "00000000-0000-0000-0000-000000000055"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000056",
+        "headers": {
+          "authorization": "Bearer <token-13>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "ALTER USER ADD KEY PAIR libredb_studio_cc8267c6 PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5f3lUWiASrTq6jC1nnRM3nP6ajX2SH9bCgo816aukdo8O1UOQ37GuVlmJogsyO7/BXnnWn3MnJAjrsnRa69pGj4kk9Bn32qLw8Gz1NhbMgZ6P5KM2Irh1kQlLVA17b0ortKp3qb0TCg+rdwexjo6c5wLRpH4xVbtdSp46XPeOQJml787+L1LqHTjVJoJyLdb7Nu1OMrX7irzyffOagv9HMybnv8V6qoArn4h7S3I6LoSqnRc19+fDr56fl921BW9hnz2bNI+wg4y1lHSYEITKKeth29t+pyZUn8ZpK3ZocaQBp62oE4Y6CwkUQLR+0yb0/zN2QVUaWVSZaW8BKLOLQIDAQAB'",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000057",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000057"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000057",
+        "headers": {
+          "authorization": "Bearer <token-13>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 422,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "003001",
+          "message": "SQL access control error:\nInsufficient privileges to operate on user '<user-1>'. Your primary role STUDIO_RW or one of your secondary roles must have MODIFY PROGRAMMATIC AUTHENTICATION METHODS granted on USER <user-1>.",
+          "sqlState": "42501",
+          "statementHandle": "00000000-0000-0000-0000-000000000057"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000058",
+        "headers": {
+          "authorization": "Bearer <token-13>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "ALTER USER SET RSA_PUBLIC_KEY_2 = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5f3lUWiASrTq6jC1nnRM3nP6ajX2SH9bCgo816aukdo8O1UOQ37GuVlmJogsyO7/BXnnWn3MnJAjrsnRa69pGj4kk9Bn32qLw8Gz1NhbMgZ6P5KM2Irh1kQlLVA17b0ortKp3qb0TCg+rdwexjo6c5wLRpH4xVbtdSp46XPeOQJml787+L1LqHTjVJoJyLdb7Nu1OMrX7irzyffOagv9HMybnv8V6qoArn4h7S3I6LoSqnRc19+fDr56fl921BW9hnz2bNI+wg4y1lHSYEITKKeth29t+pyZUn8ZpK3ZocaQBp62oE4Y6CwkUQLR+0yb0/zN2QVUaWVSZaW8BKLOLQIDAQAB'",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000059",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000059"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000059",
+        "headers": {
+          "authorization": "Bearer <token-13>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 422,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "003001",
+          "message": "SQL access control error:\nInsufficient privileges to operate on user '<user-1>'. Your primary role STUDIO_RW or one of your secondary roles must have MODIFY PROGRAMMATIC AUTHENTICATION METHODS granted on USER <user-1>.",
+          "sqlState": "42501",
+          "statementHandle": "00000000-0000-0000-0000-000000000059"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000060",
+        "headers": {
+          "authorization": "Bearer <token-13>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "SHOW USER KEY PAIRS",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000061",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000061"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000061",
+        "headers": {
+          "authorization": "Bearer <token-13>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 1,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 1,
+                "uncompressedSize": 158
+              }
+            ],
+            "rowType": [
+              {
+                "name": "name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "user_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "fingerprint",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "role_scope",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "status",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "comment",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "created_on",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 3,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "created_by",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "last_used_on",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 3,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "expires_at",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 3,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "rotated_to",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              }
+            ]
+          },
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000061?requestId=00000000-0000-0000-0000-000000000060",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000061",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791842657517
+        },
+        "dropped": [
+          "requestId"
+        ],
+        "rows": {
+          "wireBytes": 3799,
+          "decodedBytes": 3799,
+          "rowCount": 1,
+          "firstRow": [
+            "LIBREDB_STUDIO",
+            "<user-1>",
+            "SHA256:zIJnxn6wBJLAEMkuhZ1lQUdK47H91dV2HO2Sl8bPlKA=",
+            null,
+            "ACTIVE",
+            null,
+            "1791830948.383",
+            "<user-4>",
+            "1791842655.382",
+            null,
+            null
+          ],
+          "lastRow": [
+            "LIBREDB_STUDIO",
+            "<user-1>",
+            "SHA256:zIJnxn6wBJLAEMkuhZ1lQUdK47H91dV2HO2Sl8bPlKA=",
+            null,
+            "ACTIVE",
+            null,
+            "1791830948.383",
+            "<user-4>",
+            "1791842655.382",
+            null,
+            null
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1945,3 +1945,82 @@ describe("buildResultExport: Databend's type rulings (X01)", () => {
     expect(file.content).toContain('-- Row 1 skipped: column "b" holds a value of type Bitmap');
   });
 });
+
+/**
+ * Snowflake's INSERT is `INSERT ... SELECT`, since `INSERT ... VALUES` refuses `PARSE_JSON`, and its temporal cells go
+ * through `TO_DATE`, `TO_TIME` and `TO_TIMESTAMP_*` with an explicit mask, so no account input format moves them.
+ * Every form here is provisional until a replay on an account confirms it.
+ */
+describe("buildResultExport: Snowflake's rows and types", () => {
+  const columnTypes = {
+    v: "VARIANT",
+    o: "OBJECT",
+    a: "ARRAY",
+    vec: "VECTOR(FLOAT, 2)",
+    d: "DATE",
+    tm: "TIME(9)",
+    ntz: "TIMESTAMP_NTZ(3)",
+    tz: "TIMESTAMP_TZ(9)",
+    b: "BINARY",
+    n: "NUMBER(10,2)",
+  };
+  const row = {
+    v: '{"a":1}',
+    o: '{"k":"v"}',
+    a: "[1,2]",
+    vec: "[1.5,2]",
+    d: "2026-10-12",
+    tm: "13:45:30.123456789",
+    ntz: "2026-10-12 13:45:30.123",
+    tz: "2026-10-12 13:45:30.123456789+01:00",
+    b: Buffer.from([0x01, 0xab]),
+    n: "12.50",
+  };
+
+  test("writes INSERT ... SELECT with PARSE_JSON, the VECTOR cast and masked temporal casts, byte for byte", () => {
+    const file = buildResultExport(
+      "sql-insert",
+      source({ rows: [row], fields: Object.keys(row), tabName: "t", dialect: "snowflake", columnTypes }),
+    );
+    expect(file.content).toBe(
+      'INSERT INTO t ("v", "o", "a", "vec", "d", "tm", "ntz", "tz", "b", "n") SELECT ' +
+        "PARSE_JSON('{\"a\":1}'), PARSE_JSON('{\"k\":\"v\"}'), PARSE_JSON('[1,2]'), " +
+        "PARSE_JSON('[1.5,2]')::VECTOR(FLOAT, 2), TO_DATE('2026-10-12', 'YYYY-MM-DD'), " +
+        "TO_TIME('13:45:30.123456789', 'HH24:MI:SS.FF9'), " +
+        "TO_TIMESTAMP_NTZ('2026-10-12 13:45:30.123', 'YYYY-MM-DD HH24:MI:SS.FF3'), " +
+        "TO_TIMESTAMP_TZ('2026-10-12 13:45:30.123456789+01:00', 'YYYY-MM-DD HH24:MI:SS.FF9TZH:TZM'), " +
+        "X'01ab', 12.50;",
+    );
+  });
+
+  test("a row with no typed cell is still INSERT ... SELECT", () => {
+    const file = buildResultExport(
+      "sql-insert",
+      source({ rows: [{ id: 1, name: "it's" }], fields: ["id", "name"], tabName: "t", dialect: "snowflake" }),
+    );
+    expect(file.content).toBe(`INSERT INTO t ("id", "name") SELECT 1, 'it''s';`);
+  });
+
+  test("a temporal cell not in the decoder's form skips its row with the #1386 comment", () => {
+    const file = buildResultExport(
+      "sql-insert",
+      source({ rows: [{ d: "12/10/2026" }], fields: ["d"], dialect: "snowflake", columnTypes: { d: "DATE" } }),
+    );
+    expect(file.content).toContain('-- Row 1 skipped: column "d" holds a DATE that is not in the form');
+  });
+
+  test("the DDL offers FLOAT for a float column and BINARY, never BLOB, for bytes", () => {
+    const ddl = buildResultExport(
+      "sql-ddl",
+      source({ rows: [{ f: 1.5, b: new Uint8Array([1]) }], fields: ["f", "b"], dialect: "snowflake" }),
+    ).content;
+    expect(ddl).toContain('"f" FLOAT');
+    expect(ddl).toContain('"b" BINARY');
+    expect(ddl).not.toContain("BLOB");
+    const declared = buildResultExport(
+      "sql-ddl",
+      source({ rows: [{ b: null }], fields: ["b"], dialect: "snowflake", columnTypes: { b: "BINARY" } }),
+    ).content;
+    expect(declared).toContain('"b" BINARY');
+  });
+});

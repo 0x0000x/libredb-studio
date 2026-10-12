@@ -141,6 +141,10 @@ describe("the explanation claim names only engines that return a plan", () => {
     expect(explainCapable).toContain("databend");
   });
 
+  test("Snowflake declares its plan format in its directory's index.ts, so a listing's explain claim names it", () => {
+    expect(explainCapable).toContain("snowflake");
+  });
+
   for (const [name, path] of Object.entries(LISTINGS)) {
     test(`${name} scopes its explanation claim to those engines`, () => {
       const content = submittedCopy(path);

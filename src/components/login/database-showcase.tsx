@@ -52,6 +52,14 @@ export function DatabaseShowcase({ variant }: DatabaseShowcaseProps) {
  * 1366x768 back on five rows and scrolled it by 13px at both the 12px and the 10px column gap;
  * at the 6px gap it holds four rows and the page measured 800, 768, 900 and 1080px of 800, 768,
  * 900 and 1080, needing 798, 759, 759 and 701px of them.
+ * Two engines landed at once, so the count changed again and the list now carries a thirty-sixth
+ * entry. Each of the two paragraphs below measured its own engine as the thirty-fifth, with
+ * thirty-five entries on the page, and both landed on the same 4px row gap, which stays until the
+ * page is swept at thirty-six.
+ * The thirty-fifth entry (Snowflake) wrapped the list into a sixth row at 1280x800 and scrolled the
+ * page to 804px; 1366x768 and 1440x900 stayed on five rows needing 765px, 1920x1080 on four needing
+ * 707. No column gap down to 4px buys the row back, so the row gap pays: at 4px the four sizes need
+ * 794, 757, 757 and 701px of 800, 768, 900 and 1080.
  * The thirty-fifth entry (OPC UA) takes a sixth row at 1280x800 on its own and scrolled that size
  * by 4px, the other three unchanged. THE COLUMN GAP CANNOT PAY FOR THIS ONE, measured in a browser:
  * at 4px and at 2px the label still wraps, and 2px buys the fifth row back only by crowding every

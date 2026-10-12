@@ -1110,6 +1110,8 @@ describe("generateMigrationSQL: SQLite's grammar declares a foreign key only ins
     // Constraints are CHECK only in Databend's grammar, and nothing declares or reports a foreign key (design 2.4).
     databend: "engine-has-no-foreign-key",
     bigquery: "engine-has-no-foreign-key",
+    // Snowflake parses FOREIGN KEY in ALTER TABLE and records it, unenforced on a standard table.
+    snowflake: "key-follows-in-an-alter",
     s3: "engine-has-no-foreign-key",
     kubernetes: "engine-has-no-foreign-key",
     mqtt: "engine-has-no-foreign-key",
@@ -1254,6 +1256,8 @@ const MODIFIED_COLUMN_COVERAGE: Record<
     label: "BigQuery",
     reason: "BigQuery widens a column with ALTER COLUMN ... SET DATA TYPE only along its coercion rules",
   },
+  // Its own arm: ALTER COLUMN ... SET DATA TYPE, the nullability, and a default only dropped (the snowflake block).
+  snowflake: "has-own-branch",
   // Not a table store: an object is bytes under a key, and the columns a listing shows are its fixed shape.
   s3: { label: "S3-compatible object storage", reason: "with no schema, so there is no column definition to change" },
   kubernetes: { label: "Kubernetes", reason: "and Studio writes none, so there is no column definition to change" },
@@ -1288,6 +1292,48 @@ const MODIFIED_COLUMN_COVERAGE: Record<
  * through `@duckdb/node-api` 1.5.5-r.4, so this block is where the measurement is
  * pinned rather than only described in a comment.
  */
+describe("generateMigrationSQL: snowflake", () => {
+  test("a modified column takes Snowflake's ALTER COLUMN ... SET DATA TYPE, and its nullability", () => {
+    const sql = generateMigrationSQL(makeModifiedTableDiff(), "snowflake");
+
+    expect(sql).toContain('ALTER TABLE "users" ALTER COLUMN "name" SET DATA TYPE varchar(255);');
+    expect(sql).toContain('ALTER TABLE "users" ALTER COLUMN "name" SET NOT NULL;');
+    expect(sql).not.toMatch(/ALTER COLUMN "name" TYPE /);
+  });
+
+  test("a default other than a sequence's is declined in words, and a removed one is dropped", () => {
+    const sql = generateMigrationSQL(makeModifiedTableDiff(), "snowflake");
+    expect(sql).toContain(
+      `-- Snowflake: Cannot set the default of column "name". ALTER COLUMN sets a default only to a sequence's NEXTVAL; recreate the column with its default.`,
+    );
+    expect(sql).not.toContain("SET DEFAULT");
+
+    const removed = makeModifiedTableDiff();
+    removed.tables[0].columns[2] = {
+      action: "modified",
+      columnName: "name",
+      sourceType: "varchar(255)",
+      targetType: "varchar(255)",
+      sourceNullable: false,
+      targetNullable: false,
+      sourceDefault: "'unknown'",
+      targetDefault: undefined,
+      changes: ["Default changed"],
+    };
+    expect(generateMigrationSQL(removed, "snowflake")).toContain(
+      'ALTER TABLE "users" ALTER COLUMN "name" DROP DEFAULT;',
+    );
+  });
+
+  test("index DDL is declined, a foreign key follows as ADD CONSTRAINT, and nothing is wrapped in BEGIN", () => {
+    const sql = generateMigrationSQL(makeModifiedTableDiff(), "snowflake");
+    expect(sql).toContain("-- Snowflake: Cannot generate index DDL.");
+    expect(sql).not.toMatch(/^CREATE INDEX/m);
+    expect(sql).toMatch(/^ALTER TABLE "users" ADD CONSTRAINT .*FOREIGN KEY \("dept_id"\)/m);
+    expect(sql).not.toContain("BEGIN");
+  });
+});
+
 describe("generateMigrationSQL: duckdb", () => {
   test("a modified column emits the real ALTER COLUMN DDL, not a limitation comment", () => {
     const sql = generateMigrationSQL(makeModifiedTableDiff(), "duckdb");
@@ -1633,6 +1679,7 @@ const TRANSACTION_WRAPPER_COVERAGE: Record<DatabaseType, "BEGIN;" | "BEGIN TRANS
   oxia: false, // an `oxia client` read command, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
   databend: false, // a DDL statement commits the open transaction, so BEGIN; brackets nothing, the Oracle reason (module docstring)
   bigquery: false, // the provider declares no transactions
+  snowflake: false, // DDL commits implicitly, and each statement runs in its own session
   s3: false, // one AWS CLI subset command, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
   kubernetes: false, // one kubectl statement, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
   mqtt: false, // one JSON read request, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)

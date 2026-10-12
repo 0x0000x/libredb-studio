@@ -164,6 +164,7 @@ describe("CONNECTION_STRING_ACCEPTED against each provider's own declaration (Sp
     ]);
     expect(SHIPPED_DATABASE_TYPES.filter((type) => !CONNECTION_STRING_ACCEPTED[type])).toEqual([
       "bigquery",
+      "snowflake",
       "duckdb",
       "mssql",
       "druid",

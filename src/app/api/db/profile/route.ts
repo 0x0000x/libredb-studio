@@ -223,6 +223,14 @@ export async function POST(req: NextRequest) {
       // menus ask, so no menu offers what this refuses. The message names the provider's own
       // declared language and never the request's table or columns.
       if (!offersColumnProfiling(capabilities)) {
+        // An engine that declines the profiler speaks a language this route writes, so the language sentence
+        // below would name the wrong reason.
+        if (capabilities.supportsColumnProfiling === false) {
+          throw new DatabaseConfigError(
+            "This connection does not offer column profiling, so nothing was sent.",
+            provider.type,
+          );
+        }
         const dialect = capabilities.queryDialect === undefined ? "" : ` in the ${capabilities.queryDialect} dialect`;
         throw new DatabaseConfigError(
           "Column profiling runs as SQL or as a MongoDB aggregate document, and this connection speaks " +

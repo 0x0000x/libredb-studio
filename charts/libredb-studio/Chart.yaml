@@ -1,6 +1,6 @@
 apiVersion: v2
 name: libredb-studio
-description: Web-based SQL IDE for cloud-native teams supporting thirty-four engines - PostgreSQL, MySQL, SQLite, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Apache Cassandra, libSQL, Prometheus, Apache Kafka, MQTT, RabbitMQ, etcd, Neo4j, Milvus, Qdrant, InfluxDB, InfluxDB 3, Oxia, Databend, S3-compatible object storage, Kubernetes and OPC UA
+description: Web-based SQL IDE for cloud-native teams supporting thirty-five engines - PostgreSQL, MySQL, SQLite, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Snowflake, Apache Cassandra, libSQL, Prometheus, Apache Kafka, MQTT, RabbitMQ, etcd, Neo4j, Milvus, Qdrant, InfluxDB, InfluxDB 3, Oxia, Databend, S3-compatible object storage, Kubernetes and OPC UA
 type: application
 version: 0.1.90
 appVersion: "0.18.3"
@@ -93,6 +93,9 @@ keywords:
   # One keyword, like databend above: `bigquery` is the type-id and the word an evaluator looking for a
   # BigQuery client types.
   - bigquery
+  # One keyword, like bigquery above: `snowflake` is the type-id and the word an evaluator looking for a
+  # Snowflake client types.
+  - snowflake
   # One keyword, like kubernetes above: `mqtt` is the type-id and the protocol an evaluator looking
   # for a broker browser types; no product name to catch, because every broker speaks the same standard.
   - mqtt
@@ -260,8 +263,8 @@ annotations:
   # README; no template, value or default moves.
   # False: 0.1.89 changes chart metadata only, naming RabbitMQ in the description, the keywords and the
   # README; no template, value or default moves.
-  # False: 0.1.90 changes chart metadata only, naming OPC UA in the description, the keywords and the
-  # README; no template, value or default moves.
+  # False: 0.1.90 changes chart metadata only, naming Snowflake and OPC UA in the description, the keywords
+  # and the README; no template, value or default moves.
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: libredb-studio
@@ -277,6 +280,7 @@ annotations:
     - name: Source
       url: https://github.com/libredb/libredb-studio
   artifacthub.io/changes: |
+    - "Name Snowflake, the SQL warehouse read over its SQL API v2, in the description and the keywords"
     - "Name OPC UA, the industrial address space read over opc.tcp, in the description and the keywords"
 dependencies:
   - name: postgresql

@@ -637,6 +637,12 @@ services:
   # ---------------------------------------------------------------------------------------
 
   # ---------------------------------------------------------------------------------------
+  # Snowflake has no service here: it is managed-only, and no emulator speaks the SQL API v2
+  # with real authentication. Its tests replay documented answers through an injected
+  # transport; docs/providers/snowflake.md says how a capture on a live account replaces them.
+  # ---------------------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------------------
   # Trino (issue #424, Phase 2). One container is the whole cluster: the coordinator
   # runs the worker in-process by default, which is enough to answer every statement the
   # provider sends. Nothing else is needed to exercise it.

@@ -123,8 +123,8 @@ export default function Studio() {
   // After the metadata, because the declaration decides whether a health check may be sent at all.
   const connectionPulse = useConnectionPulse(conn.activeConnection, metadata);
   // A connection the page opened by itself reads nothing while every request to it can resume billed compute, until
-  // the person uses it (CL-CORE-2): the manager holds the inventory, and the tree is held here, with the declaration
-  // that decides when the tree is drawn at all, so it is held before its first read.
+  // the person uses it (CL-CORE-2): the manager holds the inventory, and the tree and a restored Source tab are held
+  // here, with the declaration that decides when the tree is drawn at all, so each is held before its first read.
   const billedComputeHold = conn.activeAwaitsUse && metadata?.capabilities.resumesBilledCompute === true;
   const { favoriteIds, toggleFavorite } = useFavoriteConnections(storageReady);
   const { order: connectionOrder, setOrder: setConnectionOrder } = useConnectionOrder(storageReady);
@@ -1555,6 +1555,8 @@ export default function Studio() {
                           <div className="flex-1 relative min-h-0">
                             <ObjectSourceView
                               connection={conn.activeConnection}
+                              readHeld={billedComputeHold}
+                              onUse={conn.markActiveUsed}
                               path={sourceTab.path}
                               kind={sourceTab.kind}
                               /*

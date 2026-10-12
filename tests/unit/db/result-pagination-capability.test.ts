@@ -95,6 +95,8 @@ const EXPECTED: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   // `LIMIT n OFFSET m` is native, and it inherits `SQLBaseProvider.prepareQuery` (design 2.4).
   databend: true,
   bigquery: true,
+  // Off by decision, not by its prepareQuery: see DECLINED below.
+  snowflake: false,
   // One AWS CLI subset command per run; the console pages with --starting-token, never with LIMIT and OFFSET.
   s3: false,
   // The list form of a single-type get, through the provider's own paging line (console/paging.ts).
@@ -112,6 +114,15 @@ const EXPECTED: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
 });
 
 const TYPES = Object.keys(EXPECTED) as DatabaseType[];
+
+/**
+ * The engines whose `prepareQuery` would page, and which declare `false` all the same, each with its reason. The
+ * flag is the only thing that keeps the control away from them, so the census pins both halves: the offset is
+ * applied, and the declaration is still false.
+ */
+const DECLINED: Readonly<Partial<Record<DatabaseType, string>>> = Object.freeze({
+  snowflake: "a page is a full warehouse re-execution, and pages without ORDER BY can repeat or drop rows",
+});
 
 /**
  * The path a tree click hands `generateTableQuery`, per type-id where it differs from the
@@ -229,21 +240,37 @@ describe("supportsResultPagination (#816)", () => {
     expect(pageOne.prepared.query).not.toBe(generated);
   });
 
-  test.each(TYPES.filter((type) => !EXPECTED[type]))("%s cannot be asked for page two", async (type) => {
-    const provider = await createDatabaseProvider(CENSUS_CONNECTION[type]);
-    const pageTwo = prepare(provider, PAGE_SIZE);
+  test.each(Object.keys(DECLINED) as DatabaseType[])(
+    "%s could page, and declares false for its own reason",
+    async (type) => {
+      const provider = await createDatabaseProvider(CENSUS_CONNECTION[type]);
+      expect(EXPECTED[type]).toBe(false);
+      expect(DECLINED[type]?.length).toBeGreaterThan(0);
+      const pageTwo = prepare(provider, PAGE_SIZE);
+      if (pageTwo.threw) throw pageTwo.error;
+      expect(pageTwo.prepared.wasLimited).toBe(true);
+      expect(pageTwo.prepared.offset).toBe(PAGE_SIZE);
+    },
+  );
 
-    if (pageTwo.threw) {
-      // Cassandra and Elasticsearch: a refusal is the strongest answer, and the flag is
-      // false so the control that would provoke it is never rendered.
-      expect(pageTwo.error).toBeInstanceOf(Error);
-      return;
-    }
+  test.each(TYPES.filter((type) => !EXPECTED[type] && DECLINED[type] === undefined))(
+    "%s cannot be asked for page two",
+    async (type) => {
+      const provider = await createDatabaseProvider(CENSUS_CONNECTION[type]);
+      const pageTwo = prepare(provider, PAGE_SIZE);
 
-    // MongoDB, Redis, LibreDB, Prometheus, Kafka, etcd and Neo4j: no refusal, so the only thing that keeps criterion 3 is the
-    // flag. Pin what they really do, so a provider that starts applying the offset is a
-    // failure here rather than a flag left false for an engine that outgrew it.
-    expect(pageTwo.prepared.wasLimited).toBe(false);
-    expect(pageTwo.prepared.query).toBe(STATEMENT);
-  });
+      if (pageTwo.threw) {
+        // Cassandra and Elasticsearch: a refusal is the strongest answer, and the flag is
+        // false so the control that would provoke it is never rendered.
+        expect(pageTwo.error).toBeInstanceOf(Error);
+        return;
+      }
+
+      // MongoDB, Redis, LibreDB, Prometheus, Kafka, etcd and Neo4j: no refusal, so the only thing that keeps criterion 3 is the
+      // flag. Pin what they really do, so a provider that starts applying the offset is a
+      // failure here rather than a flag left false for an engine that outgrew it.
+      expect(pageTwo.prepared.wasLimited).toBe(false);
+      expect(pageTwo.prepared.query).toBe(STATEMENT);
+    },
+  );
 });

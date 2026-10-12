@@ -76,6 +76,7 @@ const SeedDatabaseType = z.enum([
   "oxia",
   "databend",
   "bigquery",
+  "snowflake",
   "s3",
   "kubernetes",
   "mqtt",
@@ -185,12 +186,26 @@ export const SeedConnectionSchema = z
     // Oxia only (O6): an address list the provider parses and refuses entry by entry; resolvable as `host` is
     // (`RESOLVABLE_FIELDS`).
     dataServers: z.string().optional(),
-    // Databend only (design 6.1): the warehouse every statement runs on, a compute name rather than a credential.
-    // Declared for the reason skipObjectScan is: zod strips an undeclared key silently, and a seeded Databend Cloud
-    // connection would lose the warehouse Cloud refuses to run without.
+    // Databend and Snowflake: the warehouse statements run on, a compute name rather than a credential. Declared
+    // for the reason skipObjectScan is: zod strips an undeclared key silently, and a seeded Databend Cloud connection
+    // would lose the warehouse Cloud refuses to run without, a Snowflake one the warehouse it names over the user's
+    // default.
     warehouse: z.string().optional(),
     // BigQuery only: the job location; absent, the provider detects it.
     location: z.string().optional(),
+    // Snowflake only: the sign-in method. A string rather than an enum of `keypair` and `pat`, unlike saslMechanism,
+    // because it is resolvable (`RESOLVABLE_FIELDS`) and the file is validated before anything is resolved, so an enum
+    // would refuse a `${ENV}` reference here; the provider refuses any value other than `keypair` and `pat`.
+    authMethod: z.string().optional(),
+    // Snowflake only: the PEM private key's contents and the passphrase of an encrypted key, both secrets and both
+    // resolvable, so a deployment keeps them in its environment or Vault. Declared for the reason skipObjectScan is:
+    // zod strips an undeclared key silently, and a seeded key-pair connection would be refused for a key the file did
+    // name.
+    privateKey: z.string().optional(),
+    privateKeyPassphrase: z.string().optional(),
+    // Snowflake only: the role every statement runs as, which the provider requires. Declared for the reason
+    // skipObjectScan is.
+    role: z.string().optional(),
     // S3-compatible object storage only: the signing region. Declared for the reason skipObjectScan is: zod strips an
     // undeclared key silently, and a seeded connection to a server with a region of its own would be refused for a
     // region the file did name.
@@ -205,7 +220,7 @@ export const SeedConnectionSchema = z
     // strips an undeclared key silently. A string, not a number, as the connection field is; resolvable as `host` is.
     amqpPort: z.string().optional(),
     /*
-     * OPC UA only (#1677): the security mode the connection asks the server for, and the SHA-1
+     * OPC UA only (#1677): the security mode the connection asks the server for, and the SHA-256
      * thumbprint the server's certificate must present.
      *
      * DECLARED BECAUSE THE PIN IS THE PROVIDER'S WHOLE SAFETY PROPERTY AND ZOD WOULD HAVE DROPPED

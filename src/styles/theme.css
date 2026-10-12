@@ -217,6 +217,7 @@
   --studio-hue-fuchsia-alt: #721378;
   --studio-hue-lime: #3c6300;
   --studio-hue-lime-alt: #35530e;
+  --studio-hue-mist: #394447;
   --studio-hue-slate: #1d293d;
 }
 
@@ -345,6 +346,7 @@
   --studio-hue-fuchsia-alt: #f4a8ff;
   --studio-hue-lime: #9ae600;
   --studio-hue-lime-alt: #bbf451;
+  --studio-hue-mist: #9ca8ab;
   --studio-hue-slate: #90a1b9;
 }
 
@@ -456,6 +458,7 @@
   --color-hue-fuchsia-alt: var(--studio-hue-fuchsia-alt);
   --color-hue-lime: var(--studio-hue-lime);
   --color-hue-lime-alt: var(--studio-hue-lime-alt);
+  --color-hue-mist: var(--studio-hue-mist);
   --color-hue-slate: var(--studio-hue-slate);
   --color-hue-teal-solid: var(--studio-hue-teal-solid);
   --color-hue-teal-solid-hover: var(--studio-hue-teal-solid-hover);

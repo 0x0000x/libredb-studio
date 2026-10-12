@@ -377,6 +377,10 @@ Nor does Studio open it by itself: the connection Studio makes active at sign-in
 
 > Studio opened this connection without reading it, because any request to it can resume compute that is billed while it runs. The editor is ready to use.
 
+A Source tab restored on that connection reads nothing either until the person presses Read definition or uses the connection, and says:
+
+> Studio restored this tab without reading the definition, because any request to this connection can resume compute that is billed while it runs.
+
 A host under `databend.com`, `databend.cn` or `tidbcloud.com` is Databend Cloud's, and the provider declares `resumesBilledCompute` for it with Warehouse empty too.
 BendSQL and databend-jdbc count the same three domains as Databend Cloud's when they choose their presign mode for uploads, not for billing, and Databend's Cloud guides name the service TiDB Cloud Lake in their data-integration pages; declaring the capability stops the background checks, so a host under `tidbcloud.com` that does not serve Databend loses its pulse and its fleet check, is not read when Studio makes it active by itself, and its monitoring page shows the billed-compute note; nothing else changes.
 The older host form `<tenant>--<warehouse>.gw.<region>.default.databend.com` names a warehouse and reaches it with no `x-databend-warehouse` header (measured on the test tenant, 2026-10-08), so a pulse would resume it and bill it.

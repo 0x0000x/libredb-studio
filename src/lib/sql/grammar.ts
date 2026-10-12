@@ -235,7 +235,23 @@ export interface SqlGrammar {
    * engine refuses the statement, which it refused before the bound was there too.
    */
   readonly trailingLimitClauses: readonly RegExp[];
+  /**
+   * Keyword sequences that ask for a confirmation when they OPERATE a statement, read where the shared
+   * dangerous-keyword set is read: at the operative keyword, after leading comments, labels and a `WITH` clause, and
+   * anywhere in the code of a control-flow block. Words are compared case-insensitively and may be separated by
+   * comments. For a dialect whose own destructive or billed forms are not in the shared set; absent means none.
+   */
+  readonly confirmForms?: readonly (readonly string[])[];
+  /**
+   * Forms that ask for a confirmation wherever they appear in a statement's code, strings and comments skipped: a
+   * word sequence, or the start of an identifier (`{ prefix: "SYSTEM$" }` matches `SYSTEM$CLUSTERING_INFORMATION`).
+   * Absent means none.
+   */
+  readonly confirmCodeForms?: readonly ConfirmCodeForm[];
 }
+
+/** A form `SqlGrammar.confirmCodeForms` looks for: a word sequence, or an identifier prefix. */
+export type ConfirmCodeForm = readonly string[] | { readonly prefix: string };
 
 /**
  * What a call that names no dialect gets.
@@ -746,6 +762,76 @@ const BIGQUERY_GRAMMAR: SqlGrammar = {
 };
 
 /**
+ * Snowflake, every fact read off Snowflake's SQL reference (comments, string and binary literals, dollar-quoted
+ * constants, `SELECT ... FOR UPDATE`) and provisional until the live capture measures it: each fact names what the
+ * capture still has to show.
+ *
+ * Snowflake's only tagged string is the untagged `$$ … $$`, and `$` is a legal identifier character, so `a$b$c` is a
+ * name to Snowflake while the shared span reader opens a `$b$` tagged string there and, finding no closer, reports
+ * the text unterminated. That is the reader's fail-safe refusal, as on Databend's row: the statement loses its bound
+ * and the confirmation gate asks, and nothing written after the run is read as code it is not.
+ */
+const SNOWFLAKE_GRAMMAR: SqlGrammar = {
+  // CODE: the reference lists `--` and `//` as the line-comment forms; `#` opens none. Until the capture: `#` and
+  // `X''` read as code and an ordinary string.
+  hash: "code",
+  // A SUBSCRIPT: `v[0]` and `v['key']` read a semi-structured value, and names are quoted with `"` only.
+  bracket: "subscript",
+  // FLAT: the reference gives no nesting rule for `/* */`. Until the capture: a `/*` inside a comment opens nothing.
+  blockComment: "flat",
+  alternateQuoting: false,
+  // A LINE comment: `//` is the reference's second single-line comment form. Until the capture: `//` and a
+  // backslash string continuation.
+  doubleSlashComment: true,
+  // A backslash escapes inside `'…'` (`'it\'s'`). Until the capture: whether it also escapes inside `"…"`, which the
+  // shared reader treats as it treats a string.
+  backslashAlwaysEscapes: true,
+  // A Scripting block runs through `EXECUTE IMMEDIATE $$ … $$`, which the span reader holds whole.
+  script: DEFAULT_SQL_GRAMMAR.script,
+  // `SELECT ... FOR UPDATE [NOWAIT | WAIT <n>]` ends the statement, after any LIMIT. The wait is a number, so a `)`
+  // after it ends the match.
+  trailingLimitClauses: [/\s+FOR\s+UPDATE(?:\s+NOWAIT|\s+WAIT\s+\d+)?\s*$/i],
+  // The forms that replace, overwrite, unload, delete stage files, run text the gate cannot read, spend credits or
+  // open a path out of the account, none of which the shared set names: every COPY asks, whichever way it moves data,
+  // and so does every CALL and every pipe. `CREATE OR ALTER` drops whatever columns its new definition leaves out.
+  confirmForms: [
+    ["CREATE", "OR", "REPLACE"],
+    ["CREATE", "OR", "ALTER"],
+    ["INSERT", "OVERWRITE"],
+    ["MERGE"],
+    ["COPY"],
+    ["REMOVE"],
+    ["RM"],
+    ["EXECUTE", "IMMEDIATE"],
+    ["EXECUTE", "TASK"],
+    ["EXECUTE", "ALERT"],
+    ["EXECUTE", "NOTEBOOK"],
+    ["EXECUTE", "JOB", "SERVICE"],
+    ["EXECUTE", "DBT", "PROJECT"],
+    ["CALL"],
+    ["CREATE", "WAREHOUSE"],
+    ["CREATE", "TASK"],
+    ["CREATE", "USER"],
+    ["CREATE", "ROLE"],
+    ["CREATE", "NETWORK", "POLICY"],
+    ["CREATE", "COMPUTE", "POOL"],
+    ["CREATE", "SERVICE"],
+    ["CREATE", "DYNAMIC", "TABLE"],
+    ["CREATE", "TRANSIENT", "DYNAMIC", "TABLE"],
+    ["CREATE", "ALERT"],
+    ["CREATE", "MATERIALIZED", "VIEW"],
+    ["CREATE", "SECURE", "MATERIALIZED", "VIEW"],
+    ["CREATE", "PIPE"],
+    ["CREATE", "EXTERNAL", "ACCESS", "INTEGRATION"],
+    ["CREATE", "API", "INTEGRATION"],
+    ["CREATE", "NETWORK", "RULE"],
+    ["CREATE", "REPLICATION", "GROUP"],
+  ],
+  // An anonymous procedure (`WITH p AS PROCEDURE … CALL p()`) and any `SYSTEM$` function, wherever they are written.
+  confirmCodeForms: [["AS", "PROCEDURE"], { prefix: "SYSTEM$" }],
+};
+
+/**
  * The established readings, one row per fact per dialect.
  *
  * A dialect absent from this table is at the compatibility default because its
@@ -905,6 +991,7 @@ const SQL_GRAMMARS: Partial<Record<DatabaseType, SqlGrammar>> = {
   influxdb3: DATAFUSION_GRAMMAR,
   databend: DATABEND_GRAMMAR,
   bigquery: BIGQUERY_GRAMMAR,
+  snowflake: SNOWFLAKE_GRAMMAR,
 };
 
 /**

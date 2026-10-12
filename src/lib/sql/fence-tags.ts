@@ -114,6 +114,9 @@ const ENGINE_FENCE_TAGS: Readonly<Record<DatabaseType, true>> = Object.freeze({
   // names no engine, and `mysql` names the MySQL-wire driver Databend no longer connects through.
   databend: true,
   bigquery: true,
+  // A ```snowflake block holds one statement in Snowflake's SQL, sent as it is through the SQL API. No alias:
+  // `snowsql` names Snowflake's command-line client, not a dialect.
+  snowflake: true,
   // A ```s3 block holds one AWS CLI subset read command the editor runs as it is. No alias: `aws` names every AWS
   // service, and `sh`, `bash` and `shell` name no engine.
   s3: true,

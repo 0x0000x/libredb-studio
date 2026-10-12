@@ -1,0 +1,1316 @@
+{
+  "scenario": "every-type",
+  "connection": {
+    "user": "studio_svc",
+    "authMethod": "keypair",
+    "role": "STUDIO_RW",
+    "warehouse": "STUDIO_PROBE_WH",
+    "database": "STUDIO_DEMO",
+    "schema": "PROBE"
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000219",
+        "headers": {
+          "authorization": "Bearer <token-55>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "SHOW WAREHOUSES LIKE 'STUDIO_PROBE_WH'",
+          "timeout": 30,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:connect",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000220",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000220"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000220",
+        "headers": {
+          "authorization": "Bearer <token-55>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 1,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 1,
+                "uncompressedSize": 283
+              }
+            ],
+            "rowType": [
+              {
+                "name": "name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "state",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "type",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "size",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "min_cluster_count",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "max_cluster_count",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "started_clusters",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "running",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "queued",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "is_default",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "is_current",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "auto_suspend",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "auto_resume",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "available",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "provisioning",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "quiescing",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "other",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "created_on",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 3,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "resumed_on",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 3,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "updated_on",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 3,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "owner",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "comment",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "enable_query_acceleration",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "query_acceleration_max_scale_factor",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "resource_monitor",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "actives",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "pendings",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "failed",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "suspended",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "uuid",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "scaling_policy",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "owner_role_type",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "resource_constraint",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "generation",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "query_throughput_multiplier",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 9,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "max_query_performance_level",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "disabled_reasons",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "tables",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 16777216,
+                "precision": null,
+                "length": 16777216,
+                "type": "text"
+              }
+            ]
+          },
+          "data": [
+            [
+              "STUDIO_PROBE_WH",
+              "STARTED",
+              "STANDARD",
+              "X-Small",
+              "1",
+              "1",
+              "1",
+              "0",
+              "0",
+              "Y",
+              "Y",
+              "60",
+              "true",
+              " 100",
+              "0",
+              "0",
+              "0",
+              "1791830931.704",
+              "1791843338.049",
+              "1791843338.049",
+              "ACCOUNTADMIN",
+              "",
+              "false",
+              "8",
+              "null",
+              "1",
+              "0",
+              "0",
+              "0",
+              "20052644",
+              "STANDARD",
+              "ROLE",
+              "STANDARD_GEN_1",
+              "1",
+              null,
+              null,
+              null,
+              null
+            ]
+          ],
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000220?requestId=00000000-0000-0000-0000-000000000219",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000220",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791843365892
+        },
+        "dropped": [
+          "requestId"
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000221",
+        "headers": {
+          "authorization": "Bearer <token-55>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "SELECT CURRENT_ROLE() AS r, CURRENT_SECONDARY_ROLES() AS s",
+          "timeout": 30,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:role-check",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000222",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000222"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000222",
+        "headers": {
+          "authorization": "Bearer <token-55>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 1,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 1,
+                "uncompressedSize": 50
+              }
+            ],
+            "rowType": [
+              {
+                "name": "R",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 134217728,
+                "scale": null,
+                "nullable": true,
+                "length": 134217728,
+                "type": "text"
+              },
+              {
+                "name": "S",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 134217728,
+                "scale": null,
+                "nullable": true,
+                "length": 134217728,
+                "type": "text"
+              }
+            ]
+          },
+          "data": [
+            [
+              "STUDIO_RW",
+              "{\"roles\":\"\",\"value\":\"ALL\"}"
+            ]
+          ],
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000222?requestId=00000000-0000-0000-0000-000000000221",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000222",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791843366454
+        },
+        "dropped": [
+          "requestId"
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000223",
+        "headers": {
+          "authorization": "Bearer <token-55>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "SELECT * FROM STUDIO_DEMO.PROBE.EVERY_TYPE ORDER BY 1 NULLS LAST",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:editor",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000224",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000224"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000224",
+        "headers": {
+          "authorization": "Bearer <token-55>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 5,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 5,
+                "uncompressedSize": 2302
+              }
+            ],
+            "rowType": [
+              {
+                "name": "ID",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": false,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 38,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "N38",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 38,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "N_SCALED",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": 10,
+                "byteLength": null,
+                "precision": 38,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "I",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": 0,
+                "byteLength": null,
+                "precision": 38,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "F",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "real"
+              },
+              {
+                "name": "DF",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": 38,
+                "length": null,
+                "type": "decfloat"
+              },
+              {
+                "name": "VC",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 400,
+                "precision": null,
+                "length": 100,
+                "type": "text"
+              },
+              {
+                "name": "CH",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 12,
+                "precision": null,
+                "length": 3,
+                "type": "text"
+              },
+              {
+                "name": "BIN",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": 8388608,
+                "precision": null,
+                "length": 8388608,
+                "type": "binary"
+              },
+              {
+                "name": "B",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "boolean"
+              },
+              {
+                "name": "D",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "date"
+              },
+              {
+                "name": "T",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": 9,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "time"
+              },
+              {
+                "name": "TS_NTZ",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": 9,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_ntz"
+              },
+              {
+                "name": "TS_LTZ",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": 9,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "TS_TZ",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": 9,
+                "byteLength": null,
+                "precision": 0,
+                "length": null,
+                "type": "timestamp_tz"
+              },
+              {
+                "name": "V",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "variant"
+              },
+              {
+                "name": "O",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "object"
+              },
+              {
+                "name": "A",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "array"
+              },
+              {
+                "name": "SO",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "object"
+              },
+              {
+                "name": "SA",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "array"
+              },
+              {
+                "name": "M",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "object"
+              },
+              {
+                "name": "GEOG",
+                "extTypeName": "GEOGRAPHY",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "object"
+              },
+              {
+                "name": "GEOM",
+                "extTypeName": "GEOMETRY",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "object"
+              },
+              {
+                "name": "U",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "text"
+              },
+              {
+                "name": "VEC",
+                "database": "STUDIO_DEMO",
+                "schema": "PROBE",
+                "table": "EVERY_TYPE",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "vector"
+              },
+              {
+                "name": "FL",
+                "extTypeName": "FILE",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "nullable": true,
+                "scale": null,
+                "byteLength": null,
+                "precision": null,
+                "length": null,
+                "type": "object"
+              }
+            ]
+          },
+          "data": [
+            [
+              "1",
+              "9007199254740993",
+              "12345.6789012345",
+              "42",
+              "3.1415899999999999",
+              "12345678901234567890.123456789012345678",
+              "hello snowflake",
+              "abc",
+              "CAFEBABE",
+              "true",
+              "18655",
+              "79777.123456789",
+              "1611871777.123456789",
+              "1611871777.123456789",
+              "1611868177.123456789 1500",
+              "{\n  \"id\": 9007199254740993,\n  \"list\": [\n    1,\n    null\n  ],\n  \"nested\": {\n    \"x\": null\n  }\n}",
+              "{\n  \"a\": 1,\n  \"b\": \"two\"\n}",
+              "[\n  1,\n  \"two\",\n  undefined\n]",
+              "{\n  \"city\": \"Ankara\",\n  \"zip\": 6000\n}",
+              "[\n  1,\n  2,\n  3\n]",
+              "{\n  \"k\": 1\n}",
+              "{\n  \"coordinates\": [\n    32.85,\n    39.93\n  ],\n  \"type\": \"Point\"\n}",
+              "{\n  \"coordinates\": [\n    1.000000000000000e+00,\n    2.000000000000000e+00\n  ],\n  \"type\": \"Point\"\n}",
+              "00000000-0000-0000-0000-000000000225",
+              "[1.500000,2.000000,-3.000000]",
+              "{\n  \"CONTENT_TYPE\": \"text/plain\",\n  \"ETAG\": \"b1946ac92492d2347c6235b4d2611184\",\n  \"LAST_MODIFIED\": \"Mon, 12 Oct 2026 19:50:38 GMT\",\n  \"RELATIVE_PATH\": \"hello.txt\",\n  \"SIZE\": 6,\n  \"STAGE\": \"@STUDIO_DEMO.PROBE.FILES\"\n}"
+            ],
+            [
+              "2",
+              "99999999999999999999999999999999999999",
+              "-0.0000000001",
+              "-1",
+              "NaN",
+              "-0.000000000000000000000000000001",
+              "x",
+              "x",
+              "",
+              "false",
+              "-719162",
+              "0.000000000",
+              "-1.500000000",
+              "-1.500000000",
+              "1611891577.123456789 1110",
+              "null",
+              "{\n  \"k\": null\n}",
+              "[]",
+              null,
+              "[]",
+              null,
+              "{\n  \"coordinates\": [\n    [\n      0,\n      0\n    ],\n    [\n      1,\n      1\n    ]\n  ],\n  \"type\": \"LineString\"\n}",
+              "{\n  \"coordinates\": [\n    [\n      [\n        0.000000000000000e+00,\n        0.000000000000000e+00\n      ],\n      [\n        1.000000000000000e+00,\n        0.000000000000000e+00\n      ],\n      [\n        1.000000000000000e+00,\n        1.000000000000000e+00\n      ],\n      [\n        0.000000000000000e+00,\n        0.000000000000000e+00\n      ]\n    ]\n  ],\n  \"type\": \"Polygon\"\n}",
+              null,
+              "[0.000000,-0.500000,10000000000.000000]",
+              null
+            ],
+            [
+              "3",
+              null,
+              null,
+              null,
+              "inf",
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              "4",
+              null,
+              null,
+              null,
+              "-inf",
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            [
+              "5",
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          ],
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000224?requestId=00000000-0000-0000-0000-000000000223",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000224",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791843366986
+        },
+        "dropped": [
+          "requestId"
+        ]
+      }
+    }
+  ]
+}

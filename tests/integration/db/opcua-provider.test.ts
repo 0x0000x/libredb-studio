@@ -15,6 +15,7 @@
  * own objects.
  */
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseConfigError, QueryError } from "@/lib/db/errors";
@@ -151,6 +152,23 @@ describe("the capture is the fixture's own answer", () => {
     for (const endpoint of ENDPOINTS.endpoints) {
       expect(endpoint.advertisedUrl).not.toContain("127.0.0.1");
       expect(endpoint.serverCertificateThumbprint).toMatch(/^[0-9a-f]{64}$/);
+    }
+  });
+
+  /*
+   * THE FIXTURE CHECKS ITSELF, because it carries the certificate the thumbprint is of. A shape
+   * check alone (64 hex) would pass against a value somebody typed, and these seven were rewritten
+   * once already when the pin moved from SHA-1 to SHA-256. Read as raw JSON rather than through
+   * `OpcuaEndpoint`, which carries the thumbprint and not the DER it came from.
+   */
+  test("each recorded thumbprint is the SHA-256 of the certificate recorded beside it", () => {
+    const raw = JSON.parse(readFileSync(join(import.meta.dir, "../../fixtures/opcua/endpoints.json"), "utf8")) as {
+      endpoints: { serverCertificate: { "@bytes": string }; serverCertificateThumbprint: string }[];
+    };
+    expect(raw.endpoints.length).toBe(7);
+    for (const endpoint of raw.endpoints) {
+      const der = Buffer.from(endpoint.serverCertificate["@bytes"], "base64");
+      expect(createHash("sha256").update(der).digest("hex")).toBe(endpoint.serverCertificateThumbprint);
     }
   });
 

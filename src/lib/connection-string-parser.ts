@@ -1,4 +1,9 @@
 import { databendCloudHostWarehouse } from "@/lib/db/providers/sql/databend/cloud-host";
+import {
+  isSnowflakeHost,
+  readSnowflakeAccount,
+  SNOWFLAKE_FIELD_SENTENCES,
+} from "@/lib/db/providers/sql/snowflake/account-host";
 import { DatabaseType, type SSLMode } from "@/lib/types";
 
 export interface ParsedConnection {
@@ -79,9 +84,18 @@ export interface ParsedConnection {
    */
   unsupportedServerProtocol?: string;
   /**
-   * Databend's `warehouse=` (design 6.2): the warehouse every statement runs on, for the form's Warehouse box.
+   * The warehouse statements run on, for the form's Warehouse box: Databend's `warehouse=` (design 6.2), which
+   * Databend Cloud requires, or Snowflake's `warehouse=`, optional, the user's default warehouse when absent.
    */
   warehouse?: string;
+  /** Snowflake's `schema=` or SQLAlchemy path schema, for the form's Schema box. */
+  schema?: string;
+  /** Snowflake's `role=`, the role every statement runs as. */
+  role?: string;
+  /** Snowflake's sign-in, from `authenticator=` (`SNOWFLAKE_JWT` or `PROGRAMMATIC_ACCESS_TOKEN`) or a `token=`. */
+  authMethod?: "keypair" | "pat";
+  /** Snowflake's private key passphrase, from `private_key_pwd`, `private_key_file_pwd` or `private_key_passphrase`. */
+  privateKeyPassphrase?: string;
   /**
    * The consent to send the password without TLS that the paste carries, for the form's box of that name. A Databend
    * DSN has no parameter that gives it, so a Databend paste answers `false`, and the form clears a consent an earlier
@@ -100,10 +114,16 @@ export interface ParsedConnection {
    */
   unnamedParameters?: number;
   /**
-   * Why the paste was refused as a whole, in the sentence the form shows. When set, nothing but `type` is, and the
-   * form applies nothing, its type included.
+   * Why the paste was refused as a whole, in the sentence the form shows. When set, nothing but `type` and
+   * `discardPaste` is, and the form applies nothing, its type included unless `discardPaste` is set.
    */
   refusal?: string;
+  /**
+   * Set with a refusal whose text may hold a secret, a Snowflake token or key among them: the form clears the paste
+   * box rather than keep the text there to be corrected, and switches to `type`, filling nothing, so the box the
+   * sentence names is in view.
+   */
+  discardPaste?: true;
   /**
    * A sentence the form shows beside a successful paste, for a parameter that was applied with a meaning the field
    * alone does not show.
@@ -207,6 +227,15 @@ export function databendNotAppliedNotice(names: readonly string[], unnamed = 0):
   return `Not applied: ${listed}. Studio's Databend connection takes host, port, user, password, database, warehouse and TLS; the other fields were filled in.`;
 }
 
+/** The sentences of a Snowflake paste: two refusals, each naming the parameter in this list's own spelling. */
+export const SNOWFLAKE_PASTE_SENTENCES = Object.freeze({
+  inlineKey: (name: string) =>
+    `Studio does not take ${name} from a pasted URL. Paste the key itself into Private key, not inside a URL.`,
+  path: (name: string) =>
+    `Studio does not take ${name} from a pasted URL. Studio reads no file: paste the key's contents into Private key.`,
+  tls: "Studio checks TLS whatever insecureMode or disableOCSPChecks say.",
+});
+
 /**
  * Parse a database connection string into its components, or null when no form below reads it.
  * Schemes, matched case-sensitively on the trimmed input: postgres://, postgresql://, mysql://,
@@ -227,6 +256,9 @@ export function parseConnectionString(input: string): ParsedConnection | null {
     return databendRefusal("flight");
   }
   if (/^databend(\+https?)?:\/\//.test(trimmed)) return parseDatabendDSN(trimmed);
+
+  // Snowflake, ahead of ClickHouse's https:// rule: only an exact Snowflake host or Snowsight is claimed.
+  if (isSnowflakePaste(trimmed)) return parseSnowflakeURL(trimmed);
 
   // MongoDB connection strings
   if (trimmed.startsWith("mongodb://") || trimmed.startsWith("mongodb+srv://")) {
@@ -920,8 +952,208 @@ export function detectConnectionStringType(input: string): DatabaseType | null {
   if (trimmed.startsWith("couchbase://") || trimmed.startsWith("couchbases://")) return "couchbase";
   if (trimmed.startsWith("libsql://")) return "libsql";
   if (/^databend(\+https?)?:\/\//.test(trimmed)) return "databend";
+  if (isSnowflakePaste(input.trim())) return "snowflake";
   if (trimmed.startsWith("clickhouse://") || trimmed.startsWith("http://") || trimmed.startsWith("https://"))
     return "clickhouse";
   if (/^server\s*=/i.test(trimmed)) return "mssql";
   return null;
+}
+
+// ---------------------------------------------------------------------------------------
+// Snowflake
+// ---------------------------------------------------------------------------------------
+
+const SNOWFLAKE_SCHEMES = ["jdbc:snowflake://", "snowflake://"] as const;
+const SNOWSIGHT_HOST = "app.snowflake.com";
+
+/** The host of an `https://` text, lower-cased, or undefined when it is not a URL. */
+function httpsHost(text: string): string | undefined {
+  if (!text.toLowerCase().startsWith("https://")) return undefined;
+  try {
+    return new URL(text).hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether the paste is Snowflake's: a `jdbc:snowflake://` or `snowflake://` URL, an `https://` URL whose host is a
+ * Snowflake host or Snowsight, or a bare Snowflake host. An identifier with no suffix is not claimed: it would claim
+ * any word, so it is typed in Account instead.
+ */
+function isSnowflakePaste(text: string): boolean {
+  if (SNOWFLAKE_SCHEMES.some((scheme) => text.startsWith(scheme))) return true;
+  const host = httpsHost(text);
+  if (host !== undefined) return host === SNOWSIGHT_HOST || isSnowflakeHost(host);
+  return !/[\s/:?#@]/.test(text) && isSnowflakeHost(text);
+}
+
+/** Applied to their own fields, value percent-decoded once. */
+const SNOWFLAKE_FIELD_PARAMETERS: Readonly<Record<string, "user" | "warehouse" | "database" | "schema" | "role">> = {
+  user: "user",
+  warehouse: "warehouse",
+  db: "database",
+  database: "database",
+  schema: "schema",
+  role: "role",
+};
+const SNOWFLAKE_PASSPHRASE_PARAMETERS = new Set(["private_key_pwd", "private_key_file_pwd", "private_key_passphrase"]);
+const SNOWFLAKE_AUTHENTICATORS: Readonly<Record<string, "keypair" | "pat">> = {
+  snowflake_jwt: "keypair",
+  programmatic_access_token: "pat",
+};
+/** An inline key, refused by name; each spelled as the refusal names it. */
+const SNOWFLAKE_INLINE_KEYS = ["private_key", "private_key_raw", "privatekey", "private_key_base64"];
+/** A parameter naming a file or a directory on the machine, refused by name; each spelled as the refusal names it. */
+const SNOWFLAKE_PATH_PARAMETERS = [
+  "private_key_file",
+  "private_key_path",
+  "token_file_path",
+  "client_config_file",
+  "DIAGNOSTICS_ALLOWLIST_FILE",
+  "CRL_RESPONSE_CACHE_DIR",
+  "ocsp_response_cache_filename",
+  "crl_cache_dir",
+];
+const SNOWFLAKE_DIAG_PATH = /^connection_diag_.*_path$/;
+/** Named as not applied, value never applied; each spelled as the notice names it. */
+const SNOWFLAKE_NAMED_PARAMETERS = [
+  "password",
+  "passcode",
+  "oauthClientSecret",
+  "oauth_client_secret",
+  "proxyPassword",
+  "insecureMode",
+  "disableOCSPChecks",
+];
+const SNOWFLAKE_TLS_PARAMETERS = new Set(["insecureMode", "disableOCSPChecks"]);
+
+/** The list entry `name` (lower-cased) matches, in the list's own spelling, or undefined. */
+function listed(list: readonly string[], name: string): string | undefined {
+  return list.find((entry) => entry.toLowerCase() === name);
+}
+
+/** The refusal of a parameter that is refused by name, or undefined. */
+function snowflakeParameterRefusal(name: string): string | undefined {
+  const inline = listed(SNOWFLAKE_INLINE_KEYS, name);
+  if (inline !== undefined) return SNOWFLAKE_PASTE_SENTENCES.inlineKey(inline);
+  const path = listed(SNOWFLAKE_PATH_PARAMETERS, name);
+  if (path !== undefined) return SNOWFLAKE_PASTE_SENTENCES.path(path);
+  if (SNOWFLAKE_DIAG_PATH.test(name)) return SNOWFLAKE_PASTE_SENTENCES.path("connection_diag_*_path");
+  return undefined;
+}
+
+/** `Not applied: <names>, and <k> other parameters.`, with the TLS sentence when a TLS name is among them. */
+function snowflakeNotice(names: readonly string[], others: number): string | undefined {
+  if (names.length === 0 && others === 0) return undefined;
+  const counted = `${others} other parameter${others === 1 ? "" : "s"}`;
+  let text: string;
+  if (names.length === 0) text = `Not applied: ${counted}.`;
+  else text = `Not applied: ${names.join(", ")}${others > 0 ? `, and ${counted}` : ""}.`;
+  return names.some((name) => SNOWFLAKE_TLS_PARAMETERS.has(name)) ? `${text} ${SNOWFLAKE_PASTE_SENTENCES.tls}` : text;
+}
+
+/** The address, userinfo and query of a Snowflake paste, split by hand so no URL parser reinterprets the account. */
+function splitSnowflakePaste(text: string): {
+  account: string;
+  user?: string;
+  hasPassword: boolean;
+  segments: string[];
+  query: string;
+} {
+  const scheme = SNOWFLAKE_SCHEMES.find((prefix) => text.startsWith(prefix));
+  if (scheme === undefined && !text.toLowerCase().startsWith("https://")) {
+    return { account: text, hasPassword: false, segments: [], query: "" };
+  }
+  const rest = text.slice(scheme === undefined ? "https://".length : scheme.length).split("#")[0];
+  const queryAt = rest.indexOf("?");
+  const address = queryAt === -1 ? rest : rest.slice(0, queryAt);
+  const query = queryAt === -1 ? "" : rest.slice(queryAt + 1);
+  const slash = address.indexOf("/");
+  const authority = slash === -1 ? address : address.slice(0, slash);
+  const segments = (slash === -1 ? "" : address.slice(slash + 1))
+    .split("/")
+    .filter((segment) => segment !== "")
+    .map(safeDecodeURIComponent);
+  const at = authority.lastIndexOf("@");
+  const userinfo = at === -1 ? undefined : authority.slice(0, at);
+  const host = (at === -1 ? authority : authority.slice(at + 1)).replace(/:443$/, "");
+  const colon = userinfo?.indexOf(":") ?? -1;
+  const user =
+    userinfo === undefined ? undefined : safeDecodeURIComponent(colon === -1 ? userinfo : userinfo.slice(0, colon));
+  const hasPassword = colon !== -1;
+  if (scheme === undefined) {
+    // An https:// account URL is read by the Account field's own reader; a Snowsight URL carries the account in its
+    // first two segments, and every other segment of either is the page's own.
+    const snowsight = host.toLowerCase() === SNOWSIGHT_HOST;
+    return {
+      account: snowsight ? `https://${host}/${segments.slice(0, 2).join("/")}` : `https://${host}`,
+      user,
+      hasPassword,
+      segments: [],
+      query,
+    };
+  }
+  return { account: safeDecodeURIComponent(host), user, hasPassword, segments, query };
+}
+
+/**
+ * A Snowflake paste decomposed into the form's fields. The text itself is never kept: no `connectionString`,
+ * and no value but an applied one leaves this function. A refused account, an inline key or a path parameter refuses
+ * the whole paste, and nothing but `type` and the sentence is set.
+ */
+function parseSnowflakeURL(text: string): ParsedConnection {
+  const parts = splitSnowflakePaste(text);
+  const reading = readSnowflakeAccount(parts.account);
+  if (!reading.ok) return { type: "snowflake", refusal: reading.refusal, discardPaste: true };
+  // Snowflake serves its API on 443 only, so an account URL naming another port is refused as the Account field does.
+  if (reading.url !== null && reading.url.port !== "") {
+    return { type: "snowflake", refusal: SNOWFLAKE_FIELD_SENTENCES.accountFormat, discardPaste: true };
+  }
+
+  const fields: Partial<Record<"user" | "warehouse" | "database" | "schema" | "role", string>> = {};
+  if (parts.user) fields.user = parts.user;
+  if (parts.segments[0]) fields.database = parts.segments[0];
+  if (parts.segments[1]) fields.schema = parts.segments[1];
+  const named: string[] = parts.hasPassword ? ["the password in the URL"] : [];
+  let others = 0;
+  let authMethod: "keypair" | "pat" | undefined;
+  let token: string | undefined;
+  let privateKeyPassphrase: string | undefined;
+
+  for (const piece of parts.query.split("&")) {
+    if (piece === "") continue;
+    const equals = piece.indexOf("=");
+    const name = safeDecodeURIComponent(equals === -1 ? piece : piece.slice(0, equals)).toLowerCase();
+    const value = equals === -1 ? "" : safeDecodeURIComponent(piece.slice(equals + 1));
+    const refused = snowflakeParameterRefusal(name);
+    if (refused !== undefined) return { type: "snowflake", refusal: refused, discardPaste: true };
+    if (Object.hasOwn(SNOWFLAKE_FIELD_PARAMETERS, name)) {
+      if (value !== "") fields[SNOWFLAKE_FIELD_PARAMETERS[name]] = value;
+    } else if (SNOWFLAKE_PASSPHRASE_PARAMETERS.has(name)) {
+      if (value !== "") privateKeyPassphrase = value;
+    } else if (name === "token") {
+      if (value !== "") token = value;
+    } else if (name === "authenticator") {
+      const method = value.toLowerCase();
+      if (Object.hasOwn(SNOWFLAKE_AUTHENTICATORS, method)) authMethod = SNOWFLAKE_AUTHENTICATORS[method];
+      else if (!named.includes("authenticator")) named.push("authenticator");
+    } else {
+      const spelled = listed(SNOWFLAKE_NAMED_PARAMETERS, name);
+      if (spelled === undefined) others++;
+      else if (!named.includes(spelled)) named.push(spelled);
+    }
+  }
+
+  if (token !== undefined && authMethod === undefined) authMethod = "pat";
+  const notice = snowflakeNotice(named, others);
+  return {
+    type: "snowflake",
+    host: reading.host,
+    ...fields,
+    ...(token !== undefined ? { password: token } : {}),
+    ...(authMethod !== undefined ? { authMethod } : {}),
+    ...(privateKeyPassphrase !== undefined ? { privateKeyPassphrase } : {}),
+    ...(notice !== undefined ? { notice } : {}),
+  };
 }

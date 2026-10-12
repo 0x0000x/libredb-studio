@@ -95,6 +95,8 @@ const EXPECTED_COUNT: Readonly<Record<DatabaseType, string | null>> = Object.fre
   // `backtick-always` quoting (design 5.1) over the catalog and the database, and no declared terminator, so `;` ends it.
   databend: 'SELECT COUNT(*) AS row_count\nFROM `c0`.`c1`.`Order"Items`;',
   bigquery: 'SELECT COUNT(*) AS row_count\nFROM c0.`Order"Items`;',
+  // `double-always` quoting over the database and the schema, and no declared terminator, so `;` ends it.
+  snowflake: 'SELECT COUNT(*) AS row_count\nFROM "c0"."c1"."Order""Items";',
   // One AWS CLI subset read command: the dialect's record withholds the action, and a bucket has no row count.
   s3: null,
   // One kubectl statement: the dialect's record withholds the action, and a Kubernetes kind has no row count.

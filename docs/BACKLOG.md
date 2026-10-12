@@ -28,12 +28,12 @@ None of it is a GitHub issue.
 **Sections**
 
 - [SQL statement reading](#sql-statement-reading) — S2-S9 · 6
-- [Drivers and connections](#drivers-and-connections) — D1-D316, U17 · 216
+- [Drivers and connections](#drivers-and-connections) — D1-D340, U17 · 240
 - [Value interpolation](#value-interpolation) — V1
 - [Row editing](#row-editing) — R1–R3 · 3
-- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U131 · 121
+- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U138 · 128
 - [Dependencies](#dependencies) — P1-P9 · 7
-- [Documentation](#documentation) — DOC3-DOC24 · 21
+- [Documentation](#documentation) — DOC3-DOC25 · 22
 - [Release pipeline](#release-pipeline) — REL1-REL8 · 8
 - [Chart configuration surface](#chart-configuration-surface) — N1 · 1
 - [Security Phase 1 deferrals](#security-phase-1-deferrals) — H1–H14 · 4
@@ -3265,6 +3265,223 @@ Found 2026-10-12 in an external review of the object source statement change; pr
 
 **Done when:** the owner decides whether the package exports the predicates, and either both are exported from `src/exports/` with a test that imports them from the built package entry and the `attw` check passing, or this entry is closed as accepted.
 
+### D317. Snowflake has no OAuth sign-in
+
+A Snowflake connection signs in with a key pair or a programmatic access token only (`docs/providers/snowflake.md` section 2).
+OAuth needs two different designs: a local application for npx and the desktop app, and a custom security integration with a callback route and per-user refresh-token storage for a hosted Studio.
+Either one carries its own security review.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** a Snowflake connection can sign in through OAuth on npx, desktop and a hosted Studio, refresh tokens are stored per user under the same secret rules as a password, the callback route is covered by the security suite, and the provider doc states which flow each build uses.
+
+### D318. Snowflake has no workload identity federation for SERVICE users
+
+A Snowflake SERVICE user on a cloud host could sign in with the host's own cloud identity instead of a stored key or token.
+The provider reads its credential from the connection alone (`src/lib/db/providers/sql/snowflake/auth.ts`), so a server-side identity is not offered.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** an operator-seeded Snowflake connection can sign in with workload identity federation behind an explicit server opt-in, in the shape BigQuery's server credentials take, with tests that a user-created connection cannot reach it.
+
+### D319. Snowflake results have no Load More
+
+`supportsResultPagination` is false for Snowflake, because each page would re-run the statement on the warehouse and pages without ORDER BY can repeat or drop rows.
+Snowflake keeps a statement's result for later reads, by partition or through `RESULT_SCAN('<handle>')`, so a page could be read without running the statement again.
+Doing so needs the handle kept per provider instance and shared between the users of a connection, which no other engine does today.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** a Snowflake result past the first page loads by partition or by `RESULT_SCAN`, measured on a live account, with the handle kept under an owner check, and `supportsResultPagination` is true with its census row and doc section updated.
+
+### D320. The column profiler cannot sample a column
+
+The profile route counts whole columns, so a billed engine either scans every row or opts out, as Snowflake does with `supportsColumnProfiling: false`.
+A per-dialect sampled form (`SAMPLE (n ROWS)` on Snowflake, `TABLESAMPLE` elsewhere) would let such an engine offer a profile that bills a bounded scan.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the shared profile route can build a sampled statement per dialect, the profile says it was sampled and from how many rows, and Snowflake turns the profiler on with a test pinning the sampled text.
+
+### D321. Snowflake's grammar row has no Scripting block member
+
+The Snowflake row in `src/lib/sql/grammar.ts` reads `script.blocks` as `"none"`, so a bare `BEGIN ... END` block splits at its first `;` and Snowflake refuses the fragment; the doc tells the user to wrap it in `EXECUTE IMMEDIATE $$ ... $$`.
+Whether the SQL API takes a bare block, and whether `a$b$c` is an identifier there, are unmeasured; the second decides whether the row needs a `dollarTags: false` opt-out from the shared reader's tagged-string reading.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** both questions are measured on a live account, the grammar row reads a bare block as one unit if the API takes it, a `dollarTags` opt-out exists if `a$b$c` is an identifier, and the grammar tests pin both.
+
+### D322. Snowflake sends a script one statement per request
+
+Every Snowflake request carries `multi_statement_count: "1"`, so a script is split by the editor and sent unit by unit.
+Sending a whole script in one request with a higher count would keep one session context across its statements, but the split is then Snowflake's, and the confirmation gate and the cancel bridge are built on Studio's own split.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** a decision is recorded on whether a script may go as one request, and if so the gate reads every statement first, the cancel covers the request, and the results map back to their statements, with tests.
+
+### D323. Snowflake's `connections.toml` cannot be pasted
+
+The paste box reads Snowflake URLs and JDBC and SQLAlchemy strings, but not a `connections.toml` section, which is how the Snowflake CLI stores a connection.
+Reading it needs a small TOML parser in the browser, so the text never leaves it, with the same refusals for key and path parameters the URL paste has.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** a pasted `connections.toml` section fills the Snowflake fields in the browser, refuses inline keys and file paths by name as the URL paste does, and keeps nothing of the text, with parser tests over sentinel secrets.
+
+### D324. Snowflake has no agent execute mode and no MCP `run_read_query`
+
+The provider declares no `queryReadOnly`, so an Agent-mode run and MCP `run_read_query` are refused for Snowflake before any statement is sent.
+A read-only path needs an enforcement Snowflake itself holds, such as a role that can only read, checked before each run, and a live adversarial probe of what that role can still change.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** Snowflake implements `queryReadOnly` on an engine-side read-only boundary, an adversarial live probe shows writes refused, and the agent and MCP census rows flip with their doc lines.
+
+### D325. Snowflake has no inline row edit
+
+`supportsInlineRowEdit` is false, because one apply would be N + 2 warehouse statements and N separate commits.
+The owner may want it once the warehouse cost of an apply is stated in the provider doc.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the cost of one apply is measured and stated in `docs/providers/snowflake.md`, the owner decides, and if it ships, an apply runs inside one `EXECUTE IMMEDIATE` block with tests of the generated text.
+
+### D326. Snowflake's ER diagram has no foreign keys
+
+`declaresForeignKeys` is false, because no documented source maps a foreign key's columns, so the diagram draws Snowflake tables without relations.
+`SHOW IMPORTED KEYS` lists declared foreign keys, but its answer shape is not yet captured.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** `SHOW IMPORTED KEYS` is captured on a live account, describe reads it into foreign keys, `declaresForeignKeys` is true, and the diagram and provider doc show the relations.
+
+### D327. Snowflake stages cannot be browsed, and streams, tasks and pipes show only their SHOW columns
+
+The tree lists stages, streams, tasks and pipes, but a stage's files are not listed (`LIST @stage`) and the other three open with the columns their `SHOW` returns, nothing more.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** a stage opens to its file listing under the shared row budget, and streams, tasks and pipes have detail views of their own, with tests over captured answers.
+
+### D328. Databend does not declare `hasRunsInFlight()`
+
+The idle sweep spares a cached provider while `hasRunsInFlight()` answers true, and Snowflake declares it from its run registry.
+Databend keeps a run registry too but does not declare the method, so a Databend statement running longer than 30 minutes on an otherwise idle connection is still ended by the sweep's `disconnect()`.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** Databend declares `hasRunsInFlight()` from its run registry in a change of its own, its census row flips, and a test shows the sweep keeps a Databend provider with a run in flight.
+
+### D329. `identifierQuoting` has no upper-fold member
+
+Snowflake declares `identifierQuoting: "double-always"`, so every name Studio writes is quoted, which round-trips but makes generated SQL noisier than Snowflake users write it.
+A member that leaves an upper-case bare name unquoted and quotes everything else would match how Snowflake folds identifiers.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** `ProviderCapabilities.identifierQuoting` has an upper-fold member, Snowflake declares it, and the quoting tests cover a lower-case, a mixed-case and an upper-case name.
+
+### D330. The shared limiter misses Snowflake's `FETCH n` and `SELECT DISTINCT TOP n`
+
+The shared limiter appends `LIMIT 500` to a SELECT-shaped statement, but does not read a short `FETCH n` or `SELECT DISTINCT TOP n` as the statement's own bound.
+On Snowflake the provider's 16 MiB and 100,000-row budget still bounds such a result, so the gap costs rows, not memory.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the limiter reads both forms as an existing bound on the Snowflake dialect, with tests that it neither appends a second bound nor misses a larger one.
+
+### D331. The confirmation gate's per-dialect forms exist only for Snowflake
+
+`SqlGrammar.confirmForms` and `confirmCodeForms` let a dialect name the destructive forms the shared keyword set misses, and only Snowflake's row declares them.
+Other engines' replace, merge, call, unload and opaque-text forms still run unconfirmed; D246 covers Databend's, and the rest have no entry.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** every SQL engine's row declares its own confirmation forms, each form is pinned by `isDangerousQuery` for that engine, also behind comments, and each provider doc lists what its gate asks for.
+
+### D332. The seed plaintext warning knows only `password`
+
+`resolveField` in `src/lib/seed/credential-resolver.ts` warns about a plaintext value only when the field is `password`.
+A seed that writes a Snowflake `privateKey` or `privateKeyPassphrase`, or any other secret field, in plain text gets no warning.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the warning is derived from the secret fields of `CONNECTION_FIELDS`, so every secret field written in plain text warns once per connection, with a test over each secret field.
+
+### D333. The connection-string redactor misses several credential names, and `getConnectionInfo` is never called
+
+`redactConnectionString` in `src/lib/db/base-provider.ts` masks a parameter whose name holds `password`, `token`, `sslkey` or `secret`, so `pwd`, `passphrase` and a PEM block written into a parameter pass through.
+`getConnectionInfo`, the only caller of that redactor in the base provider, is declared and called nowhere.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the redactor masks `pwd`, `passphrase` and PEM armour with tests, and `getConnectionInfo` is either used where connection details are shown or removed.
+
+### D334. No census records which fields each engine's connection identity frames
+
+`connectionIdentity` in `src/lib/agent/context-snapshot.ts` and `credentialDigest` in `src/lib/db/provider-cache-key.ts` each frame a hand-kept list of fields, and nothing compares the two lists engine by engine.
+A field one frames and the other does not is a silent difference between what the agent treats as the same connection and what the provider cache does.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** one census test lists, per engine, the fields each function frames and fails when a connection field is added without a decision in both.
+
+### D335. A token that names its own principal can hide that principal from the connection identity
+
+On engines whose password field carries a token, the token decides who the connection signs in as, while the identity is built from `user` and the other public fields.
+Two connections with the same public fields and tokens of different principals then share one identity.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** each engine whose secret names its principal frames a digest of that principal (or the secret) in its identity, with a test per engine that two principals give two identities.
+
+### D336. BigQuery has no seam guard
+
+Most HTTP providers have a `seam-guard.test.ts` that parses every source of the provider's directory and fails when a module imports another provider's code, opens a socket outside its transport, or imports outside a declared set; BigQuery's tests (`tests/unit/db/bigquery/`) have none.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** `tests/unit/db/bigquery/seam-guard.test.ts` holds the same layered rules as Databend's guard, each proven against the real sources and against a planted violation.
+
+### D337. BigQuery's `location` is not part of the connection identity
+
+`credentialDigest` in `src/lib/db/provider-cache-key.ts` frames BigQuery's `location`, so a moved location gets a new provider, while `connectionIdentity` in `src/lib/agent/context-snapshot.ts` does not frame it.
+A plan held under one location is therefore still matched after the location changes; adding the field moves every existing BigQuery identity, which is why it is a decision and not a fix.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the decision is recorded, and if `location` joins `connectionIdentity`, the identity tests pin it and the release note says existing BigQuery plans are re-grounded.
+
+### D338. BigQuery offers the column profiler, and each profile bills scanned bytes
+
+The profiler opt-out (`supportsColumnProfiling: false`) exists and Snowflake takes it; BigQuery does not, so each profile click runs up to 20 full-column statements that bill the bytes they scan and cannot be cancelled.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** BigQuery declares the opt-out, or a sampled profile replaces the full scans, with its census row and doc section updated.
+
+### D339. The idle sweep can hand out a provider it is closing
+
+The idle sweep that `startIdleSweep` in `src/lib/db/factory.ts` runs awaits `entry.provider.disconnect()` and only then calls `providerCache.delete(key)`.
+A request that reaches `getOrCreateProvider` in between is handed the closing provider whenever its `isConnected()` still answers true, so its statement can start on a connection that is being closed.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the entry leaves the cache before its `disconnect()` starts, or the cache hit refuses an entry being closed, with a test that a request arriving during the close gets a fresh provider.
+
+### D340. A listing cannot say it was cut, so the Snowflake tree truncates in silence
+
+`listObjects` in the provider contract (`src/lib/db/types.ts`) answers a bare `DatabaseObject[]`, so it has no channel to say a listing stopped at a cap.
+Snowflake's `listObjects` (`src/lib/db/providers/sql/snowflake/introspect.ts`) reads a pageable kind up to `SNOWFLAKE_TREE_PAGE_LIMIT` pages of `SNOWFLAKE_SHOW_PAGE_ROWS`, 50,000 rows, and any other kind in one `SHOW` that Snowflake caps at 10,000 rows, then answers what it read with the stop reason dropped.
+The object inventory carries the two cap sentences (`treeCap` and `silentCap` in `SNOWFLAKE_INTROSPECT_SENTENCES`), so the agent and the inventory route are told, while the tree shows the first 50,000 or 10,000 objects of a kind as if that were all of them.
+The provider doc's section 7 states the gap.
+
+Found 2026-10-12 while building the Snowflake provider.
+
+**Done when:** a listing can carry a truncation field (a cap reached, with its sentence), Snowflake's `listObjects` fills it from its stop reason, the tree renders the sentence under the cut folder, and the provider doc's tree section says the tree names the cut, with tests on the provider answer and the rendered folder.
+
 ## Value interpolation
 
 ### V1. Query history records the placeholders, not the values that were bound
@@ -5032,6 +5249,65 @@ The waits stand in for a walk settling, which has no single observable the spec 
 
 **Done when:** every fixed wait in that spec is replaced by a wait on an observable condition, or the panel exposes a settled marker the spec can await.
 
+### U132. Studio has no shared result cursor for paging
+
+Each engine that offers Load More pages its own way, and an engine whose server keeps a result, such as Snowflake, has no contract to page it by.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** a provider can return an opaque cursor with a result, the routes and the grid page by it under an owner check, and one engine uses it end to end, with tests.
+
+### U133. The connection dialog shows no key fingerprint before Test
+
+A Snowflake key's fingerprint reaches the user only inside the key-pair refusal, so a user cannot check which key is loaded before a request is sent.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** a provider can declare a pre-request panel on `DatabaseUIConfig`, the dialog shows the key's SHA-256 fingerprint and registration name as soon as the key reads, and the component test covers it.
+
+### U134. `ConnectionModalProps.onTestConnection` does not declare what the form reads
+
+The exported `ConnectionModal` types its `onTestConnection` result as `success`, `latency`, `error` and `fixStatement`, while the form hook also reads `degraded`, `message` and `warnings` from it (`src/hooks/use-connection-form.ts`).
+An embedding host that returns Snowflake's cautions has to step outside the declared type to do it.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the exported result type declares every field the hook reads, the type test pins it, and the embedding docs show an adapter returning warnings.
+
+### U135. `WorkspaceProps.onTestConnection` is declared and never read
+
+`WorkspaceProps` in `src/workspace/types.ts` declares `onTestConnection`, and `StudioWorkspace` never calls it, so a host that supplies it gets no effect.
+Its fixed field list also carries none of the newer connection fields, Snowflake's among them.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the prop is either wired to the workspace's connection dialog with the full connection shape, or removed, with the package type test updated.
+
+### U136. Plan mode's walk enumerates containers without regard to scope
+
+Plan mode grounds through the provider walk scoped to the session-default container, and a connection with no default walks the first container only, inside the walk's 10 s timer (`src/lib/agent/tools.ts`).
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the walk can enumerate the containers a run's objective names, within the same timer, with tests on an engine with several databases.
+
+### U137. Snowflake SQL has no editor language of its own
+
+The editor highlights Snowflake statements as generic SQL, so `//` comments, backslash escapes in strings and `$$` bodies are coloured as if they were code.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** a Snowflake Monarch language reads `//`, `\'` and `$$` as the grammar row does, is registered for the `snowflake` type, and the editor tests cover each form.
+
+### U138. A result cut inside a script gets no limited badge
+
+The multi-query route in `src/app/api/db/multi-query/route.ts` builds a script's main result from the last result with rows, carrying its warnings and column types but no `pagination`.
+So a result the provider cut inside a script gets neither the grid's limited badge nor the export menu's cut sentence, only the provider's own warning.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the multi-query route carries the main result's `pagination`, and the route and component tests show the badge and the export wording over a cut result inside a script.
+
 ## Dependencies
 
 ### P1. The desktop shell's `glib` advisory has no reachable fix while Tauri v2 targets GTK 3
@@ -5475,6 +5751,15 @@ Found 2026-10-12 while designing the RabbitMQ provider.
 Found 2026-10-12 while designing the RabbitMQ provider.
 
 **Done when:** both texts name the eight translations and the four invariants, with the guide's list read from the script's `LOCALIZED` array by a test.
+
+### DOC25. docs/providers/bigquery.md says a dropped connection cancels the job
+
+Section 5.1 says the provider sends `jobs.cancel` when the call fails or is aborted, "a dropped connection" among the causes.
+`BigQueryProvider.query` takes no query id or caller signal and the provider has no `cancelQuery`, so a closed tab or a dropped request does not reach it; only the deadline does.
+
+Found 2026-10-12 while designing the Snowflake provider.
+
+**Done when:** the sentence names only what aborts the call today, or BigQuery gains `cancelQuery` and the route's abort reaches it, with the doc and a test saying which.
 
 ## Release pipeline
 
@@ -5960,7 +6245,7 @@ Nor was the pin defeatable: defeating a pin of a certificate that already exists
 The thing actually worth fixing that the audit turned up is U130, which is about which certificate the pin is compared against rather than about the hash.
 
 The ALGORITHM was weak all the same, and nothing had shipped with a SHA-1 pin, so there was no compatibility to keep.
-The thumbprint is SHA-256 now, 64 lowercase hex, which is what `openssl x509 -fingerprint -sha256` prints and what current openssl prints by default.
+The thumbprint is SHA-256 now, 64 lowercase hex, which is what `openssl x509 -fingerprint -sha256` prints. The digest has to be named: measured on OpenSSL 3.6.3, `-fingerprint` with no digest still prints the SHA-1 one.
 Measured against the running fixture on 2026-10-13: the same certificate is `451da1b4...` under SHA-1 and `b9432ed1...` under SHA-256, and the recorded endpoints fixture was re-derived from the DER it already carries rather than retyped.
 One thing this does NOT buy, and a reader should not believe it does: `node-opcua-pki` keys its own trust list on a SHA-1 fingerprint with no comparison of the stored bytes, so the library's trust decision is still SHA-1 whatever this provider writes.
 

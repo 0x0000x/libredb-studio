@@ -31,6 +31,7 @@ import type { DatabaseType } from "@/lib/types";
 const SHIPPED: Readonly<Record<DatabaseType, true>> = Object.freeze({
   postgres: true,
   bigquery: true,
+  snowflake: true,
   mysql: true,
   sqlite: true,
   // libSQL (#424 Phase 5): its own provider, doc and integration test. A separate
@@ -153,6 +154,7 @@ export const SHIPPED_DATABASE_TYPES: readonly DatabaseType[] = Object.freeze(Obj
 const EXTERNAL: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   postgres: true,
   bigquery: true,
+  snowflake: true,
   mysql: true,
   sqlite: true,
   libsql: true,
@@ -244,6 +246,7 @@ export function isExternalDatabaseType(type: DatabaseType): boolean {
 export const READ_ONLY_ENFORCED: Record<DatabaseType, boolean> = Object.freeze({
   postgres: false,
   bigquery: false,
+  snowflake: false,
   mysql: false,
   sqlite: false,
   libsql: false,
@@ -330,6 +333,7 @@ export const READ_ONLY_ENFORCED: Record<DatabaseType, boolean> = Object.freeze({
 export const READS_FILE_ACCESS_POSTURE: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   postgres: false,
   bigquery: false,
+  snowflake: false,
   mysql: false,
   sqlite: true,
   libsql: false,
@@ -375,12 +379,14 @@ export const READS_FILE_ACCESS_POSTURE: Readonly<Record<DatabaseType, boolean>> 
  *
  * The etcd provider (#1089) is the engine this record exists for: MCP is outside its first version, so
  * its entry answers false, and that entry lands with the provider's registration, which the compiler
- * forces. etcd, Oxia, S3 and Kubernetes answer false; every other engine answers true. An exhaustive Record for the reason
- * `EXTERNAL` gives, so a new type-id cannot join without someone answering, and frozen like the records above it.
+ * forces. Each entry that answers false carries its reason beside it, so the record below is the list; every
+ * other engine answers true. An exhaustive Record for the reason `EXTERNAL` gives, so a new type-id cannot join
+ * without someone answering, and frozen like the records above it.
  */
 export const MCP_EXPOSABLE: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   postgres: true,
   bigquery: true,
+  snowflake: true,
   mysql: true,
   sqlite: true,
   libsql: true,
@@ -399,8 +405,8 @@ export const MCP_EXPOSABLE: Readonly<Record<DatabaseType, boolean>> = Object.fre
   redis: true,
   prometheus: true,
   kafka: true,
-  // One of the engines MCP is not offered for (#1089 E12; Oxia, S3 and Kubernetes are the others): the provider implements no
-  // read-only query path, and a seed that sets `mcp: true` on an etcd connection is refused when the seed file loads.
+  // The first engine MCP is not offered for (#1089 E12): the provider implements no read-only query path, and a seed
+  // that sets `mcp: true` on an etcd connection is refused when the seed file loads.
   etcd: false,
   // Offered for the two metadata tools, `list_connections` and `inspect_schema` (Neo4j spec 6.4).
   // `run_read_query` does not serve it, because the provider implements no `queryReadOnly`.
@@ -457,6 +463,7 @@ export const MCP_EXPOSABLE: Readonly<Record<DatabaseType, boolean>> = Object.fre
 export const CONNECTION_FORM_URI_MODE: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   postgres: false,
   bigquery: false,
+  snowflake: false,
   mysql: false,
   sqlite: false,
   libsql: true,
@@ -508,6 +515,7 @@ export const CONNECTION_FORM_URI_MODE: Readonly<Record<DatabaseType, boolean>> =
 export const CONNECTION_STRING_ACCEPTED: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   postgres: true,
   bigquery: false,
+  snowflake: false,
   mysql: true,
   // The provider's supportsConnectionString flag is false, yet it opens this field as the database file path:
   // sqlite.ts getDatabasePath, docs/providers/sqlite.md.

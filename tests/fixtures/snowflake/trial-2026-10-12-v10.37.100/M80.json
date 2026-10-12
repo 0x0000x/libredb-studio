@@ -1,0 +1,320 @@
+{
+  "item": "M80",
+  "step": 5,
+  "asks": "What does SHOW IMPORTED KEYS answer, for a later foreign-key reading?",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000141",
+        "headers": {
+          "authorization": "Bearer <token-44>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "SHOW IMPORTED KEYS IN SCHEMA \"STUDIO_DEMO\".\"PROBE\"",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RO",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000142",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000142"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000142",
+        "headers": {
+          "authorization": "Bearer <token-44>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 0,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 0,
+                "uncompressedSize": 0
+              }
+            ],
+            "rowType": [
+              {
+                "name": "created_on",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": 0,
+                "byteLength": null,
+                "scale": 3,
+                "nullable": true,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "pk_database_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "pk_schema_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "pk_table_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "pk_column_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "fk_database_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "fk_schema_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "fk_table_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "fk_column_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "key_sequence",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": 9,
+                "byteLength": null,
+                "scale": 0,
+                "nullable": true,
+                "length": null,
+                "type": "fixed"
+              },
+              {
+                "name": "update_rule",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "delete_rule",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "fk_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "pk_name",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "deferrability",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "rely",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "comment",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              }
+            ]
+          },
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000142?requestId=00000000-0000-0000-0000-000000000141",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000142",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791843344257
+        },
+        "dropped": [
+          "requestId"
+        ],
+        "rows": {
+          "wireBytes": 5359,
+          "decodedBytes": 5359,
+          "rowCount": 0,
+          "firstRow": null,
+          "lastRow": null
+        }
+      }
+    }
+  ]
+}

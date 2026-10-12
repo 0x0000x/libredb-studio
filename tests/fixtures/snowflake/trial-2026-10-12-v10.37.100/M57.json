@@ -1,0 +1,204 @@
+{
+  "item": "M57",
+  "step": 4,
+  "asks": "Which wire shape do time and timestamp cells take, a pre-1970 fraction included?",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "stateBefore": "SUSPENDED",
+  "stateAfter": "STARTED",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000137",
+        "headers": {
+          "authorization": "Bearer <token-42>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "SELECT TO_TIME('23:01:59.123') AS t, TO_TIMESTAMP_NTZ('2021-03-19 17:06:59.5') AS ntz, TO_TIMESTAMP_LTZ('2021-03-19 17:06:59') AS ltz, TO_TIMESTAMP_TZ('2021-03-19 18:06:59 +01:00') AS tz, TO_TIMESTAMP_NTZ('1969-12-31 23:59:58.5') AS before_epoch",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "warehouse": "STUDIO_PROBE_WH",
+          "role": "STUDIO_RW",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000138",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000138"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000138",
+        "headers": {
+          "authorization": "Bearer <token-42>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000138",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000138"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000138",
+        "headers": {
+          "authorization": "Bearer <token-42>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 1,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 1,
+                "uncompressedSize": 119
+              }
+            ],
+            "rowType": [
+              {
+                "name": "T",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": 0,
+                "byteLength": null,
+                "scale": 9,
+                "nullable": false,
+                "length": null,
+                "type": "time"
+              },
+              {
+                "name": "NTZ",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": 0,
+                "byteLength": null,
+                "scale": 9,
+                "nullable": false,
+                "length": null,
+                "type": "timestamp_ntz"
+              },
+              {
+                "name": "LTZ",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": 0,
+                "byteLength": null,
+                "scale": 9,
+                "nullable": false,
+                "length": null,
+                "type": "timestamp_ltz"
+              },
+              {
+                "name": "TZ",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": 0,
+                "byteLength": null,
+                "scale": 9,
+                "nullable": false,
+                "length": null,
+                "type": "timestamp_tz"
+              },
+              {
+                "name": "BEFORE_EPOCH",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": 0,
+                "byteLength": null,
+                "scale": 9,
+                "nullable": false,
+                "length": null,
+                "type": "timestamp_ntz"
+              }
+            ]
+          },
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000138?requestId=00000000-0000-0000-0000-000000000137",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000138",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791843337763
+        },
+        "dropped": [
+          "requestId"
+        ],
+        "rows": {
+          "wireBytes": 2030,
+          "decodedBytes": 2030,
+          "rowCount": 1,
+          "firstRow": [
+            "82919.123000000",
+            "1616173619.500000000",
+            "1616173619.000000000",
+            "1616173619.000000000 1500",
+            "-1.500000000"
+          ],
+          "lastRow": [
+            "82919.123000000",
+            "1616173619.500000000",
+            "1616173619.000000000",
+            "1616173619.000000000 1500",
+            "-1.500000000"
+          ]
+        }
+      }
+    }
+  ]
+}

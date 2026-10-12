@@ -20,7 +20,7 @@
 
 > 📖 **Full documentation, source, and issues:** <https://github.com/libredb/libredb-studio>
 
-Query **PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Databend, Apache Cassandra, Prometheus, InfluxDB, Apache Kafka, MQTT, RabbitMQ, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage and Kubernetes** from your browser, with AI query assistance, RBAC and OIDC SSO.
+Query **PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Databend, Snowflake, Apache Cassandra, Prometheus, InfluxDB, Apache Kafka, MQTT, RabbitMQ, OPC UA, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage and Kubernetes** from your browser, with AI query assistance, RBAC and OIDC SSO.
 
 ---
 
@@ -109,8 +109,8 @@ Every one of those tags is published on three bases, and the suffix is appended 
 
 ## Supported databases
 
-Thirty-four external engines share one interface.
-The thirty-fifth row is the embedded LibreDB store: it ships inside the image.
+Thirty-five external engines share one interface.
+The thirty-sixth row is the embedded LibreDB store: it ships inside the image.
 
 | Database | Driver | Highlights |
 | :--- | :--- | :--- |
@@ -133,6 +133,7 @@ The thirty-fifth row is the embedded LibreDB store: it ships inside the image.
 | **Trino** | none, HTTP | Full SQL IDE over the client protocol, every configured catalog in one tree, `EXPLAIN (FORMAT JSON)` plans, `system.runtime` monitoring and query cancellation |
 | **Databend** | none, HTTP | SQL IDE over its own query API, self-hosted or a Databend Cloud warehouse; `system.*` monitoring and `KILL QUERY`. No keys, so no inline row edits |
 | **BigQuery** | none, REST | GoogleSQL; EXPLAIN is a dry run |
+| **Snowflake** | none, REST | SQL API v2 |
 | **Apache Cassandra** | `cassandra-driver` (pure JS) | CQL editor over the native protocol, keyspace browser with partition and clustering keys marked, `system_views` monitoring. No row counts or sizes: Cassandra publishes only partition estimates and whole mebibytes, so neither is shown |
 | **Prometheus** | none, HTTP | PromQL editor, metric, rule and target browser |
 | **Apache Kafka** | `@platformatic/kafka` | Topic, group and broker browser, reads by offset or time |
@@ -155,7 +156,7 @@ Firestore, Prometheus, InfluxDB, Apache Kafka, MQTT, RabbitMQ, OPC UA, Oxia, S3-
 
 ### Engines with no provider of their own
 
-Twenty-seven further engines speak the wire protocol of one of the thirty-four drivers above: pick that driver in the connection dialog. Each was measured against a real instance, and how much worked is recorded per engine.
+Twenty-seven further engines speak the wire protocol of one of the thirty-five drivers above: pick that driver in the connection dialog. Each was measured against a real instance, and how much worked is recorded per engine.
 
 | Engine | Connect as | Support |
 | :--- | :--- | :--- |
@@ -173,7 +174,7 @@ Twenty-seven further engines speak the wire protocol of one of the thirty-four d
 | Garnet | `redis` | Full - every Redis surface answers, and the overview names the engine ahead of the compat level, as `Garnet 2.1.5 (Redis 7.4.3)`. Three readings are absences wearing a value: every size shows 0 B, the cache hit ratio shows 100% and max connections reads 0, because Garnet publishes neither `used_memory` nor keyspace counters |
 | FerretDB | `mongodb` | Full - sign in with the backend PostgreSQL credentials |
 | StarRocks | `mysql` | Partial - the editor, object browser, metrics, slow queries and Explain work; the health and session panels do not, because the engine has no `information_schema.PROCESSLIST`. The version reads MySQL 5.1, and row counts, sizes and indexes are empty |
-| Apache Doris | `mysql` | Full - the engine StarRocks was forked from, and the more trustworthy of the two: every surface answers, row counts and sizes are correct, cancellation genuinely cancels, and Explain shows the engine's own plan. A freshly loaded table reads 0 for about a minute until its background statistics land, no index is ever reported, and a foreign key is accepted but invisible and unenforced |
+| Apache Doris | `mysql` | Full - the engine StarRocks forked, and the more trustworthy of the two: every surface answers, counts and sizes are correct, cancel works, and Explain shows the engine's own plan. A freshly loaded table reads 0 for about a minute until its statistics land, no index is ever reported, and a foreign key is accepted but invisible and unenforced |
 | CockroachDB | `postgres` | Partial - editor, metrics, slow queries and sessions work; the object browser and size panels are blank |
 | Apache Cloudberry (incubating) | `postgres` | Partial. Row counts and sizes are correct after `ANALYZE`, but the monitoring dashboard and the table and index statistics all fail on one MPP planner restriction, and a foreign key is read back as though enforced when it is not |
 | OceanBase | `mysql` | Partial - health fails outright because the tenant has no `performance_schema` database at all, every size reads 0 B, and row counts are correct only once `ANALYZE TABLE` has run |
@@ -192,7 +193,7 @@ Details, probed versions and each caveat: [`docs/providers/README.md`](https://g
 - **Professional SQL IDE** - Monaco editor (VS Code engine), schema-aware autocomplete, multi-tab workspace, Visual EXPLAIN.
 - **Interactive ER diagrams** - real FK edges, cardinality, auto-layout (ELK.js), PNG/SVG export.
 - **Schema diff & migration** - compare snapshots/connections and auto-generate migration SQL.
-- **Read-only database agent** - state an objective, and the run drafts SQL, reads the results and composes a report whose claims cite them. Three workflows (investigate / optimize / assess), a visible statement-and-time budget, and writes refused before the database is reached. **Agent mode executes on PostgreSQL, SQLite, DuckDB and SQL Server only** - the four engines with a database-native read-only execution profile; anywhere else a statement-sending run is refused at the start. Plan mode is toolless, runs no statement of yours, and is grounded in your own schema on every engine. Standalone image only. [Guide](https://github.com/libredb/libredb-studio/blob/main/docs/AGENT_GUIDE.md) · [What leaves the machine](https://github.com/libredb/libredb-studio/blob/main/docs/AGENT_DATA_FLOW.md).
+- **Read-only database agent** - state an objective, and the run drafts SQL, reads the results and composes a report whose claims cite them. Three workflows (investigate, optimize, assess), a visible statement-and-time budget, and writes refused before the database is reached. **Agent mode executes on PostgreSQL, SQLite, DuckDB and SQL Server only** - the four engines with a database-native read-only profile; elsewhere a statement-sending run is refused at the start. Plan mode is toolless, runs no statement of yours, and is grounded in your own schema on every engine. Standalone image only. [Guide](https://github.com/libredb/libredb-studio/blob/main/docs/AGENT_GUIDE.md) · [What leaves the machine](https://github.com/libredb/libredb-studio/blob/main/docs/AGENT_DATA_FLOW.md).
 - **Model-backed helpers** - query safety analysis, EXPLAIN-in-plain-English, AI-generated schema docs, data-profile summaries. Gemini / OpenAI / Ollama / custom; with no `LLM_*` variables at all, no AI call is made. A key is required for Gemini and OpenAI only: Ollama and a custom endpoint count as a configured model without one.
 - **Pro data grid** - virtualized millions of rows, inline editing, per-column filters, pivot table, CSV/JSON export.
 - **Data visualization** - 8 chart types with aggregation and saved-chart dashboards.

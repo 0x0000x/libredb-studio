@@ -184,6 +184,8 @@ const DIALECT_TYPES: Partial<Record<DatabaseType, Partial<Record<InferredKind, s
   // pinned image and M08c read them back as `String`, `Float64` and `Binary`, unbounded. The standard `TEXT`,
   // `DOUBLE PRECISION` and `BLOB` were not measured there. `BIGINT`, `BOOLEAN` and `TIMESTAMP` were, as they are.
   databend: { text: "VARCHAR", numeric: "DOUBLE", binary: "BINARY" },
+  // Snowflake's float type is FLOAT and its byte type BINARY; it has no BLOB. Provisional until a replay on an account.
+  snowflake: { numeric: "FLOAT", binary: "BINARY" },
   oracle: {
     text: "VARCHAR2(4000)",
     integer: "NUMBER(19)",
@@ -393,6 +395,9 @@ const NOTHING_STANDS_ALONE: readonly string[] = [];
 
 const STANDS_ALONE: Record<DatabaseType, readonly string[]> = {
   bigquery: NOTHING_STANDS_ALONE,
+  // Not measured: no Snowflake account read a probe column back for this change, so every bare name is re-spelled
+  // portably until one does.
+  snowflake: NOTHING_STANDS_ALONE,
   postgres: [
     "character varying",
     "varchar",
@@ -736,6 +741,8 @@ type BinaryLiteral = "standard-hex" | "zero-x" | "binary-hex" | "pg-bytea" | "he
 
 const BINARY_LITERAL: Record<DatabaseType, BinaryLiteral> = {
   bigquery: "text",
+  // Snowflake reads `X'0102deadbeef'` as a BINARY constant, the standard form; not yet measured on an account.
+  snowflake: "standard-hex",
   postgres: "pg-bytea",
   // Measured on MySQL 26.7.0: `SELECT HEX(X'0102deadbeef')` answers `0102DEADBEEF` and
   // `SELECT LENGTH(X'')` answers 0, so MySQL is here rather than in `zero-x` even
@@ -1137,6 +1144,13 @@ function exportTableName(source: ResultExportSource): string {
   return deriveTableName(source.tabName);
 }
 
+/**
+ * The dialects whose INSERT is written `INSERT INTO t (...) SELECT ...;`. Snowflake's `INSERT ... VALUES` refuses
+ * `PARSE_JSON`, which its semi-structured cells are written with (`typed-literals.ts`), so every Snowflake row takes
+ * the SELECT form. Provisional until a replay on an account confirms it.
+ */
+const INSERT_SELECT_DIALECTS: ReadonlySet<DatabaseType> = new Set<DatabaseType>(["snowflake"]);
+
 /** Build the file for `format`. The caller owns naming it and handing it to the browser. */
 export function buildResultExport(format: ResultExportFormat, source: ResultExportSource): ResultExportFile {
   const { rows, dialect } = source;
@@ -1196,6 +1210,9 @@ export function buildResultExport(format: ResultExportFormat, source: ResultExpo
           if (!(error instanceof UnwritableValue)) throw error;
           return skippedRow(rowIndex, column, error.message, dialect);
         }
+      }
+      if (INSERT_SELECT_DIALECTS.has(dialect as DatabaseType)) {
+        return `INSERT INTO ${tableName} (${quotedColumns.join(", ")}) SELECT ${values.join(", ")};`;
       }
       return `INSERT INTO ${tableName} (${quotedColumns.join(", ")}) VALUES (${values.join(", ")});`;
     });

@@ -480,11 +480,14 @@ export type TypedConfirmationAsk =
  * count. The asymmetry is kept on purpose, because changing either answer would change what a menu offers. A
  * declared dialect with no record, which only a host's own declaration can name, is refused, as it always was.
  *
+ * An engine declaring `supportsColumnProfiling: false` is refused before the language rule, whatever it speaks.
+ *
  * Unknown capabilities are not a permission, for the reason `maintenanceControl` gives:
  * `/api/db/provider-meta` answers with nothing both while it is in flight and when it failed.
  */
 export function offersColumnProfiling(capabilities: ProviderCapabilities | undefined): boolean {
   if (capabilities === undefined) return false;
+  if (capabilities.supportsColumnProfiling === false) return false;
   if (capabilities.queryLanguage === "sql") return true;
   const profilesDialect = dialectSpec(capabilities)?.offersColumnProfiling ?? !declaresDialect(capabilities);
   return capabilities.queryLanguage === "json" && profilesDialect;
@@ -610,6 +613,7 @@ export type ExplainFormat =
   | "duckdb-json"
   | "databend-text"
   | "bigquery-dryrun"
+  | "snowflake-json"
   | "firestore-explain";
 
 /**
@@ -1073,6 +1077,15 @@ export interface ProviderCapabilities {
    * permissive default.
    */
   supportsResultPagination?: boolean;
+  /**
+   * Whether the column profiler may be offered for this SQL engine, read by `offersColumnProfiling`.
+   *
+   * An SQL engine declares false when a profile's full-column scans would bill a warehouse per click and cannot be
+   * cancelled; absent keeps the SQL rule.
+   * Only `false` is accepted, so the field can withhold the profiler and never grant it to an engine the language
+   * rule refuses.
+   */
+  supportsColumnProfiling?: false;
   /**
    * Whether THIS PROVIDER implements the interactive transaction session that
    * `POST /api/db/transaction` drives — `beginTransaction()` / `commitTransaction()`

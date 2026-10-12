@@ -463,6 +463,17 @@ describe("wire-compatibility registry", () => {
     expect(CONNECTION_STRING_ACCEPTED.bigquery).toBe(false);
   });
 
+  test("snowflake ships as an external engine, offered to MCP, with no read-only promise and no relatives", () => {
+    expect(SHIPPED_DATABASE_TYPES).toContain("snowflake");
+    expect(isExternalDatabaseType("snowflake")).toBe(true);
+    expect(compatibleEnginesFor("snowflake")).toEqual([]);
+    expect(READ_ONLY_ENFORCED.snowflake).toBe(false);
+    expect(MCP_EXPOSABLE.snowflake).toBe(true);
+    expect(READS_FILE_ACCESS_POSTURE.snowflake).toBe(false);
+    expect(CONNECTION_FORM_URI_MODE.snowflake).toBe(false);
+    expect(CONNECTION_STRING_ACCEPTED.snowflake).toBe(false);
+  });
+
   test("s3 ships as an external engine that keeps the read-only mode, is not offered to MCP, and has no relatives", () => {
     // S3-compatible object storage the user already runs, reached over the S3 REST API by a client of this repository's
     // own. MinIO, Silo, Garage and RustFS are the servers the s3 driver itself was verified on, not relatives:
@@ -495,9 +506,9 @@ describe("wire-compatibility registry", () => {
     // The one place these numerals live. A new provider moves them here and nowhere else, and the derived
     // assertions around this test say how the counts relate.
     expect([SHIPPED_DATABASE_TYPES.length, EXTERNAL_DATABASE_TYPES.length, WIRE_COMPATIBLE_ENGINES.length]).toEqual([
-      35, 34, 27,
+      36, 35, 27,
     ]);
-    expect(connectableProductCount()).toBe(61);
+    expect(connectableProductCount()).toBe(62);
   });
 
   test("firestore ships as an external engine that keeps the read-only mode, is not offered to MCP and has no relatives", () => {

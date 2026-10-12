@@ -16,9 +16,14 @@ class MockSSHClient extends EventEmitter {
   connectOptions: Record<string, unknown> | null = null;
   forwardOutCalls: Array<{ bindAddr: string; bindPort: number; host: string; port: number }> = [];
   ended = false;
+  /** What the tunnel last passed to `setNoDelay`, or undefined when it never called it. */
+  noDelay: boolean | undefined = undefined;
 
   connect(opts: Record<string, unknown>) {
     this.connectOptions = opts;
+    // ssh2 emits 'connect' once its TCP socket is up, before key exchange
+    // (node_modules/ssh2/lib/client.js, the socket's own 'connect' handler).
+    setTimeout(() => this.emit("connect"), 0);
     // Mirror ssh2's own handshake ordering: the verifier is called with the raw K_S blob
     // during key exchange, and returning false fails the handshake with exactly this
     // error (node_modules/ssh2/lib/protocol/kex.js: "Host denied (verification failed)").
@@ -42,6 +47,11 @@ class MockSSHClient extends EventEmitter {
     // Return a mock duplex stream
     const mockStream = new MockDuplexStream();
     cb(null, mockStream);
+  }
+
+  setNoDelay(noDelay: boolean) {
+    this.noDelay = noDelay;
+    return this;
   }
 
   end() {
@@ -187,6 +197,19 @@ describe("SSH Tunnel", () => {
         password: "secret123",
         hostVerifier: expect.any(Function),
       });
+    });
+
+    test("disables Nagle on the bastion socket once it connects", async () => {
+      // ssh2 1.17.0 never calls setNoDelay on the socket it dials. Under Node that put the
+      // 40 ms delayed-ACK stall on every small query through the tunnel: measured through
+      // Studio's query API against PostgreSQL behind OpenSSH, a SELECT 1 took a median
+      // 46 ms tunnelled against 3 ms direct.
+      const connId = "test-nodelay-" + Date.now();
+      lastConnectionId = connId;
+
+      await createSSHTunnel(connId, BASTION, "db.internal", 5432);
+
+      expect(mockSSHInstance.noDelay).toBe(true);
     });
 
     test("creates tunnel with privateKey auth", async () => {
