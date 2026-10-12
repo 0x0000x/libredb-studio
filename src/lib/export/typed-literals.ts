@@ -153,8 +153,12 @@ const postgresLiteral: TypedWriter = (value, declared) => {
 // SQL Server
 // ---------------------------------------------------------------------------------------
 
-/** The text the provider reads a `datetime` and a `smalldatetime` as (#1452): the engine's own. */
-const MSSQL_DATETIME_TEXT = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,3})?$/;
+/**
+ * The text the provider reads a `datetime` and a `smalldatetime` as (#1452): the engine's own.
+ * The inline grid edit (`use-inline-editing.ts`) binds it with a `T` for the same reason the
+ * export below writes it with one.
+ */
+export const MSSQL_DATETIME_TEXT = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,3})?$/;
 
 /**
  * T-SQL has no boolean literal: `true` parses as a column name (`Msg 207: Invalid column

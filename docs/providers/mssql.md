@@ -460,8 +460,8 @@ throw — it does **not** confirm the cancellation actually took effect. Exposed
   | `SMALLDATETIME` `2026-09-01T10:30:29.999` | `2026-09-01 10:31:00` | `2026-09-01T10:31:00.000Z` | `2026-09-01 10:31:00` |
 
   Unlike `datetime2` and `date`, these two types read `yyyy-mm-dd hh:mi:ss` through the
-  session's DATEFORMAT, which is why the SQL INSERT export writes their text with a `T`
-  ([§5.5](#55-what-the-sql-insert-export-writes-for-a-bit)).
+  session's DATEFORMAT, which is why the SQL INSERT export writes their text, and an inline
+  grid edit binds it, with a `T` ([§5.5](#55-what-the-sql-insert-export-writes-for-a-bit)).
 - **Binary** (`VARBINARY`/`IMAGE`/`rowversion`) comes back as a Node `Buffer` and is **not**
   stringified by the provider, so it reaches the client as the JSON shape a `Buffer` serializes to and
   is rendered as hex there (§7). Every provider answers this way since 2026-08-24, when MySQL and
@@ -516,6 +516,10 @@ Dates need nothing: the ISO text a `Date` becomes (`2024-12-31T23:59:59.997Z`) r
 The one exception is the engine text `datetime` and `smalldatetime` are read as since #1452 ([§5.3](#53-data-type--parameter-handling)): those two types read `yyyy-mm-dd hh:mi:ss` through the session's DATEFORMAT, so the export writes that text with its space as a `T` (`N'2026-10-04T12:34:56.123'`), the ISO 8601 form every DATEFORMAT reads the same.
 Measured 2026-10-08 on SQL Server 2022 CU27 (16.0.4295.3), the same two rows read through the provider, exported and replayed under `SET LANGUAGE us_english` and `british`: written with the space, `2026-10-04 12:34:56.123` came back as `2026-04-10` under `british` and `2026-10-25 23:59:59.997` was refused as out of range; written with the `T`, both came back equal under both languages, as they did under `Deutsch`, `Français` and `Japanese` in a direct `CAST`.
 A `datetime2` and a `date` text are written as they are, since those two read `yyyy-mm-dd` the same under every DATEFORMAT.
+
+The inline grid edit opens its editor on that same text and binds the edit as an nvarchar parameter, which those two types also read through DATEFORMAT, so [`use-inline-editing.ts`](../../src/hooks/use-inline-editing.ts) binds an edit still in that form with its space as a `T` too, by the same `MSSQL_DATETIME_TEXT`. A `datetime2` edit, and text in any other shape, is bound as typed.
+Measured 2026-10-12 on SQL Server 2022 CU27 (16.0.4295.3), the hook's own `UPDATE … SET [dt] = @p1 WHERE [id] = @p2` with `SET LANGUAGE british` in the same call: `2026-10-04 12:34:57.123` was stored as `2026-04-10` and `2026-10-25 23:59:58.997` was refused as out of range, a `smalldatetime` the same, and each of them with the `T` was stored as written.
+This provider's own sessions read `mdy` today whatever the login's default language: tedious opens every connection with `set dateformat mdy` and `set language us_english`, and `query()` runs each statement through `sp_executesql`, so a `SET LANGUAGE` a user runs ends with that statement (measured on the same server with a login whose default language is `british`). The `T` keeps the edit correct without leaning on that driver default.
 
 Measured 2026-10-04 on SQL Server 2025 (17.0.5005.3): a table of `bit`, the five date and time types, `uniqueidentifier`, `decimal(38,10)`, `bigint`, `money`, `varbinary(max)`, `nvarchar(max)`, `float`, `real`, `tinyint` and `xml` exported and replayed with `sqlcmd` into both a `SELECT * INTO copy … WHERE 1 = 0` copy and the exported DDL's own table without an error.
 Two cells read back differently, both lost by the driver before the export sees them: a `datetimeoffset` keeps its instant but not its offset or its digits past the millisecond, and a `decimal` past 15 significant digits arrives as a rounded JS number.
