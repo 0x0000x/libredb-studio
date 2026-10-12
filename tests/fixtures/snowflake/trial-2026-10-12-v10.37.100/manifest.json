@@ -1,0 +1,371 @@
+{
+  "cloud": "AWS",
+  "region": "EU_CENTRAL_2",
+  "currentVersion": "10.37.100",
+  "edition": "Enterprise",
+  "captured": "2026-10-12",
+  "commit": "cce47e3b9ab0a1b5590430312ed6c7e07fb6e379",
+  "uncommitted": [],
+  "results": [
+    {
+      "name": "M25",
+      "ms": 5022,
+      "exchanges": 12
+    },
+    {
+      "name": "M26",
+      "ms": 2421,
+      "exchanges": 2
+    },
+    {
+      "name": "M29-show-columns",
+      "ms": 2424,
+      "exchanges": 2
+    },
+    {
+      "name": "M29-describe",
+      "ms": 2406,
+      "exchanges": 2
+    },
+    {
+      "name": "M29-get-ddl",
+      "ms": 2366,
+      "exchanges": 2
+    },
+    {
+      "name": "M31",
+      "ms": 4134,
+      "exchanges": 3
+    },
+    {
+      "name": "M100",
+      "ms": 2363,
+      "exchanges": 2
+    },
+    {
+      "name": "M101",
+      "ms": 2314,
+      "exchanges": 2
+    },
+    {
+      "name": "M110",
+      "ms": 5050,
+      "exchanges": 12
+    },
+    {
+      "name": "M7",
+      "ms": 643,
+      "exchanges": 2
+    },
+    {
+      "name": "M12",
+      "ms": 960346,
+      "exchanges": 9
+    },
+    {
+      "name": "M8",
+      "ms": 692,
+      "exchanges": 2
+    },
+    {
+      "name": "M97",
+      "ms": 2879,
+      "exchanges": 10
+    },
+    {
+      "name": "M10",
+      "ms": 568,
+      "exchanges": 2
+    },
+    {
+      "name": "M23",
+      "ms": 535,
+      "exchanges": 2
+    },
+    {
+      "name": "M82",
+      "ms": 618,
+      "exchanges": 2
+    },
+    {
+      "name": "M25b",
+      "ms": 1128,
+      "exchanges": 4
+    },
+    {
+      "name": "M105",
+      "ms": 4909,
+      "exchanges": 4
+    },
+    {
+      "name": "M52",
+      "ms": 4042,
+      "exchanges": 5
+    },
+    {
+      "name": "M53",
+      "ms": 2634,
+      "exchanges": 5
+    },
+    {
+      "name": "M58",
+      "ms": 3461,
+      "exchanges": 6
+    },
+    {
+      "name": "M60",
+      "ms": 2161,
+      "exchanges": 4
+    },
+    {
+      "name": "M61",
+      "ms": 1615,
+      "exchanges": 2
+    },
+    {
+      "name": "M62",
+      "ms": 2126,
+      "exchanges": 4
+    },
+    {
+      "name": "M63",
+      "ms": 2352,
+      "exchanges": 4
+    },
+    {
+      "name": "M64",
+      "ms": 1937,
+      "exchanges": 2
+    },
+    {
+      "name": "M15",
+      "ms": 2,
+      "exchanges": 0
+    },
+    {
+      "name": "M18",
+      "ms": 129,
+      "exchanges": 1
+    },
+    {
+      "name": "M24-prime",
+      "ms": 231,
+      "exchanges": 0
+    },
+    {
+      "name": "M33",
+      "ms": 2257,
+      "exchanges": 4
+    },
+    {
+      "name": "M34",
+      "ms": 2182,
+      "exchanges": 4
+    },
+    {
+      "name": "M35",
+      "ms": 2149,
+      "exchanges": 4
+    },
+    {
+      "name": "M36",
+      "ms": 2190,
+      "exchanges": 4
+    },
+    {
+      "name": "M37",
+      "ms": 2703,
+      "exchanges": 6
+    },
+    {
+      "name": "M38",
+      "ms": 2182,
+      "exchanges": 4
+    },
+    {
+      "name": "M41",
+      "ms": 3754,
+      "exchanges": 4
+    },
+    {
+      "name": "M42",
+      "ms": 23032,
+      "exchanges": 13
+    },
+    {
+      "name": "M48",
+      "ms": 1756,
+      "exchanges": 2
+    },
+    {
+      "name": "M44",
+      "ms": 603369,
+      "exchanges": 279
+    },
+    {
+      "name": "M104",
+      "ms": 1768,
+      "exchanges": 2
+    },
+    {
+      "name": "M51",
+      "ms": 2735,
+      "exchanges": 5
+    },
+    {
+      "name": "M57",
+      "ms": 2386,
+      "exchanges": 3
+    },
+    {
+      "name": "M83",
+      "ms": 2337,
+      "exchanges": 3
+    },
+    {
+      "name": "M17",
+      "ms": 2,
+      "exchanges": 0
+    },
+    {
+      "name": "M22",
+      "ms": 2,
+      "exchanges": 0
+    },
+    {
+      "name": "M50",
+      "ms": 1204,
+      "exchanges": 0
+    },
+    {
+      "name": "M55",
+      "ms": 3,
+      "exchanges": 0
+    },
+    {
+      "name": "M70",
+      "ms": 1098,
+      "exchanges": 0
+    },
+    {
+      "name": "M78",
+      "ms": 2,
+      "exchanges": 0
+    },
+    {
+      "name": "M80",
+      "ms": 655,
+      "exchanges": 2
+    },
+    {
+      "name": "M81",
+      "ms": 3,
+      "exchanges": 0
+    },
+    {
+      "name": "M84",
+      "ms": 2,
+      "exchanges": 0
+    },
+    {
+      "name": "M98",
+      "ms": 14,
+      "exchanges": 0
+    },
+    {
+      "name": "connect-keypair",
+      "ms": 1099,
+      "exchanges": 4
+    },
+    {
+      "name": "connect-pat",
+      "ms": 1190,
+      "exchanges": 4
+    },
+    {
+      "name": "connect-no-warehouse",
+      "ms": 1070,
+      "exchanges": 4
+    },
+    {
+      "name": "refusal-390144",
+      "ms": 109,
+      "exchanges": 1
+    },
+    {
+      "name": "refusal-390186",
+      "ms": 141,
+      "exchanges": 1
+    },
+    {
+      "name": "refusal-002003",
+      "ms": 1648,
+      "exchanges": 6
+    },
+    {
+      "name": "refusal-003001",
+      "ms": 1645,
+      "exchanges": 6
+    },
+    {
+      "name": "refusal-422",
+      "ms": 1638,
+      "exchanges": 6
+    },
+    {
+      "name": "tree-show",
+      "ms": 7521,
+      "exchanges": 28
+    },
+    {
+      "name": "describe-columns",
+      "ms": 2658,
+      "exchanges": 10
+    },
+    {
+      "name": "partitions",
+      "ms": 2118,
+      "exchanges": 7
+    },
+    {
+      "name": "every-type",
+      "ms": 1617,
+      "exchanges": 6
+    },
+    {
+      "name": "cancel",
+      "ms": 4550,
+      "exchanges": 7
+    },
+    {
+      "name": "role-check-match",
+      "ms": 1580,
+      "exchanges": 6
+    },
+    {
+      "name": "monitoring-started",
+      "ms": 2849,
+      "exchanges": 9
+    },
+    {
+      "name": "monitoring-suspended",
+      "ms": 1656,
+      "exchanges": 6
+    },
+    {
+      "name": "monitoring-started-without-monitor",
+      "ms": 2179,
+      "exchanges": 8
+    },
+    {
+      "name": "monitoring-suspended-without-monitor",
+      "ms": 1717,
+      "exchanges": 6
+    },
+    {
+      "name": "role-restricted-pat-show",
+      "ms": 104,
+      "exchanges": 1
+    }
+  ]
+}

@@ -47,6 +47,8 @@ function fullConnection(): DatabaseConnection {
     agentPassword: "CANARY-AGENT-PASSWORD",
     apiKeyId: "CANARY-API-KEY-ID",
     apiKeySecret: "CANARY-API-KEY-SECRET",
+    privateKey: "CANARY-SNOWFLAKE-PRIVATE-KEY",
+    privateKeyPassphrase: "CANARY-SNOWFLAKE-PASSPHRASE",
     ssl: {
       mode: "verify-full",
       caCert: "-----BEGIN CERTIFICATE-----CA-----END CERTIFICATE-----",
@@ -77,6 +79,8 @@ const CANARIES = [
   "CANARY-AGENT-PASSWORD",
   "CANARY-API-KEY-ID",
   "CANARY-API-KEY-SECRET",
+  "CANARY-SNOWFLAKE-PRIVATE-KEY",
+  "CANARY-SNOWFLAKE-PASSPHRASE",
 ];
 
 describe("the classification is exhaustive by construction", () => {
@@ -139,8 +143,8 @@ describe("the classification is exhaustive by construction", () => {
         "sshTunnel",
         "type",
         "user",
-        // Databend's warehouse (design 6.1). A compute NAME from the Cloud console's DSN, which picks where a
-        // statement runs and grants nothing, so `public`.
+        // The warehouse of Databend (design 6.1) and Snowflake. A compute NAME, which picks where a statement runs
+        // and grants nothing, so `public`.
         "warehouse",
         // BigQuery's job location: a region name, which grants nothing, so `public`.
         "location",
@@ -151,11 +155,17 @@ describe("the classification is exhaustive by construction", () => {
         "tlsServerName",
         // An AMQP port: an address, as port is, so `public`.
         "amqpPort",
+        // Snowflake's sign-in method and role: which credential is sent and what the statements may do, so `public`.
+        // The PEM key and its passphrase are the credential and are classified as secrets.
+        "authMethod",
+        "privateKey",
+        "privateKeyPassphrase",
+        "role",
       ].sort(),
     );
   });
 
-  test("exactly the nine credential-bearing fields are classified secret", () => {
+  test("exactly the eleven credential-bearing fields are classified secret", () => {
     const secrets = [
       ...Object.keys(CONNECTION_FIELDS).filter((k) => CONNECTION_FIELDS[k as never] === "secret"),
       ...Object.keys(SSL_FIELDS)
@@ -173,6 +183,8 @@ describe("the classification is exhaustive by construction", () => {
         "apiKeySecret",
         "connectionString",
         "password",
+        "privateKey",
+        "privateKeyPassphrase",
         "ssl.clientKey",
         "sshTunnel.passphrase",
         "sshTunnel.password",
@@ -321,8 +333,8 @@ describe("decryptConnections", () => {
     resetStorageEncryptionKey();
     const result = decryptConnections(encrypted);
 
-    // Nine unreadable fields on one record.
-    expect(result.undecryptable).toBe(9);
+    // Eleven unreadable fields on one record.
+    expect(result.undecryptable).toBe(11);
     // The record SURVIVES. Dropping it would be persisted as a deletion by the write-through
     // cache on the next sync, destroying ciphertext a restored key could still have opened.
     expect(result.connections).toHaveLength(1);
@@ -340,7 +352,7 @@ describe("decryptConnections", () => {
     process.env.JWT_SECRET = "a-different-secret-that-cannot-open-it";
     resetStorageEncryptionKey();
 
-    expect(decryptConnections(encrypted).undecryptable).toBe(18);
+    expect(decryptConnections(encrypted).undecryptable).toBe(22);
   });
 
   test("an empty list is not an error", () => {

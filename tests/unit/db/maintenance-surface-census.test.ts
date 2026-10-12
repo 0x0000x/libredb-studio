@@ -105,6 +105,8 @@ const EXPECTED: Readonly<Record<DatabaseType, SurfaceRow>> = {
   // Its one operation is `kill`, a session's and never an object row's (design 2.4).
   databend: NONE,
   bigquery: NONE,
+  // No operation: a kill would reach other users' statements from a shared connection.
+  snowflake: NONE,
   s3: NONE,
   kubernetes: NONE,
   mqtt: NONE,
@@ -123,9 +125,9 @@ describe("every shipped provider's per-row maintenance controls (R46 C3)", () =>
     expect(surfacesOf(provider.getCapabilities(), provider.getLabels())).toEqual(EXPECTED[type]);
   });
 
-  test("11 of 34 type-ids offer per-row controls on the two tabs, 10 on the row menus, one outside MaintenanceType", () => {
+  test("11 of 35 type-ids offer per-row controls on the two tabs, 10 on the row menus, one outside MaintenanceType", () => {
     const rows = Object.values(EXPECTED);
-    expect(rows.length).toBe(34);
+    expect(rows.length).toBe(35);
     expect(rows.filter((row) => row.tabs !== "").length).toBe(11);
     expect(rows.filter((row) => row.tree !== "").length).toBe(10);
     expect(rows.filter((row) => row.outsideMaintenanceType !== "").length).toBe(1);

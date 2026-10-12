@@ -1087,8 +1087,9 @@ const heldSnapshots = new Map<string, AgentContextSnapshot>();
  * Over-keying is deliberately the safe direction. A miss costs ONE catalog read, because
  * a plan run captures its own inventory when the hold has nothing for it; a false hit
  * costs a confident answer about a database nobody looked at. So the user fields are in
- * here too — a least-privilege role sees a different catalog — while the password is
- * not: rotating a credential does not change which database this is.
+ * here too, since a least-privilege user sees a different catalog, and so are Snowflake's
+ * role and sign-in method, while the password is not: rotating a credential does not
+ * change which database this is.
  *
  * Hashed rather than concatenated because `connectionString` can carry a password, and a
  * process-lifetime map should not hold one as a key.
@@ -1114,7 +1115,7 @@ export function connectionIdentity(connection: DatabaseConnection): string {
         connection.user ?? "",
         // The database the user is looked up in. Same name, different auth database is
         // a different user record, so it can be a different catalog view - the reason
-        // the role fields are in here.
+        // the user fields are in here.
         connection.authSource ?? "",
         // Elasticsearch's API key id (#708) is this field's analogue of `user`: it
         // identifies WHICH pre-configured key, and a key carries its own role
@@ -1127,6 +1128,8 @@ export function connectionIdentity(connection: DatabaseConnection): string {
         // Databend's `warehouse` is deliberately absent: it picks compute, not the catalog. Every warehouse of a
         // tenant reads the same databases and tables, so a held inventory stays true across them; the provider
         // cache key frames it instead, because there it decides which servers a request reaches.
+        // Snowflake's `warehouse` is deliberately absent for the same reason: it picks the compute every request runs
+        // on, not the catalog.
         // S3's `region` is deliberately absent: it is the scope a request is signed for, not the catalog; a wrong region
         // is refused rather than answered with other buckets.
         // Kubernetes' API path and TLS server name pick which cluster answers behind one host and port, so either
@@ -1154,6 +1157,11 @@ export function connectionIdentity(connection: DatabaseConnection): string {
         // An AMQP port names the listener a read reaches, which can be another server; over-keying is the safe direction.
         // Appended only when set and tagged, so every connection without it keeps the identity it had.
         ...(connection.amqpPort ? [`amqpPort=${connection.amqpPort}`] : []),
+        // Snowflake's role and sign-in method, tagged and only when set, so no connection that has neither moves: a
+        // role sees another catalog, and a method signs in as another principal. Its key and passphrase are excluded
+        // on the password rule.
+        ...(connection.role ? [`role=${connection.role}`] : []),
+        ...(connection.authMethod ? [`authMethod=${connection.authMethod}`] : []),
       ]),
     )
     .digest("hex");

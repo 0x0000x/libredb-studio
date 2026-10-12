@@ -1966,12 +1966,14 @@ describe("the complete engine lists outside the agent docs", () => {
     expect(read("README_ko.md")).toContain(
       "InfluxDB 3 (SQL), Oxia, S3-compatible object storage, Kubernetes에 연결할 수 있으며",
     );
-    // The newest-engine history names RabbitMQ as the newest in README.md, Firestore one step back, MQTT before
-    // Firestore, Kubernetes before MQTT, S3 before Kubernetes and Databend before S3; the translations still name MQTT
-    // as the newest. The chain is a claim about ORDER, so each link is pinned at both ends: an engine added without
-    // moving the head leaves the previous head claiming a title it no longer holds, which is exactly what this change
-    // did to Kubernetes until the `not` assertions below were added.
-    expect(readme).toContain("RabbitMQ is the newest: the management API browses");
+    // The newest-engine history names Snowflake as the newest in README.md, RabbitMQ one step back, Firestore before
+    // RabbitMQ, MQTT before Firestore, Kubernetes before MQTT, S3 before Kubernetes and Databend before S3; the
+    // translations still name MQTT as the newest. The chain is a claim about ORDER, so each link is pinned at both
+    // ends: an engine added without moving the head leaves the previous head claiming a title it no longer holds,
+    // which is exactly what this change did to Kubernetes until the `not` assertions below were added.
+    expect(readme).toContain("Snowflake is the newest: SQL typed in the editor");
+    expect(readme).not.toContain("RabbitMQ is the newest");
+    expect(readme).toContain("RabbitMQ came before Snowflake: the management API browses");
     expect(readme).not.toContain("Firestore is the newest");
     expect(readme).toContain("Firestore came before RabbitMQ: the Admin SDK query chain");
     expect(readme).not.toContain("MQTT is the newest");

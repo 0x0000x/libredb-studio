@@ -1,0 +1,8 @@
+{
+  "item": "M22",
+  "step": 5,
+  "asks": "What does a request from an address the network policy does not allow answer? The operator sends one from another network.",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "operator": "pending: the operator's answer is added to this file by hand",
+  "exchanges": []
+}

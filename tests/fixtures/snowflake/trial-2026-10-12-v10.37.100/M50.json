@@ -1,0 +1,10 @@
+{
+  "item": "M50",
+  "step": 5,
+  "asks": "What code ends a statement the resource monitor suspends mid-run? The operator lowers the quota for one run.",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "stateBefore": "STARTED",
+  "operator": "pending: the operator's answer is added to this file by hand",
+  "stateAfter": "STARTED",
+  "exchanges": []
+}

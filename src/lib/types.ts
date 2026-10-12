@@ -21,6 +21,7 @@ import type { VectorColumn } from "@/lib/db/vector/types";
 export type DatabaseType =
   | "postgres"
   | "bigquery"
+  | "snowflake"
   | "mysql"
   | "sqlite"
   | "mongodb"
@@ -398,10 +399,11 @@ export interface DatabaseConnection {
    */
   dataServers?: string;
   /**
-   * Databend only: the warehouse every statement of this connection runs on, sent as the `X-DATABEND-WAREHOUSE`
-   * header. Databend Cloud requires one and resumes a suspended warehouse on the first statement, billing while it
-   * runs; self-hosted Databend leaves it empty. It picks compute, not the catalog, and it is not a secret. Absent and
-   * empty are one value. Read by no other engine.
+   * Databend and Snowflake: the warehouse the statements of this connection run on. Databend sends it as the
+   * `X-DATABEND-WAREHOUSE` header; Databend Cloud requires one and resumes a suspended warehouse on the first
+   * statement, billing while it runs, and self-hosted Databend leaves it empty. Snowflake sends it as the `warehouse`
+   * field of every request body; it is optional there, and empty means the user's default warehouse. It picks
+   * compute, not the catalog, and it is not a secret. Absent and empty are one value. Read by no other engine.
    */
   warehouse?: string;
   /**
@@ -445,6 +447,26 @@ export interface DatabaseConnection {
   location?: string;
   /** RabbitMQ only: the AMQP 0-9-1 port of stream reads; empty means browse only. Read by no other engine. */
   amqpPort?: string;
+  /**
+   * Snowflake only: how the connection signs in, `keypair` (a key-pair JWT signed with `privateKey`) or `pat` (a
+   * programmatic access token in `password`). Absent reads as `keypair`. Read by no other engine, and not the SSH
+   * tunnel's `sshTunnel.authMethod`, which is a field of another feature.
+   */
+  authMethod?: "keypair" | "pat";
+  /**
+   * Snowflake only: the contents of the PEM private key the key-pair JWT is signed with, PKCS#8 or PKCS#1, encrypted
+   * or not. Never a path: the provider reads no file. A secret. Read by no other engine; `ssl.clientKey` and the SSH
+   * tunnel's `privateKey` are other features' fields.
+   */
+  privateKey?: string;
+  /** Snowflake only: the passphrase of an encrypted `privateKey`. A secret. Absent and empty are one value. */
+  privateKeyPassphrase?: string;
+  /**
+   * Snowflake only: the role every statement of this connection runs as, sent on every request, case preserved; a
+   * double-quoted name is exact, a bare one is folded to upper case by Snowflake. Required by the provider. It decides
+   * what the connection can read and change, so it is part of the connection's identity. Read by no other engine.
+   */
+  role?: string;
   /**
    * Read no catalog when this connection opens.
    *

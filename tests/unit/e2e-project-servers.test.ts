@@ -22,6 +22,7 @@ const SECOND_SERVER_SPECS = [
   "influxdb-providers.spec.ts",
   "oxia-provider.spec.ts",
   "databend-provider.spec.ts",
+  "snowflake-provider.spec.ts",
   "s3-provider.spec.ts",
   "kubernetes-provider.spec.ts",
   "firestore-connection.spec.ts",

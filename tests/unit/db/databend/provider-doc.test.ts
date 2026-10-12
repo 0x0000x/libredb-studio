@@ -22,6 +22,7 @@ import {
   parseConnectionString,
 } from "@/lib/connection-string-parser";
 import { IMPORT_NO_TARGET, importRefusal } from "@/components/DataImportModal";
+import { SOURCE_BILLED_COMPUTE_HOLD } from "@/components/object-source/ObjectSourceView";
 import { BILLED_COMPUTE_HOLD } from "@/components/object-tree/ObjectTree";
 import { DB_UI_CONFIG, DATABEND_FIELD_HINTS } from "@/lib/db-ui-config";
 import {
@@ -487,6 +488,7 @@ describe("docs/providers/databend.md quotes what the code says", () => {
       "Nor does Studio open it by itself: the connection Studio makes active at sign-in or on a reload, from a link, when the server changes the connection list or when the person deletes the open connection reads nothing past its declaration, which opens no connection, until the person picks it, loads its objects, opens the Schema tab of the phone layout or runs a statement;",
     );
     expect(cloud).toContain(`> ${BILLED_COMPUTE_HOLD}`);
+    expect(cloud).toContain(`> ${SOURCE_BILLED_COMPUTE_HOLD}`);
     expect(cloud).toContain("only what a person asks for");
   });
 

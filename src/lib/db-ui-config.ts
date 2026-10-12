@@ -33,11 +33,17 @@ import {
   FirestoreIcon,
   RabbitMQIcon,
   KubernetesIcon,
+  SnowflakeIcon,
 } from "@/components/icons/db-icons";
 import type { DatabaseConnection, DatabaseType } from "@/lib/types";
 import type { HostUriScheme } from "@/lib/connection-host-uri";
 import type { ConnectionImportDeclaration } from "@/lib/connection-import";
 import { CREDENTIAL_WARNINGS, type CredentialWarning } from "@/lib/db/credential-warnings";
+import {
+  SNOWFLAKE_ACCOUNT_PATTERN,
+  SNOWFLAKE_FIELD_SENTENCES,
+  snowflakeHostHint,
+} from "@/lib/db/providers/sql/snowflake/account-host";
 
 // DB brand icons share the same interface as LucideIcon (className + SVG props)
 export type DBIcon = LucideIcon | React.FC<React.SVGAttributes<SVGSVGElement> & { className?: string }>;
@@ -47,6 +53,12 @@ export interface DatabaseUIConfig {
   color: string;
   label: string;
   defaultPort: string;
+  /**
+   * What the Host box holds when this engine is chosen after another one, where the previous engine's host means
+   * nothing here: a Snowflake account is not a host name, so a carried `localhost` would sign in to an account of
+   * that name. Absent, the box keeps what it held, as it always has.
+   */
+  defaultHost?: string;
   showConnectionStringToggle: boolean;
   connectionFields: (
     | "host"
@@ -78,7 +90,9 @@ export interface DatabaseUIConfig {
     | "allowInsecureAuth"
     // Oxia only (O6): a cluster's data-server addresses, one text box.
     | "dataServers"
-    // Databend only (design 6.1): the warehouse every statement runs on, one text box.
+    // Databend and Snowflake: the warehouse statements run on, one text box. Databend sends it as the
+    // X-DATABEND-WAREHOUSE header, which Databend Cloud requires; Snowflake as the warehouse field of every request
+    // body, optional, the user's default warehouse when empty.
     | "warehouse"
     // BigQuery only: the job location, one text box; empty means detected.
     | "location"
@@ -91,6 +105,12 @@ export interface DatabaseUIConfig {
     | "tlsServerName"
     // An AMQP 0-9-1 port, one text box of digits; no engine declares it yet.
     | "amqpPort"
+    // Snowflake only: the sign-in method (a select), the pasted private key and its passphrase for a key pair, and
+    // the role every statement runs as.
+    | "authMethod"
+    | "privateKey"
+    | "privateKeyPassphrase"
+    | "role"
   )[];
   /**
    * The connection dialog's label for a field, where this engine names the field differently from
@@ -107,9 +127,17 @@ export interface DatabaseUIConfig {
   fieldHints?: Partial<Record<ConnectionField, string>>;
   /**
    * The connection dialog's placeholder for a field, where this engine's example differs from the dialog's own.
-   * Read through `connectionFieldPlaceholder`; the `database`, `location`, `region` and `amqpPort` boxes read it.
+   * Read through `connectionFieldPlaceholder`; the `host`, `user`, `password`, `database`, `schema`, `region`,
+   * `location`, `privateKey` and `amqpPort` boxes read it. A declared `schema` example also stands in for the dialog's
+   * own sentence under that box, so the engine's hint is the only one drawn there.
    */
   fieldPlaceholders?: Partial<Record<ConnectionField, string>>;
+  /**
+   * The sentence under the Host box derived from what is typed in it, such as the host a Snowflake account
+   * identifier resolves to, or `undefined` while the text derives nothing. Drawn in place of the static `fieldHints`
+   * entry for `host` while it answers; absent, the static hint is drawn as before.
+   */
+  hostHint?: (host: string) => string | undefined;
   /**
    * The sentence under the connection dialog's Read-only toggle, where this engine's mode differs from
    * the dialog's own sentence, which says the mode can be turned off. Neo4j declares one because its
@@ -132,6 +160,13 @@ export interface DatabaseUIConfig {
    * `ConnectionModal.tsx` is what this replaces.
    */
   fieldOptions?: Partial<Record<ConnectionField, readonly { readonly value: string; readonly label: string }[]>>;
+  /**
+   * A field the connection dialog draws only while another field holds one value, such as Snowflake's private key,
+   * drawn only while Sign-in is Key pair. Read through `connectionFieldShown`: the dialog draws such a field only
+   * while the condition holds, `buildConnection` writes it only then, and `connectionFieldRefusal` checks its rules
+   * only then, so a hidden field is neither saved nor required. Absent means every field the engine takes is drawn.
+   */
+  fieldShownWhen?: Partial<Record<ConnectionField, { readonly field: ConnectionField; readonly equals: string }>>;
   /**
    * `false` where this engine's connections may not carry an SSH tunnel (#1088), absent meaning the
    * dialog offers the tunnel. Read through `offersSshTunnel`, never directly.
@@ -209,6 +244,37 @@ export const DATABEND_FIELD_HINTS: Readonly<Partial<Record<ConnectionField, stri
     "Databend Cloud: the warehouse= value of the DSN from Connect. A suspended warehouse resumes on the first statement, opening the connection included, because it reads the object tree, and is billed while it runs; with Warehouse set, Studio sends no background health checks. Self-hosted: leave empty unless your cluster routes requests by warehouse.",
   allowInsecureAuth:
     "Ticked, the password crosses the network in cleartext to this host. Databend Cloud never needs this: it serves HTTPS on port 443.",
+});
+
+/**
+ * The sentences the connection dialog draws under Snowflake's fields, exported so the docs can be held to them.
+ */
+export const SNOWFLAKE_FIELD_HINTS: Readonly<Partial<Record<ConnectionField, string>>> = Object.freeze({
+  user: "The user's login name (LOGIN_NAME).",
+  privateKey: "Paste the private key's contents. Studio reads no key file.",
+  privateKeyPassphrase: "Only for an encrypted key.",
+  password: "A programmatic access token for this user.",
+  warehouse: "Leave empty to use the user's default warehouse. Queries need one; browsing does not.",
+  database: "Opened first in the tree, and the default for unqualified names.",
+  schema: "The default schema for unqualified names.",
+  role: "Every statement runs as this role; Studio checks it when it connects.",
+});
+
+/**
+ * Snowflake's form checks, in the provider's own sentences. The account module is pure, with no import of its own,
+ * so the dialog reads its pattern and sentences directly rather than a copy.
+ */
+export const SNOWFLAKE_FIELD_RULES: Readonly<Partial<Record<ConnectionField, ConnectionFieldRule>>> = Object.freeze({
+  host: {
+    required: SNOWFLAKE_FIELD_SENTENCES.accountEmpty,
+    format: { pattern: SNOWFLAKE_ACCOUNT_PATTERN, sentence: SNOWFLAKE_FIELD_SENTENCES.accountFormat },
+  },
+  user: { required: SNOWFLAKE_FIELD_SENTENCES.userEmpty },
+  // Each credential is required only under its own sign-in method: `fieldShownWhen` hides the other one, and a
+  // hidden field's rules are not checked.
+  privateKey: { required: SNOWFLAKE_FIELD_SENTENCES.keyEmpty },
+  password: { required: SNOWFLAKE_FIELD_SENTENCES.tokenEmpty },
+  role: { required: SNOWFLAKE_FIELD_SENTENCES.roleEmpty },
 });
 
 /**
@@ -873,6 +939,73 @@ export const DB_UI_CONFIG: Record<DatabaseType, DatabaseUIConfig> = {
       password: "key JSON, a ya29… token, or empty for server credentials (if enabled)",
     },
   },
+  snowflake: {
+    // A six-armed snowflake drawn for Studio, never the company's logo.
+    icon: SnowflakeIcon,
+    // Every chromatic hue and every `-alt` step was already an engine's, `lime-alt` RabbitMQ's last, so `mist`, the
+    // blue-tinted neutral, joined the identity palette with this entry: mist-700 in light and mist-400 in dark leave
+    // both closest pairs where they were (tests/unit/theme-accent-contrast.test.ts).
+    color: "text-hue-mist",
+    label: "Snowflake",
+    defaultPort: "",
+    // Account opens empty, with only its placeholder, rather than holding the previous engine's host.
+    defaultHost: "",
+    // A pasted Snowflake address is decomposed into fields; no connection string is stored.
+    showConnectionStringToggle: false,
+    connectionFields: [
+      "host",
+      "user",
+      "authMethod",
+      "privateKey",
+      "privateKeyPassphrase",
+      "password",
+      "warehouse",
+      "database",
+      "schema",
+      "role",
+    ],
+    fieldLabels: {
+      host: "Account",
+      user: "User",
+      authMethod: "Sign-in",
+      privateKey: "Private key",
+      privateKeyPassphrase: "Passphrase",
+      password: "Access token",
+      warehouse: "Warehouse",
+      database: "Database",
+      schema: "Schema",
+      role: "Role",
+    },
+    fieldOptions: {
+      authMethod: [
+        { value: "keypair", label: "Key pair" },
+        { value: "pat", label: "Programmatic access token" },
+      ],
+    },
+    fieldPlaceholders: {
+      host: "myorg-myaccount or https://myorg-myaccount.snowflakecomputing.com",
+      privateKey: "-----BEGIN PRIVATE KEY-----",
+      // No example for these three: a name such as user or default reads as a value already typed, and each box's
+      // hint says what it takes.
+      user: "",
+      database: "",
+      schema: "",
+    },
+    fieldHints: SNOWFLAKE_FIELD_HINTS,
+    // Once the Account reads, the hint names the host Studio connects to.
+    hostHint: snowflakeHostHint,
+    fieldRules: SNOWFLAKE_FIELD_RULES,
+    // One credential at a time: the key and its passphrase for a key pair, the token for an access token.
+    fieldShownWhen: {
+      privateKey: { field: "authMethod", equals: "keypair" },
+      privateKeyPassphrase: { field: "authMethod", equals: "keypair" },
+      password: { field: "authMethod", equals: "pat" },
+    },
+    // TLS is fixed (the certificate checked, the account host as its name) and nothing is tunnelled, so neither panel
+    // would be read.
+    showSshTunnel: false,
+    showSslPanel: false,
+  },
   s3: {
     // A generic bucket drawn for Studio, never a vendor's logo.
     icon: S3Icon,
@@ -1157,15 +1290,33 @@ export function connectionFieldHint(config: DatabaseUIConfig, field: ConnectionF
 }
 
 /**
+ * Whether the dialog draws a field the engine takes, by the engine's `fieldShownWhen`: true when the field has no
+ * condition, else whether the controlling field holds the declared value. An unset controlling field reads as its
+ * first `fieldOptions` value, the choice its select shows first, so Snowflake's unset Sign-in reads as Key pair.
+ */
+export function connectionFieldShown(
+  config: DatabaseUIConfig,
+  field: ConnectionField,
+  connection: Partial<Record<ConnectionField, unknown>>,
+): boolean {
+  const condition = config.fieldShownWhen?.[field];
+  if (condition === undefined) return true;
+  const value = connection[condition.field] ?? config.fieldOptions?.[condition.field]?.[0]?.value;
+  return value !== undefined && String(value) === condition.equals;
+}
+
+/**
  * The first refusal of the engine's `fieldRules` for a connection as the dialog built it, or `undefined` when every
  * declared check passes. The fields are checked in `connectionFields` order, so the dialog names the first box to fix.
- * A blank field is one the dialog wrote no value for, or an empty one.
+ * A blank field is one the dialog wrote no value for, or an empty one. A field `connectionFieldShown` hides is not
+ * checked, since the dialog neither draws nor writes it.
  */
 export function connectionFieldRefusal(config: DatabaseUIConfig, connection: DatabaseConnection): string | undefined {
   const values = connection as Partial<Record<ConnectionField, unknown>>;
   for (const field of config.connectionFields) {
     const rule = config.fieldRules?.[field];
     if (rule === undefined) continue;
+    if (!connectionFieldShown(config, field, values)) continue;
     const value = values[field];
     if (value === undefined || value === "") {
       if (rule.required !== undefined) return rule.required;

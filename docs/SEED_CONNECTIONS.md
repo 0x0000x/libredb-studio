@@ -78,7 +78,7 @@ An mssql seed that carried only a `connectionString`, for example, loaded and op
 The types whose provider reads it are postgres, mysql, sqlite, libsql, oracle, db2, clickhouse, mongodb and couchbase.
 sqlite reads it as the database file path, with a `file:` prefix removed, although its provider's capability flag says it does not ([docs/providers/sqlite.md](./providers/sqlite.md)).
 mssql does not read it, although its provider's capability flag says it does: the flag covers the connection form, which splits a pasted URI into fields, and the provider builds from those fields only ([docs/providers/mssql.md](./providers/mssql.md#44-connection-string-nuance)).
-The 25 that refuse it are bigquery, duckdb, mssql, druid, trino, cassandra, elasticsearch, opensearch, redis, prometheus, kafka, etcd, neo4j, milvus, qdrant, influxdb, influxdb3, oxia, databend, s3, kubernetes, mqtt, firestore, rabbitmq and libredb.
+The 26 that refuse it are bigquery, snowflake, duckdb, mssql, druid, trino, cassandra, elasticsearch, opensearch, redis, prometheus, kafka, etcd, neo4j, milvus, qdrant, influxdb, influxdb3, oxia, databend, s3, kubernetes, mqtt, firestore, rabbitmq and libredb.
 To fix a refused file, move the value into `host`, `port`, `user`, `password` and `database`, and remove `connectionString`.
 
 ### A Firestore connection
@@ -98,6 +98,31 @@ connections:
 ```
 
 A Firestore connection takes no `connectionString` and is refused if it carries one.
+
+### A Snowflake connection
+
+A Snowflake seed names the account in `host` and the role every statement runs as in `role`, and carries one credential: a key pair (`authMethod: "keypair"`, the key's PEM text in `privateKey` and, for an encrypted key, `privateKeyPassphrase`) or a programmatic access token (`authMethod: "pat"`, the token in `password`) ([providers/snowflake.md](providers/snowflake.md)).
+Each of the four fields takes an `${ENV}` reference, so no key or token is written in the file.
+
+```yaml
+connections:
+  - id: "snowflake-analytics"
+    name: "Snowflake analytics"
+    type: "snowflake"
+    host: "myorg-myaccount"          # account identifier, or its https URL
+    user: "STUDIO_SVC"               # the login name
+    authMethod: "keypair"
+    privateKey: "${SNOWFLAKE_PRIVATE_KEY}"
+    privateKeyPassphrase: "${SNOWFLAKE_KEY_PASSPHRASE}"   # only for an encrypted key
+    # For a token instead: authMethod: "pat" and password: "${SNOWFLAKE_PAT}"
+    warehouse: "STUDIO_WH"           # optional; empty means the user's default
+    database: "ANALYTICS"            # optional
+    role: "STUDIO_RO"
+    roles: ["admin", "user"]
+    mcp: true                        # optional: offer it to MCP clients
+```
+
+A Snowflake connection takes no `connectionString` and is refused if it carries one.
 
 ### Diagnostics
 
@@ -300,7 +325,7 @@ connections:
 | `connections` | Yes | — | Array of connection definitions (min 1) |
 | `connections[].id` | Yes | — | Unique slug: `[a-z0-9-]+`, max 64 chars |
 | `connections[].name` | Yes | — | Display name, max 128 chars |
-| `connections[].type` | Yes | - | Database type: `postgres`, `mysql`, `sqlite`, `libsql`, `duckdb`, `mongodb`, `redis`, `oracle`, `db2`, `mssql`, `libredb`, `couchbase`, `clickhouse`, `druid`, `elasticsearch`, `opensearch`, `trino`, `cassandra`, `prometheus`, `kafka`, `etcd`, `neo4j`, `milvus`, `qdrant`, `influxdb`, `influxdb3`, `oxia`, `databend`, `s3`, `kubernetes` |
+| `connections[].type` | Yes | - | Database type: `postgres`, `mysql`, `sqlite`, `libsql`, `duckdb`, `mongodb`, `redis`, `oracle`, `db2`, `mssql`, `libredb`, `couchbase`, `clickhouse`, `druid`, `elasticsearch`, `opensearch`, `trino`, `snowflake`, `cassandra`, `prometheus`, `kafka`, `etcd`, `neo4j`, `milvus`, `qdrant`, `influxdb`, `influxdb3`, `oxia`, `databend`, `s3`, `kubernetes` |
 | `connections[].host` | No | — | Hostname or IP |
 | `connections[].port` | No | — | Port number (1-65535) |
 | `connections[].database` | No | — | Database name (Couchbase: the bucket. Druid has one catalog and ignores it. Trino: the **catalog**. S3: the optional pinned bucket) |
@@ -328,7 +353,11 @@ connections:
 | `connections[].allowInsecureAuth` | No | absent | Db2, both InfluxDB types, Oxia, Databend, S3, MQTT and RabbitMQ (#786): `true` accepts that a connection with no TLS sends its password to the server in cleartext, which the Db2 provider otherwise refuses when the connection opens ([providers/db2.md](providers/db2.md)), and that an InfluxDB connection sends its password or token without TLS to a host that is not loopback, which both InfluxDB providers otherwise refuse before any socket ([providers/influxdb.md](providers/influxdb.md), [providers/influxdb3.md](providers/influxdb3.md)), and that an Oxia connection sends its token in cleartext, which the Oxia provider otherwise refuses when the connection opens ([providers/oxia.md](providers/oxia.md), section 4.6, where a token to this machine or through an SSH tunnel needs no tick), and that a Databend connection sends its password without TLS to a host that is not loopback, which the Databend provider otherwise refuses when the connection opens, and that an S3 connection reaches a host that is not loopback over plain HTTP, signed or not, which the S3 provider otherwise refuses when the connection opens ([providers/s3.md](providers/s3.md)), and that an MQTT connection carries its username and password in the CONNECT packet in cleartext, which the MQTT provider sends over whatever transport the SSL mode selects, refusing nothing of its own ([providers/mqtt.md](providers/mqtt.md)), and that a RabbitMQ connection sends its password without TLS to a host that is not this machine, on the management API and the AMQP port both, which the RabbitMQ provider otherwise refuses when the connection opens; a signed request sent that way is replayable while the server's clock window lasts. Set `ssl` instead wherever the server offers TLS. Every other engine ignores it. A literal boolean: a `${ENV}` reference fails the whole file |
 | `connections[].dataServers` | No | absent | Oxia only: the public addresses of a cluster's data servers, as `host:port` entries separated by commas or whitespace, at most 64. Exact entries only, never a pattern. A `${ENV}` or `${vault:...}` reference is resolved, as in `host`. Not a secret: it is listed with the connection, and the token it receives is not. Refused together with an SSH tunnel |
 | `connections[].location` | No | absent | BigQuery only: where jobs run, e.g. `EU` or `europe-west3`. Absent, the provider takes the default dataset's location, else the one most datasets share ([providers/bigquery.md](providers/bigquery.md)). Not a secret |
-| `connections[].warehouse` | No | absent | Databend only: the warehouse every statement runs on, sent as the `X-DATABEND-WAREHOUSE` header. Databend Cloud requires one (the `warehouse=` value of its DSN) and resumes a suspended warehouse on the first statement, billing while it runs, so with one set Studio sends the connection no background health checks ([providers/databend.md](providers/databend.md)). A `${ENV}` or `${vault:...}` reference is resolved, as in `host`. Not a secret |
+| `connections[].warehouse` | No | absent | Databend and Snowflake: the warehouse statements run on. Databend sends it as the `X-DATABEND-WAREHOUSE` header; Databend Cloud requires one (the `warehouse=` value of its DSN) and resumes a suspended warehouse on the first statement, billing while it runs, so with one set Studio sends the connection no background health checks ([providers/databend.md](providers/databend.md)). Snowflake sends it as the `warehouse` field of every request body; it is optional there, and empty means the user's default warehouse. A `${ENV}` or `${vault:...}` reference is resolved, as in `host`. Not a secret |
+| `connections[].authMethod` | No | `keypair` | Snowflake only: `keypair` signs a JWT with `privateKey`, `pat` sends the programmatic access token in `password`. |
+| `connections[].privateKey` | No¹ | absent | Snowflake only: the PEM private key's contents, PKCS#8 or PKCS#1, encrypted or not; never a path. ¹Required under `keypair`. A secret: write `${ENV}` or a Vault reference. |
+| `connections[].privateKeyPassphrase` | No | absent | Snowflake only: the passphrase of an encrypted `privateKey`. A secret. |
+| `connections[].role` | No¹ | absent | Snowflake only: the role every statement runs as, sent on every request. ¹Required by the Snowflake provider. |
 | `connections[].region` | No | absent | S3-compatible object storage only: the region every request is signed for; absent means `us-east-1`. Garage refuses any region but its s3_region; a MinIO or Silo started with a site region refuses bucket and object reads signed for another ([providers/s3.md](providers/s3.md)). A `${ENV}` or `${vault:...}` reference is resolved, as in `host`. A region name, neither a credential nor an address; not a secret |
 | `connections[].namespaces` | No | absent | Kubernetes only: the namespaces the tree lists, DNS-1123 labels separated by commas or spaces; when set, no namespace list is read, and a `database` (the Default namespace) outside the list is refused at connect. |
 | `connections[].apiPath` | No | absent | Kubernetes and RabbitMQ, each with its own rule. Kubernetes: a path every request goes under, such as Rancher's `/k8s/clusters/<cluster id>`; no segment may be `api`, `apis`, `proxy`, `namespaces`, `nodes`, `services`, `pods`, `openapi` or `version`. RabbitMQ (Path prefix): the management API's path, such as `/rabbitmq`; a plain path with no `%`, `?` or `#`, no empty, `.` or `..` segment, and no segment `api`. |

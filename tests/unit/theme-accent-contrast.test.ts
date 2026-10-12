@@ -224,6 +224,10 @@ const HUES: ReadonlyArray<{ hue: string; light: string; lightAlt: string }> = [
   // Of the hues Tailwind ships, lime-800 clears AA in light (4.67) and leaves both closest identity pairs where
   // they were (0.0205 light, 0.0160 dark).
   { hue: "lime", light: "lime-800", lightAlt: "lime-900" },
+  // Snowflake's identity: every chromatic hue Tailwind ships and every `-alt` step was an engine's once RabbitMQ took
+  // `lime-alt`, so the blue-tinted neutral joined the palette. mist-700 clears AA in light and leaves both closest
+  // identity pairs where they were (0.0205 light, 0.0160 dark).
+  { hue: "mist", light: "mist-700", lightAlt: "mist-900" },
 ];
 
 /**
@@ -265,6 +269,8 @@ const HUES: ReadonlyArray<{ hue: string; light: string; lightAlt: string }> = [
  * identity pairs where they were (0.0205 in light, 0.0160 in dark).
  * `lime` joined with RabbitMQ (#1656), the last hue with no identity `-alt`: every base hue and every other `-alt`
  * step was an engine's once Firestore took `lime`, and `lime-alt` clears every test below.
+ * `mist` joined with Snowflake as a base hue in HUES, not as an `-alt` here: every chromatic hue and its `-alt` was
+ * already an engine's once RabbitMQ took `lime-alt`.
  */
 const IDENTITY_ALTS = [
   "blue",

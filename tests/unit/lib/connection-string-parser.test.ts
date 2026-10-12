@@ -7,6 +7,7 @@ import {
   DATABEND_DSN_REFUSALS,
   DATABEND_SSLMODE_NOTICES,
   databendNotAppliedNotice,
+  SNOWFLAKE_PASTE_SENTENCES,
 } from "@/lib/connection-string-parser";
 import { getDBConfig } from "@/lib/db-ui-config";
 import type { SSLMode } from "@/lib/types";
@@ -1631,5 +1632,230 @@ describe("parseConnectionString: databend:// DSNs", () => {
     expect(detectConnectionStringType("Databend+HTTP://host")).toBe("databend");
     expect(detectConnectionStringType("databend+https://host")).toBe("databend");
     expect(detectConnectionStringType("databend+flight://host:8900")).toBeNull();
+  });
+});
+
+// ─── Snowflake ──────────────────────────────────────────────────────────────
+
+describe("parseConnectionString: Snowflake URLs, decomposed into fields and never kept", () => {
+  /** No secret and no value the paste did not apply may appear anywhere in the result but its own field. */
+  const expectOnlyIn = (result: unknown, sentinel: string, field: string) => {
+    const copy = { ...(result as Record<string, unknown>) };
+    expect(copy[field]).toBe(sentinel);
+    delete copy[field];
+    expect(JSON.stringify(copy)).not.toContain(sentinel);
+  };
+
+  test("an account URL fills the account and keeps no connection string", () => {
+    const result = parseConnectionString("https://xy12345.us-east-2.aws.snowflakecomputing.com");
+    expect(result).toEqual({ type: "snowflake", host: "xy12345.us-east-2.aws.snowflakecomputing.com" });
+  });
+
+  test("a bare Snowflake host is claimed, and an identifier with no suffix is not", () => {
+    expect(parseConnectionString("myorg-myacct.snowflakecomputing.com")).toEqual({
+      type: "snowflake",
+      host: "myorg-myacct.snowflakecomputing.com",
+    });
+    expect(parseConnectionString("myorg-myacct")).toBeNull();
+  });
+
+  test("a Snowsight URL reads the account from its path", () => {
+    expect(parseConnectionString("https://app.snowflake.com/myorg/myacct/x")).toEqual({
+      type: "snowflake",
+      host: "myorg-myacct.snowflakecomputing.com",
+    });
+  });
+
+  test("a JDBC URL applies its parameters, the passphrase only to its field", () => {
+    const result = parseConnectionString(
+      "jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?user=u&warehouse=wh&db=d&schema=s&role=r&authenticator=SNOWFLAKE_JWT&private_key_pwd=P-SENT",
+    );
+    expect(result).toEqual({
+      type: "snowflake",
+      host: "myorg-myacct.snowflakecomputing.com",
+      user: "u",
+      warehouse: "wh",
+      database: "d",
+      schema: "s",
+      role: "r",
+      authMethod: "keypair",
+      privateKeyPassphrase: "P-SENT",
+    });
+    expectOnlyIn(result, "P-SENT", "privateKeyPassphrase");
+    expect(result!.connectionString).toBeUndefined();
+  });
+
+  test("a SQLAlchemy URL reads user, account, database and schema, and names its password without applying it", () => {
+    const result = parseConnectionString("snowflake://u:PW-SENT@myorg-myacct/d/s?warehouse=wh&role=r");
+    expect(result).toEqual({
+      type: "snowflake",
+      host: "myorg-myacct.snowflakecomputing.com",
+      user: "u",
+      database: "d",
+      schema: "s",
+      warehouse: "wh",
+      role: "r",
+      notice: "Not applied: the password in the URL.",
+    });
+    expect(JSON.stringify(result)).not.toContain("PW-SENT");
+  });
+
+  test("names case-insensitively and values percent-decoded once", () => {
+    const result = parseConnectionString(
+      "jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?USER=a%2540b&Database=my%20db&WAREHOUSE=wh",
+    );
+    expect(result).toMatchObject({ user: "a%40b", database: "my db", warehouse: "wh" });
+  });
+
+  test("a token is the access token, with pat sign-in unless an authenticator chose another", () => {
+    const result = parseConnectionString("https://myorg-myacct.snowflakecomputing.com/?token=S-SENT");
+    expect(result).toEqual({
+      type: "snowflake",
+      host: "myorg-myacct.snowflakecomputing.com",
+      password: "S-SENT",
+      authMethod: "pat",
+    });
+    expectOnlyIn(result, "S-SENT", "password");
+    expect(
+      parseConnectionString(
+        "jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?authenticator=PROGRAMMATIC_ACCESS_TOKEN&token=T",
+      ),
+    ).toMatchObject({ authMethod: "pat", password: "T" });
+  });
+
+  test("an authenticator Studio does not sign in with is named and not applied", () => {
+    const result = parseConnectionString(
+      "jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?authenticator=externalbrowser",
+    );
+    expect(result!.authMethod).toBeUndefined();
+    expect(result!.notice).toBe("Not applied: authenticator.");
+    expect(JSON.stringify(result)).not.toContain("externalbrowser");
+  });
+
+  test("an unnamed parameter is counted, and no name or value of one is echoed", () => {
+    const result = parseConnectionString("https://myorg-myacct.snowflakecomputing.com/?password=A&B&C=1");
+    expect(result!.notice).toBe("Not applied: password, and 2 other parameters.");
+    for (const text of ["=A", "B&", "C="]) expect(JSON.stringify(result)).not.toContain(text);
+    expect(result!.password).toBeUndefined();
+    const encoded = parseConnectionString("https://myorg-myacct.snowflakecomputing.com/?x%3DQ=1");
+    expect(encoded!.notice).toBe("Not applied: 1 other parameter.");
+    expect(JSON.stringify(encoded)).not.toContain("Q");
+  });
+
+  test("every secret-carrying name is named and never applied", () => {
+    const result = parseConnectionString(
+      "jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?passcode=1&oauthClientSecret=2&oauth_client_secret=3&proxyPassword=4",
+    );
+    expect(result!.notice).toBe("Not applied: passcode, oauthClientSecret, oauth_client_secret, proxyPassword.");
+  });
+
+  test("insecureMode and disableOCSPChecks change nothing, are named, and the TLS sentence follows", () => {
+    const result = parseConnectionString(
+      "jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?insecureMode=true&disableOCSPChecks=true&foo=1",
+    );
+    expect(result).toEqual({
+      type: "snowflake",
+      host: "myorg-myacct.snowflakecomputing.com",
+      notice: `Not applied: insecureMode, disableOCSPChecks, and 1 other parameter. ${SNOWFLAKE_PASTE_SENTENCES.tls}`,
+    });
+    expect(SNOWFLAKE_PASTE_SENTENCES.tls).toBe("Studio checks TLS whatever insecureMode or disableOCSPChecks say.");
+  });
+
+  test("an inline key refuses the whole paste by name, with the key absent from the refusal", () => {
+    const result = parseConnectionString(
+      "jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?user=u&PRIVATE_KEY_BASE64=K-SENT",
+    );
+    expect(result).toEqual({
+      type: "snowflake",
+      refusal:
+        "Studio does not take private_key_base64 from a pasted URL. Paste the key itself into Private key, not inside a URL.",
+      discardPaste: true,
+    });
+    expect(JSON.stringify(result)).not.toContain("K-SENT");
+    for (const name of ["private_key", "private_key_raw", "privatekey"]) {
+      expect(parseConnectionString(`snowflake://u@myorg-myacct/?${name}=K`)!.refusal).toBe(
+        SNOWFLAKE_PASTE_SENTENCES.inlineKey(name),
+      );
+    }
+  });
+
+  test("a path parameter refuses the whole paste by the list's own name, with the path absent", () => {
+    for (const name of [
+      "private_key_file",
+      "private_key_path",
+      "token_file_path",
+      "client_config_file",
+      "DIAGNOSTICS_ALLOWLIST_FILE",
+      "CRL_RESPONSE_CACHE_DIR",
+      "ocsp_response_cache_filename",
+      "crl_cache_dir",
+    ]) {
+      const result = parseConnectionString(
+        `jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?${name.toLowerCase()}=/etc/PATH-SENT`,
+      );
+      expect(result).toEqual({ type: "snowflake", refusal: SNOWFLAKE_PASTE_SENTENCES.path(name), discardPaste: true });
+      expect(JSON.stringify(result)).not.toContain("PATH-SENT");
+    }
+    expect(parseConnectionString("snowflake://u@myorg-myacct/?Connection_Diag_Log_Path=/tmp/PATH-SENT")!.refusal).toBe(
+      SNOWFLAKE_PASTE_SENTENCES.path("connection_diag_*_path"),
+    );
+    expect(SNOWFLAKE_PASTE_SENTENCES.path("private_key_file")).toBe(
+      "Studio does not take private_key_file from a pasted URL. Studio reads no file: paste the key's contents into Private key.",
+    );
+  });
+
+  test("an account the field would refuse refuses the paste with the account sentence", () => {
+    const result = parseConnectionString("snowflake://u:PW@my%20acct/d");
+    expect(result!.type).toBe("snowflake");
+    expect(result!.refusal).toBe(
+      "Enter an account identifier such as myorg-myaccount, or its https URL; a jdbc: or snowflake:// URL goes into Paste URL instead. Nothing was sent.",
+    );
+    expect(Object.keys(result!)).toEqual(["type", "refusal", "discardPaste"]);
+  });
+
+  test("an account URL on a port other than 443 is refused, and :443 is read as the account", () => {
+    expect(parseConnectionString("https://myorg-myacct.snowflakecomputing.com:8443/")).toEqual({
+      type: "snowflake",
+      refusal:
+        "Enter an account identifier such as myorg-myaccount, or its https URL; a jdbc: or snowflake:// URL goes into Paste URL instead. Nothing was sent.",
+      discardPaste: true,
+    });
+    expect(parseConnectionString("https://myorg-myacct.snowflakecomputing.com:443/")!.host).toBe(
+      "myorg-myacct.snowflakecomputing.com",
+    );
+  });
+
+  test("only a Snowflake refusal asks the form to discard the pasted text, since it may hold a token or a key", () => {
+    expect(parseConnectionString("snowflake://u@myorg-myacct/?private_key=K")!.discardPaste).toBe(true);
+    expect(parseConnectionString("https://myorg-myacct.snowflakecomputing.com/?token=S")).not.toHaveProperty(
+      "discardPaste",
+    );
+    // A Databend refusal leaves its text in the box to be corrected, as before.
+    expect(parseConnectionString("databend+flight://root:pw@db.example.com:8900/default")).not.toHaveProperty(
+      "discardPaste",
+    );
+  });
+
+  test("an authenticator named like an Object member is not a sign-in method", () => {
+    const result = parseConnectionString(
+      "jdbc:snowflake://myorg-myacct.snowflakecomputing.com/?authenticator=constructor",
+    );
+    expect(result!.authMethod).toBeUndefined();
+    expect(result!.notice).toBe("Not applied: authenticator.");
+  });
+
+  test("every other https:// paste still resolves to ClickHouse", () => {
+    const clickhouse = parseConnectionString("https://myacct.clickhouse.cloud:8443");
+    expect(clickhouse!.type).toBe("clickhouse");
+    expect(clickhouse!.host).toBe("myacct.clickhouse.cloud");
+    expect(parseConnectionString("https://snowflakecomputing.com.evil.example/")!.type).toBe("clickhouse");
+    expect(parseConnectionString("https://app.snowflake.com.evil.example/a/b")!.type).toBe("clickhouse");
+  });
+
+  test("detectConnectionStringType names snowflake for the same forms", () => {
+    expect(detectConnectionStringType("https://xy12345.us-east-2.aws.snowflakecomputing.com")).toBe("snowflake");
+    expect(detectConnectionStringType("jdbc:snowflake://a.snowflakecomputing.com/")).toBe("snowflake");
+    expect(detectConnectionStringType("snowflake://u@acct/d")).toBe("snowflake");
+    expect(detectConnectionStringType("https://ch.example.clickhouse.cloud")).toBe("clickhouse");
   });
 });

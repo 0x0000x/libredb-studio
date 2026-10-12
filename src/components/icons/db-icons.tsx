@@ -828,3 +828,30 @@ export const FirestoreIcon: React.FC<IconProps> = ({ className, ...props }) => (
     <path d="M4 7v12.5A1.5 1.5 0 0 0 5.5 21H14" />
   </svg>
 );
+
+/**
+ * Snowflake: a mark drawn for Studio, never the company's logo: a six-armed snowflake, three strokes through a centre
+ * with a chevron on each arm. Stroked on the house 24-unit grid like the others.
+ */
+export const SnowflakeIcon: React.FC<IconProps> = ({ className, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <path d="M12 2.5 V21.5" />
+    <path d="M3.77 7.25 L20.23 16.75" />
+    <path d="M3.77 16.75 L20.23 7.25" />
+    <path d="M13.94 3.56 L12 5.5 L10.06 3.56" />
+    <path d="M5.66 6.09 L6.37 8.75 L3.71 9.46" />
+    <path d="M3.71 14.54 L6.37 15.25 L5.66 17.91" />
+    <path d="M10.06 20.44 L12 18.5 L13.94 20.44" />
+    <path d="M18.34 17.91 L17.63 15.25 L20.29 14.54" />
+    <path d="M20.29 9.46 L17.63 8.75 L18.34 6.09" />
+  </svg>
+);

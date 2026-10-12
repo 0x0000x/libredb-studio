@@ -91,6 +91,7 @@ const ENGINES = [
   "src/lib/db/providers/sql/druid/objects.ts",
   "src/lib/db/providers/sql/duckdb/objects.ts",
   "src/lib/db/providers/sql/libsql/objects.ts",
+  "src/lib/db/providers/sql/snowflake/index.ts",
   "src/lib/db/providers/sql/mssql.ts",
   "src/lib/db/providers/sql/mysql.ts",
   "src/lib/db/providers/sql/oracle.ts",

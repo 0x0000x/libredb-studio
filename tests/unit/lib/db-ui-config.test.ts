@@ -6,6 +6,7 @@ import {
   connectionFieldLabel,
   connectionFieldPlaceholder,
   connectionFieldRefusal,
+  connectionFieldShown,
   DATABEND_FIELD_HINTS,
   DATABEND_FIELD_RULES,
   DB_UI_CONFIG,
@@ -21,6 +22,8 @@ import {
   offersSshTunnel,
   offersSslPanel,
   readOnlyHint,
+  SNOWFLAKE_FIELD_HINTS,
+  SNOWFLAKE_FIELD_RULES,
   S3_FIELD_HINTS,
   S3_FIELD_RULES,
   takesConnectionField,
@@ -48,7 +51,12 @@ import {
   readClusterEndpoint,
 } from "@/lib/db/providers/platform/kubernetes/connection-options";
 import { S3_ACCESS_KEY_ID_MAX_CHARS, S3_ACCESS_KEY_ID_MIN_CHARS } from "@/lib/db/providers/objectstore/s3/constants";
-import { DatabendIcon, FirestoreIcon, InfluxDBIcon, S3Icon } from "@/components/icons/db-icons";
+import { DatabendIcon, FirestoreIcon, InfluxDBIcon, S3Icon, SnowflakeIcon } from "@/components/icons/db-icons";
+import {
+  SNOWFLAKE_ACCOUNT_PATTERN,
+  SNOWFLAKE_FIELD_SENTENCES,
+  snowflakeHostHint,
+} from "@/lib/db/providers/sql/snowflake/account-host";
 import { CREDENTIAL_WARNINGS } from "@/lib/db/credential-warnings";
 import { declareHostUri } from "../../helpers/synthetic-host-uri";
 import { providerDirectoryFiles } from "../../helpers/provider-directory-map";
@@ -90,6 +98,7 @@ const ALL_TYPES: DatabaseType[] = [
   "oxia",
   "databend",
   "bigquery",
+  "snowflake",
   "s3",
   "kubernetes",
   "mqtt",
@@ -307,7 +316,7 @@ describe("db-ui-config", () => {
       expect(offersSshTunnel("postgres")).toBe(true);
     });
 
-    test("only kafka's, bigquery's, firestore's and rabbitmq's connections refuse an SSH tunnel, and only because their entries declare it", () => {
+    test("only kafka's, bigquery's, snowflake's, firestore's and rabbitmq's connections refuse an SSH tunnel, and only because their entries declare it", () => {
       // Derived from the declaration rather than typed out: a tunnel forwards one address, and a
       // Kafka client reaches every broker at the address the broker advertises (docs/providers/kafka.md).
       for (const type of ALL_TYPES) {
@@ -317,20 +326,21 @@ describe("db-ui-config", () => {
         });
       }
       const refusing = ALL_TYPES.filter((type) => !offersSshTunnel(type));
-      expect(refusing.sort()).toEqual(["bigquery", "firestore", "kafka", "rabbitmq"]);
+      expect(refusing.sort()).toEqual(["bigquery", "firestore", "kafka", "rabbitmq", "snowflake"]);
       // A file-based engine still answers true: its panel is hidden by isFileBased instead.
       expect(offersSshTunnel("sqlite")).toBe(true);
     });
 
-    test("only bigquery's and firestore's connections withhold the SSL panel, and only because their entries declare it", () => {
-      // BigQuery always speaks HTTPS to googleapis.com with the system trust store, so an SSL mode is read by nothing.
+    test("only bigquery's, snowflake's and firestore's connections withhold the SSL panel, and only because their entries declare it", () => {
+      // BigQuery always speaks HTTPS to googleapis.com with the system trust store, and Snowflake to the account host with
+      // the certificate checked against that name, so an SSL mode is read by nothing.
       for (const type of ALL_TYPES) {
         expect({ type, offered: offersSslPanel(type) }).toEqual({
           type,
           offered: getDBConfig(type).showSslPanel !== false,
         });
       }
-      expect(ALL_TYPES.filter((type) => !offersSslPanel(type))).toEqual(["bigquery", "firestore"]);
+      expect(ALL_TYPES.filter((type) => !offersSslPanel(type))).toEqual(["bigquery", "snowflake", "firestore"]);
     });
 
     test("a field an engine draws as a select is a field it takes, and the SASL select is drawn exactly where the field is taken", () => {
@@ -684,6 +694,10 @@ const FIELD_CHECKLIST: Record<ConnectionField, true> = {
   namespaces: true,
   tlsServerName: true,
   amqpPort: true,
+  authMethod: true,
+  privateKey: true,
+  privateKeyPassphrase: true,
+  role: true,
 };
 const EVERY_FIELD = Object.keys(FIELD_CHECKLIST) as ConnectionField[];
 
@@ -962,7 +976,7 @@ describe("declared connection-field copy (#1085)", () => {
     }
   });
 
-  test("only libsql, db2, prometheus, kafka, etcd, neo4j, milvus, qdrant, the two InfluxDB types, oxia, databend, bigquery, s3, kubernetes, mqtt, firestore and rabbitmq declare field copy, so every other engine draws every label and hint it drew before", () => {
+  test("only libsql, db2, prometheus, kafka, etcd, neo4j, milvus, qdrant, the two InfluxDB types, oxia, databend, bigquery, snowflake, s3, kubernetes, mqtt, firestore and rabbitmq declare field copy, so every other engine draws every label and hint it drew before", () => {
     const declared = Object.entries(DB_UI_CONFIG)
       .filter(([, config]) => config.fieldLabels !== undefined || config.fieldHints !== undefined)
       .map(([type]) => type);
@@ -980,6 +994,7 @@ describe("declared connection-field copy (#1085)", () => {
       "oxia",
       "databend",
       "bigquery",
+      "snowflake",
       "s3",
       "kubernetes",
       "mqtt",
@@ -1227,11 +1242,11 @@ describe("declared field rules (Databend design 6.3)", () => {
     );
   });
 
-  test("only databend, s3, kubernetes and rabbitmq declare field rules, so no other engine's Test Connection or Save is checked", () => {
+  test("only databend, snowflake, s3, kubernetes and rabbitmq declare field rules, so no other engine's Test Connection or Save is checked", () => {
     const declaring = Object.entries(DB_UI_CONFIG)
       .filter(([, config]) => config.fieldRules !== undefined)
       .map(([type]) => type);
-    expect(declaring).toEqual(["databend", "s3", "kubernetes", "rabbitmq"]);
+    expect(declaring).toEqual(["databend", "snowflake", "s3", "kubernetes", "rabbitmq"]);
     for (const type of ALL_TYPES.filter((candidate) => !declaring.includes(candidate))) {
       expect(
         connectionFieldRefusal(
@@ -1502,6 +1517,9 @@ describe("db-showcase", () => {
         // Behind Firestore and ahead of libSQL (#1656): the message broker a team runs beside its databases, so only
         // libSQL and the embedded store move, as they did for Firestore.
         "rabbitmq",
+        // Behind RabbitMQ and ahead of libSQL: the third cloud data warehouse, so only libSQL and the embedded store
+        // move, as they did for RabbitMQ.
+        "snowflake",
         "libsql",
         "libredb",
       ]);
@@ -1572,6 +1590,182 @@ describe("Host box addresses and credential warnings", () => {
       restore();
     }
     expect(getDBConfig("etcd").credentialWarnings).toBeUndefined();
+  });
+});
+
+describe("the Snowflake entry", () => {
+  const snowflake = getDBConfig("snowflake");
+  const connection = (fields: Record<string, unknown>): DatabaseConnection =>
+    ({
+      id: "sf",
+      name: "Snowflake",
+      type: "snowflake",
+      host: "myorg-myaccount",
+      user: "studio_svc",
+      role: "STUDIO_RO",
+      privateKey: "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n",
+      createdAt: new Date(0),
+      ...fields,
+    }) as DatabaseConnection;
+
+  test("declares its icon, hue, fields, labels, the method select, placeholders and hints, and no panel", () => {
+    expect(snowflake).toMatchObject({
+      icon: SnowflakeIcon,
+      color: "text-hue-mist",
+      label: "Snowflake",
+      defaultPort: "",
+      defaultHost: "",
+      showConnectionStringToggle: false,
+      showSshTunnel: false,
+      showSslPanel: false,
+    });
+    expect(snowflake.connectionFields).toEqual([
+      "host",
+      "user",
+      "authMethod",
+      "privateKey",
+      "privateKeyPassphrase",
+      "password",
+      "warehouse",
+      "database",
+      "schema",
+      "role",
+    ]);
+    expect(connectionFieldLabel(snowflake, "host", "Host")).toBe("Account");
+    expect(connectionFieldLabel(snowflake, "password", "Password")).toBe("Access token");
+    expect(snowflake.fieldOptions?.authMethod).toEqual([
+      { value: "keypair", label: "Key pair" },
+      { value: "pat", label: "Programmatic access token" },
+    ]);
+    expect(connectionFieldPlaceholder(snowflake, "privateKey", "")).toBe("-----BEGIN PRIVATE KEY-----");
+    for (const field of ["user", "database", "schema"] as const) {
+      expect(connectionFieldPlaceholder(snowflake, field, "fallback")).toBe("");
+    }
+    expect(snowflake.fieldHints).toBe(SNOWFLAKE_FIELD_HINTS);
+    expect(connectionFieldHint(snowflake, "role")).toBe(
+      "Every statement runs as this role; Studio checks it when it connects.",
+    );
+  });
+
+  test("checks the account, the user and the role in the provider's own sentences", () => {
+    expect(snowflake.fieldRules).toBe(SNOWFLAKE_FIELD_RULES);
+    expect(SNOWFLAKE_FIELD_RULES.host?.format?.pattern).toBe(SNOWFLAKE_ACCOUNT_PATTERN);
+    expect(connectionFieldRefusal(snowflake, connection({}))).toBeUndefined();
+    expect(connectionFieldRefusal(snowflake, connection({ host: "" }))).toBe(SNOWFLAKE_FIELD_SENTENCES.accountEmpty);
+    expect(connectionFieldRefusal(snowflake, connection({ host: "jdbc:snowflake://myorg-myaccount" }))).toBe(
+      SNOWFLAKE_FIELD_SENTENCES.accountFormat,
+    );
+    expect(connectionFieldRefusal(snowflake, connection({ user: "" }))).toBe(SNOWFLAKE_FIELD_SENTENCES.userEmpty);
+    expect(connectionFieldRefusal(snowflake, connection({ role: "" }))).toBe(SNOWFLAKE_FIELD_SENTENCES.roleEmpty);
+  });
+
+  test("refuses each empty required field in the sentence of its own", () => {
+    expect(SNOWFLAKE_FIELD_SENTENCES.accountEmpty).toBe(
+      "Enter Account: an account identifier such as myorg-myaccount, or its URL. Nothing was sent.",
+    );
+    expect(SNOWFLAKE_FIELD_SENTENCES.userEmpty).toBe("Enter the user's login name. Nothing was sent.");
+    expect(SNOWFLAKE_FIELD_SENTENCES.roleEmpty).toBe("Enter the role every statement runs as. Nothing was sent.");
+    expect(SNOWFLAKE_FIELD_SENTENCES.keyEmpty).toBe("Paste the private key for key-pair sign-in. Nothing was sent.");
+    expect(SNOWFLAKE_FIELD_SENTENCES.tokenEmpty).toBe("Enter the programmatic access token. Nothing was sent.");
+    expect(connectionFieldRefusal(snowflake, connection({ host: undefined }))).toBe(
+      "Enter Account: an account identifier such as myorg-myaccount, or its URL. Nothing was sent.",
+    );
+    expect(connectionFieldRefusal(snowflake, connection({ user: undefined }))).toBe(
+      "Enter the user's login name. Nothing was sent.",
+    );
+    expect(connectionFieldRefusal(snowflake, connection({ role: undefined }))).toBe(
+      "Enter the role every statement runs as. Nothing was sent.",
+    );
+    expect(connectionFieldRefusal(snowflake, connection({ privateKey: "" }))).toBe(
+      "Paste the private key for key-pair sign-in. Nothing was sent.",
+    );
+    expect(connectionFieldRefusal(snowflake, connection({ authMethod: "pat", privateKey: undefined }))).toBe(
+      "Enter the programmatic access token. Nothing was sent.",
+    );
+  });
+
+  test("shows the key and the passphrase for a key pair and the token for an access token", () => {
+    expect(snowflake.fieldShownWhen).toEqual({
+      privateKey: { field: "authMethod", equals: "keypair" },
+      privateKeyPassphrase: { field: "authMethod", equals: "keypair" },
+      password: { field: "authMethod", equals: "pat" },
+    });
+    // A field with no condition is always shown.
+    expect(connectionFieldShown(snowflake, "role", {})).toBe(true);
+    expect(connectionFieldShown(snowflake, "privateKey", { authMethod: "keypair" })).toBe(true);
+    expect(connectionFieldShown(snowflake, "privateKeyPassphrase", { authMethod: "keypair" })).toBe(true);
+    expect(connectionFieldShown(snowflake, "password", { authMethod: "keypair" })).toBe(false);
+    expect(connectionFieldShown(snowflake, "password", { authMethod: "pat" })).toBe(true);
+    expect(connectionFieldShown(snowflake, "privateKey", { authMethod: "pat" })).toBe(false);
+    expect(connectionFieldShown(snowflake, "privateKeyPassphrase", { authMethod: "pat" })).toBe(false);
+    // An unset method reads as the select's first option, the key pair.
+    expect(connectionFieldShown(snowflake, "privateKey", {})).toBe(true);
+    expect(connectionFieldShown(snowflake, "password", {})).toBe(false);
+    expect(connectionFieldShown(snowflake, "password", { authMethod: undefined })).toBe(false);
+  });
+
+  test("reads a condition on a field with no options as unmet while that field is unset", () => {
+    const config: DatabaseUIConfig = {
+      ...getDBConfig("postgres"),
+      fieldShownWhen: { schema: { field: "database", equals: "app" } },
+    };
+    expect(connectionFieldShown(config, "schema", {})).toBe(false);
+    expect(connectionFieldShown(config, "schema", { database: "app" })).toBe(true);
+    expect(connectionFieldShown(config, "schema", { database: "other" })).toBe(false);
+    expect(connectionFieldShown(config, "user", {})).toBe(true);
+  });
+
+  test("checks the key only under a key pair and the token only under an access token", () => {
+    // The token's rule is skipped under a key pair, and the key's under an access token.
+    expect(connectionFieldRefusal(snowflake, connection({ authMethod: "keypair", password: "" }))).toBeUndefined();
+    expect(connectionFieldRefusal(snowflake, connection({ password: undefined }))).toBeUndefined();
+    expect(
+      connectionFieldRefusal(snowflake, connection({ authMethod: "pat", privateKey: "", password: "S-TOKEN" })),
+    ).toBeUndefined();
+    expect(connectionFieldRefusal(snowflake, connection({ authMethod: "keypair", privateKey: "" }))).toBe(
+      SNOWFLAKE_FIELD_SENTENCES.keyEmpty,
+    );
+    expect(connectionFieldRefusal(snowflake, connection({ authMethod: "pat", password: "" }))).toBe(
+      SNOWFLAKE_FIELD_SENTENCES.tokenEmpty,
+    );
+    expect(SNOWFLAKE_FIELD_RULES.privateKey).toEqual({ required: SNOWFLAKE_FIELD_SENTENCES.keyEmpty });
+    expect(SNOWFLAKE_FIELD_RULES.password).toEqual({ required: SNOWFLAKE_FIELD_SENTENCES.tokenEmpty });
+  });
+
+  test("derives the host it connects to for the Account hint, and declares the account placeholder", () => {
+    expect(snowflake.hostHint).toBe(snowflakeHostHint);
+    expect(snowflake.hostHint?.("myorg-myacct")).toBe("Studio connects to myorg-myacct.snowflakecomputing.com.");
+    expect(snowflake.hostHint?.("")).toBeUndefined();
+    expect(connectionFieldPlaceholder(snowflake, "host", "localhost")).toBe(
+      "myorg-myaccount or https://myorg-myaccount.snowflakecomputing.com",
+    );
+  });
+
+  test("only snowflake takes a host without a port, so every other host row keeps its Port box", () => {
+    expect(
+      ALL_TYPES.filter((type) => takesConnectionField(type, "host") && !takesConnectionField(type, "port")),
+    ).toEqual(["snowflake"]);
+  });
+
+  test("only snowflake declares a derived host hint, so every other Host box keeps its static hint", () => {
+    expect(
+      Object.entries(DB_UI_CONFIG)
+        .filter(([, config]) => config.hostHint !== undefined)
+        .map(([type]) => type),
+    ).toEqual(["snowflake"]);
+  });
+
+  test("only snowflake declares a field shown while another field holds a value, so every other dialog is unchanged", () => {
+    const declaring = Object.entries(DB_UI_CONFIG)
+      .filter(([, config]) => config.fieldShownWhen !== undefined)
+      .map(([type]) => type);
+    expect(declaring).toEqual(["snowflake"]);
+    for (const type of ALL_TYPES.filter((candidate) => candidate !== "snowflake")) {
+      const config = getDBConfig(type);
+      for (const field of config.connectionFields) {
+        expect(connectionFieldShown(config, field, {})).toBe(true);
+      }
+    }
   });
 });
 

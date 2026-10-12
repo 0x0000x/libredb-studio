@@ -187,10 +187,10 @@ jobs:
         with:
           node-version: "26.10.0"
 
-      - name: Run the transport runtime cases, the S3 client wire cases and the RabbitMQ dial cases on Node 26.10.0
+      - name: Run the transport runtime cases, the S3 client wire cases, the RabbitMQ dial cases and the Snowflake key cases on Node 26.10.0
         run: |
           test "$(node --version)" = "v26.10.0"
-          NODE_TRANSPORT_NODES="$(command -v node)" bun tests/run-tests.ts tests/unit/db/http/node-transport-runtimes.test.ts tests/unit/db/s3/client-wire.test.ts tests/unit/db/rabbitmq/dial-runtimes.test.ts
+          NODE_TRANSPORT_NODES="$(command -v node)" bun tests/run-tests.ts tests/unit/db/http/node-transport-runtimes.test.ts tests/unit/db/s3/client-wire.test.ts tests/unit/db/rabbitmq/dial-runtimes.test.ts tests/unit/db/snowflake/key-runtimes.test.ts
 
       - name: Upload coverage artifact
         # always(): keep the lcov available for debugging when coverage:check

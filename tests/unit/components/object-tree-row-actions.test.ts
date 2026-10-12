@@ -549,6 +549,22 @@ describe("a kind whose rows are derived groupings", () => {
 });
 
 /**
+ * The column profiler opt-out: an SQL engine whose profile scans would bill a warehouse per click declares
+ * `supportsColumnProfiling: false`, and the profile entry goes; the same declaration without the field keeps it.
+ */
+describe("an SQL engine declaring supportsColumnProfiling false", () => {
+  const declined = { ...postgres, supportsColumnProfiling: false } as ProviderCapabilities;
+
+  test("is not offered Profile", () => {
+    expect(idsFor(objectRow("table"), declined)).not.toContain("profile");
+  });
+
+  test("the same declaration without the field IS offered Profile", () => {
+    expect(idsFor(objectRow("table"), postgres)).toContain("profile");
+  });
+});
+
+/**
  * Browse Keys, the ONE action that opens another READING of the row rather than acting on it.
  *
  * TWO declarations and no kind id, which is what makes this a gate rather than a special case:

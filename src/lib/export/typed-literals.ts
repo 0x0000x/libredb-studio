@@ -639,6 +639,85 @@ function databendValue(value: unknown, declared: string, scalar: ScalarLiteral):
 const databendLiteral: TypedWriter = (value, declared, scalar) =>
   declared === undefined || asBytes(value) !== undefined ? undefined : databendValue(value, declared, scalar);
 
+// ---------------------------------------------------------------------------------------
+// Snowflake
+// ---------------------------------------------------------------------------------------
+
+/** The semi-structured types, each written through `PARSE_JSON`; a structured spelling of one is also cast. */
+const SNOWFLAKE_SEMI_STRUCTURED = /^(VARIANT|OBJECT|ARRAY|MAP)$/;
+/**
+ * A declared type a cast may name: a type name and an argument list of names, digits, commas, spaces and parentheses.
+ * The declaration is data, so nothing that could close a literal, start a comment or end the statement passes.
+ */
+const SNOWFLAKE_CAST_TYPE = /^[A-Z_]+\([A-Z0-9_, ()]*\)$/i;
+/** A NUMBER or DECFLOAT text written bare, as the decoder hands over its exact text. */
+const SNOWFLAKE_NUMERIC_TEXT = /^-?\d+(\.\d+)?(e[+-]?\d+)?$/i;
+
+/** The decoder's text for each temporal type, its conversion function, and its mask without the fraction. */
+const SNOWFLAKE_TEMPORAL: Readonly<Record<string, { shape: RegExp; convert: string; mask: string; zoned: boolean }>> = {
+  DATE: { shape: /^\d{4}-\d{2}-\d{2}$/, convert: "TO_DATE", mask: "YYYY-MM-DD", zoned: false },
+  TIME: { shape: /^\d{2}:\d{2}:\d{2}(?:\.(\d{1,9}))?$/, convert: "TO_TIME", mask: "HH24:MI:SS", zoned: false },
+  TIMESTAMP_NTZ: {
+    shape: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.(\d{1,9}))?$/,
+    convert: "TO_TIMESTAMP_NTZ",
+    mask: "YYYY-MM-DD HH24:MI:SS",
+    zoned: false,
+  },
+  TIMESTAMP_LTZ: {
+    shape: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.(\d{1,9}))?[+-]\d{2}:\d{2}$/,
+    convert: "TO_TIMESTAMP_LTZ",
+    mask: "YYYY-MM-DD HH24:MI:SS",
+    zoned: true,
+  },
+  TIMESTAMP_TZ: {
+    shape: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.(\d{1,9}))?[+-]\d{2}:\d{2}$/,
+    convert: "TO_TIMESTAMP_TZ",
+    mask: "YYYY-MM-DD HH24:MI:SS",
+    zoned: true,
+  },
+};
+
+/**
+ * A Snowflake cell by its declared type, in the catalog spelling the provider's decoder reports.
+ *
+ * Provisional until a replay on an account confirms each form. A semi-structured, structured or VECTOR cell is
+ * `PARSE_JSON` of its JSON text, which `INSERT ... VALUES` refuses, so the export writes Snowflake's rows as
+ * `INSERT ... SELECT`; a VECTOR or a structured type is cast to its declaration, and a VECTOR without its dimension
+ * has no cast to name. A date, a time or a timestamp goes through its `TO_*` function with a mask matching the
+ * decoder's text, the fraction digits as the text carries them, so no account input format moves the value; a cell
+ * not in that text is refused rather than left to an input format.
+ */
+function snowflakeValue(value: unknown, declared: string, scalar: ScalarLiteral): string | undefined {
+  const spelled = declared.trim().replace(/\s+/g, " ");
+  const name = spelled.split("(")[0].trim().toUpperCase();
+  const structured = spelled.includes("(");
+  if (SNOWFLAKE_SEMI_STRUCTURED.test(name) || name === "VECTOR") {
+    const parsed = `PARSE_JSON(${quoteLiteral(typeof value === "string" ? value : jsonText(value), "snowflake")})`;
+    if (!structured) {
+      if (name === "VECTOR") throw new UnwritableValue("a VECTOR whose dimension is not declared");
+      return parsed;
+    }
+    if (!SNOWFLAKE_CAST_TYPE.test(spelled)) throw new UnwritableValue(`a ${name} whose declared type is not a type`);
+    return `${parsed}::${spelled}`;
+  }
+  const temporal = Object.hasOwn(SNOWFLAKE_TEMPORAL, name) ? SNOWFLAKE_TEMPORAL[name] : undefined;
+  if (temporal !== undefined) {
+    const match = typeof value === "string" ? temporal.shape.exec(value) : null;
+    if (match === null) throw new UnwritableValue(`a ${name} that is not in the form Studio reads`);
+    const fraction = match[1] === undefined ? "" : `.FF${match[1].length}`;
+    const mask = `${temporal.mask}${fraction}${temporal.zoned ? "TZH:TZM" : ""}`;
+    return `${temporal.convert}(${quoteLiteral(value as string, "snowflake")}, '${mask}')`;
+  }
+  if ((name === "NUMBER" || name === "DECFLOAT") && typeof value === "string") {
+    return SNOWFLAKE_NUMERIC_TEXT.test(value) ? value : scalar(value);
+  }
+  return undefined;
+}
+
+/** Every declared cell but bytes, which the generic writer spells with `BINARY_LITERAL.snowflake`. */
+const snowflakeLiteral: TypedWriter = (value, declared, scalar) =>
+  declared === undefined || asBytes(value) !== undefined ? undefined : snowflakeValue(value, declared, scalar);
+
 /** The dialects whose INSERT needs a declared type to write some cell; the rest have no row. */
 const TYPED_WRITERS: Partial<Record<DatabaseType, TypedWriter>> = {
   postgres: postgresLiteral,
@@ -648,6 +727,7 @@ const TYPED_WRITERS: Partial<Record<DatabaseType, TypedWriter>> = {
   duckdb: duckdbLiteral,
   cassandra: cassandraLiteral,
   databend: databendLiteral,
+  snowflake: snowflakeLiteral,
 };
 
 /**

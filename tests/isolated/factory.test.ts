@@ -48,7 +48,7 @@ import { ExecutionBudgetTracker } from "@/lib/db/operations/budgets";
 import { createCanonicalOperationRegistry, sqlExplainAnalyzeDescriptor } from "@/lib/db/operations/descriptors";
 import { createTargetScope } from "@/lib/db/operations/policy";
 import type { DatabaseProvider, QueryResult } from "@/lib/db/types";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, relative as relativePath } from "node:path";
 import type { DatabaseConnection, ReadOnlyStatementBudget } from "@/lib/db/types";
@@ -630,7 +630,7 @@ describe("createDatabaseProvider", () => {
   test("the factory error lists databend after trino, in the SQL block", async () => {
     const conn = makeConnection("not-an-engine");
     await expect(createDatabaseProvider(conn)).rejects.toThrow(
-      /Supported types: .*\bdruid, trino, databend, bigquery, cassandra\b/,
+      /Supported types: .*\bdruid, trino, databend, bigquery, snowflake, cassandra\b/,
     );
   });
 
@@ -3386,4 +3386,105 @@ test("a denied SQLite caller cannot borrow a cached administrator handle", async
   } finally {
     clearProviderCache();
   }
+});
+
+// ─── Snowflake: the two-argument build, the role split and removal ─────────
+
+// Imported after the factory, which this file must evaluate first (the docblock above).
+const { SnowflakeProvider } = await import("@/lib/db/providers/sql/snowflake/index");
+
+describe("the Snowflake provider in the factory", () => {
+  /** A Snowflake connection as a census builds one: nothing in it is read before connect(). */
+  const snowflake = (overrides: Partial<DatabaseConnection> = {}): DatabaseConnection =>
+    makeConnection("snowflake", {
+      host: "myorg-myaccount",
+      port: undefined,
+      user: "studio_svc",
+      role: "STUDIO_RO",
+      authMethod: "pat",
+      password: "stand-in-token",
+      warehouse: "STUDIO_WH",
+      ...overrides,
+    });
+
+  /** connect() stubbed to mark the provider connected and send nothing, as the file stubs other providers. */
+  function stubConnect() {
+    return spyOn(SnowflakeProvider.prototype, "connect").mockImplementation(async function (
+      this: InstanceType<typeof SnowflakeProvider>,
+    ) {
+      (this as unknown as { setConnected(connected: boolean): void }).setConnected(true);
+    });
+  }
+
+  test("builds SnowflakeProvider with two arguments only, so no deps reach it from a connection", async () => {
+    const source = readFileSync(join(import.meta.dir, "../../src/lib/db/factory.ts"), "utf8");
+    const start = source.indexOf('case "snowflake": {');
+    expect(start).toBeGreaterThan(-1);
+    // The case block ends at its own closing brace, the first one at the case's indentation.
+    const block = source.slice(start, source.indexOf("\n    }", start));
+    expect(block).toContain("new SnowflakeProvider(connection, options)");
+    expect(block).not.toMatch(/new SnowflakeProvider\([^)]*,[^)]*,/);
+
+    const provider = await createDatabaseProvider(snowflake());
+    expect(provider).toBeInstanceOf(SnowflakeProvider);
+    expect(provider.isConnected()).toBe(false);
+  });
+
+  test("two connections differing only in role are two cache entries, two instances, each with its own role", async () => {
+    const connect = stubConnect();
+    try {
+      const first = await getOrCreateProvider(snowflake({ id: "sf-roles", role: "ROLE_A" }));
+      const second = await getOrCreateProvider(snowflake({ id: "sf-roles", role: "ROLE_B" }));
+      expect(first).not.toBe(second);
+      expect(first.config.role).toBe("ROLE_A");
+      expect(second.config.role).toBe("ROLE_B");
+      expect(getProviderCacheStats()).toEqual({ size: 2, connections: ["sf-roles", "sf-roles"] });
+      expect(connect).toHaveBeenCalledTimes(2);
+      // The same role again is the first entry, not a third.
+      expect(await getOrCreateProvider(snowflake({ id: "sf-roles", role: "ROLE_A" }))).toBe(first);
+    } finally {
+      connect.mockRestore();
+    }
+  });
+
+  test("removeProvider calls disconnect() once per cached entry of the connection, shared and profiled", async () => {
+    const connect = stubConnect();
+    const disconnect = spyOn(SnowflakeProvider.prototype, "disconnect");
+    try {
+      const conn = snowflake({ id: "sf-remove" });
+      await getOrCreateProvider(conn);
+      await acquireExecutionProfileProvider(conn, "agent-operations");
+      expect(getProviderCacheStats().size).toBe(1);
+      expect(getExecutionProfileCacheStats().size).toBe(1);
+
+      await removeProvider(conn.id);
+
+      expect(disconnect).toHaveBeenCalledTimes(2);
+      expect(getProviderCacheStats().size).toBe(0);
+      expect(getExecutionProfileCacheStats().size).toBe(0);
+    } finally {
+      connect.mockRestore();
+      disconnect.mockRestore();
+    }
+  });
+
+  test.each(["agent-read-only", "agent-handover"] as const)(
+    "the %s profile is refused, since Snowflake declares no read-only statement path, and nothing connects",
+    async (profile) => {
+      const connect = stubConnect();
+      try {
+        const error: unknown = await acquireExecutionProfileProvider(snowflake({ id: `sf-${profile}` }), profile).catch(
+          (e: unknown) => e,
+        );
+        expect(error).toBeInstanceOf(ExecutionProfileError);
+        expect((error as InstanceType<typeof ExecutionProfileError>).reasonCode).toBe(
+          "PROFILE_UNSUPPORTED_BY_PROVIDER",
+        );
+        expect(connect).not.toHaveBeenCalled();
+        expect(getExecutionProfileCacheStats().size).toBe(0);
+      } finally {
+        connect.mockRestore();
+      }
+    },
+  );
 });

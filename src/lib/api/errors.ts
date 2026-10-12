@@ -41,6 +41,8 @@ export interface ApiErrorResponse {
   statusCode: number;
   retryable?: boolean;
   details?: unknown;
+  /** On a 401 only: a statement the user can copy and run to fix the refusal, when the provider knows one. */
+  fixStatement?: string;
 }
 
 // ============================================================================
@@ -123,7 +125,15 @@ export function createErrorResponse(error: unknown, context?: { route?: string }
   // --- DB: AuthenticationError ---
   if (error instanceof AuthenticationError) {
     logger.warn("Database auth error", { route, provider: error.provider });
-    return NextResponse.json({ error: error.message, code: ApiErrorCode.AUTH_ERROR, statusCode: 401 }, { status: 401 });
+    return NextResponse.json(
+      {
+        error: error.message,
+        code: ApiErrorCode.AUTH_ERROR,
+        statusCode: 401,
+        ...(error.fixStatement === undefined ? {} : { fixStatement: error.fixStatement }),
+      },
+      { status: 401 },
+    );
   }
 
   // --- DB: TimeoutError ---

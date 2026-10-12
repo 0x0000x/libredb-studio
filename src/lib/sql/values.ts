@@ -124,6 +124,9 @@ const LITERAL_ESCAPE: Record<DatabaseType, LiteralEscape> = {
   databend: "double-and-backslash",
   // GoogleSQL escapes the quote as \\' and does not accept doubling.
   bigquery: "backslash",
+  // Snowflake reads both escapes in a single-quoted string constant: a doubled quote is one quote, and a backslash
+  // escapes the next character, so it is doubled first, as Databend's is.
+  snowflake: "double-and-backslash",
   // SQL++ spells its literals the way JSON does — `char ::= unicode-character |
   // '\' ( '\' | '"' | "'" | 'b' | 'f' | 'n' | 'r' | 't' | 'u' hex hex hex hex )`.
   // Doubling is not in that grammar, so a doubled quote is not one literal there.

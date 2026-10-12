@@ -82,9 +82,16 @@ export class ConnectionError extends DatabaseError {
  * Authentication error - invalid credentials
  */
 export class AuthenticationError extends DatabaseError {
-  constructor(message: string, provider?: DatabaseType) {
+  /**
+   * A statement the user can copy and run to fix the refusal, when the provider knows one; shown under the message.
+   * An own property only then, so every other AuthenticationError has the same own keys as before it existed.
+   */
+  declare readonly fixStatement?: string;
+
+  constructor(message: string, provider?: DatabaseType, options: { readonly fixStatement?: string } = {}) {
     super(message, provider, ApiErrorCode.AUTH_ERROR);
     this.name = "AuthenticationError";
+    if (options.fixStatement !== undefined) this.fixStatement = options.fixStatement;
     Object.setPrototypeOf(this, AuthenticationError.prototype);
   }
 }

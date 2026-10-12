@@ -140,6 +140,13 @@ const CONNECTION_RELEVANCE: Record<keyof DatabaseConnection, FieldRelevance> = {
   // naming another warehouse does not resolve to the seed's connection, the dataServers reasoning.
   warehouse: "resolution",
   location: "resolution",
+  // Snowflake: the sign-in method, the key and its passphrase decide as whom the connection signs in, as user and
+  // password do, and the role decides what every statement may read and change, so a copy differing in any of them
+  // does not resolve to the seed's connection.
+  authMethod: "resolution",
+  privateKey: "resolution",
+  privateKeyPassphrase: "resolution",
+  role: "resolution",
   // The region every S3 request is signed for: a copy naming another region signs for another scope and a server
   // with a region of its own refuses it, so it does not resolve to the seed's connection, the warehouse reasoning.
   region: "resolution",

@@ -1,0 +1,163 @@
+{
+  "item": "M101",
+  "step": 1,
+  "asks": "Does DESC USER on oneself answer with no warehouse, so a later revision can read the default warehouse?",
+  "rowsSummarised": "Every answer's rows are summarised: each answer that carried rows keeps its other fields and records `rows` with the byte length on the wire and decoded, the row count, and the first and the last row.",
+  "coldStart": "SUSPENDED",
+  "stateBefore": "SUSPENDED",
+  "stateAfter": "SUSPENDED",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v2/statements?async=true&requestId=00000000-0000-0000-0000-000000000025",
+        "headers": {
+          "authorization": "Bearer <token-8>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence",
+          "content-type": "application/json"
+        },
+        "body": {
+          "statement": "DESC USER <user-2>",
+          "timeout": 60,
+          "database": "STUDIO_DEMO",
+          "schema": "PROBE",
+          "role": "STUDIO_RO",
+          "parameters": {
+            "multi_statement_count": "1",
+            "query_tag": "libredb-studio:evidence",
+            "client_result_chunk_size": 16,
+            "rows_per_resultset": 100001,
+            "timezone": "UTC"
+          }
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "code": "333334",
+          "message": "Asynchronous execution in progress. Use provided query id to perform query monitoring and management.",
+          "statementHandle": "00000000-0000-0000-0000-000000000026",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000026"
+        },
+        "dropped": []
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v2/statements/00000000-0000-0000-0000-000000000026",
+        "headers": {
+          "authorization": "Bearer <token-8>",
+          "x-snowflake-authorization-token-type": "KEYPAIR_JWT",
+          "accept": "application/json",
+          "user-agent": "LibreDB-Studio-evidence"
+        },
+        "dropped": []
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "resultSetMetaData": {
+            "numRows": 44,
+            "format": "jsonv2",
+            "partitionInfo": [
+              {
+                "rowCount": 44,
+                "uncompressedSize": 4724
+              }
+            ],
+            "rowType": [
+              {
+                "name": "property",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "value",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "default",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              },
+              {
+                "name": "description",
+                "database": "",
+                "schema": "",
+                "table": "",
+                "collation": null,
+                "precision": null,
+                "byteLength": 16777216,
+                "scale": null,
+                "nullable": true,
+                "length": 16777216,
+                "type": "text"
+              }
+            ]
+          },
+          "code": "090001",
+          "statementStatusUrl": "/api/v2/statements/00000000-0000-0000-0000-000000000026?requestId=00000000-0000-0000-0000-000000000025",
+          "sqlState": "00000",
+          "statementHandle": "00000000-0000-0000-0000-000000000026",
+          "message": "Statement executed successfully.",
+          "createdOn": 1791841687399
+        },
+        "dropped": [
+          "requestId"
+        ],
+        "rows": {
+          "wireBytes": 6418,
+          "decodedBytes": 6418,
+          "rowCount": 44,
+          "firstRow": [
+            "NAME",
+            "<user-2>",
+            "null",
+            "Name"
+          ],
+          "lastRow": [
+            "LOCK_DETAILS",
+            "{\"isAdminLocked\":false,\"isMfaLocked\":false,\"isMfaOTPLocked\":false,\"isMfaTOTPLocked\":false,\"isPasswordLocked\":false,\"isSnowflakeLocked\":false}",
+            "null",
+            "Details about why the user is locked, if the user is locked."
+          ]
+        }
+      }
+    }
+  ]
+}
