@@ -1128,6 +1128,48 @@ describe("SparkProvider: the version floor and the probe session", () => {
     await provider.disconnect();
   });
 
+  test("a disconnect while a failed second connect still closes its own connection finds the first connection closed and its sessions released", async () => {
+    const release = gate();
+    let shows = 0;
+    const script = scripted({
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT, "SELECT 1": ONE },
+      stream: (sql) => {
+        if (sql !== "SHOW CURRENT NAMESPACE") return undefined;
+        shows += 1;
+        return shows === 2 ? failingStream(unavailable()) : undefined;
+      },
+      unary: (rpc, request) =>
+        rpc === "ReleaseSession" && sessionOf(request) === secondMetadata()
+          ? release.promise.then(() => ({}))
+          : undefined,
+    });
+    // The first connection's metadata session, the scope's session, then the second connect's metadata session.
+    const sessions = () => script.calls.filter((call) => call.rpc === "Config").map((call) => call.sessionId);
+    const secondMetadata = () => sessions()[2];
+    const released = () => script.calls.filter((call) => call.rpc === "ReleaseSession").map((call) => call.sessionId);
+    const channels = channelsOf(script);
+    const provider = new SparkProvider(connection(1), {}, channels);
+    await provider.connect();
+    await provider.query("SELECT 1", undefined, "q-first", "scope-first");
+    const first = sessions();
+    expect(first).toHaveLength(2);
+    const failed = failureOf(provider.connect());
+    // The failed connect is closing what it opened: the release of its metadata session waits on the test.
+    await eventually(() =>
+      script.calls.some((call) => call.rpc === "ReleaseSession" && call.sessionId === secondMetadata()),
+    );
+    await provider.disconnect();
+    expect(channels.closed()).toStrictEqual([true, false]);
+    expect(released().filter((id) => first.includes(id))).toStrictEqual(first);
+    release.open();
+    const failure = await failed;
+    expect(failure).toBeInstanceOf(ConnectionError);
+    expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.notConnected("127.0.0.1", 1));
+    expect(channels.closed()).toStrictEqual([true, true]);
+    expect(provider.isConnected()).toBe(false);
+    expect(provider.hasRunsInFlight()).toBe(false);
+  });
+
   test("a connect displaced while it replaced a live connection leaves the connect that displaced it connected", async () => {
     const held = gate();
     let shows = 0;
@@ -1301,6 +1343,56 @@ describe("SparkProvider: Stop at the edges of a run", () => {
     expect(provider.isConnected()).toBe(true);
     expect(provider.hasRunsInFlight()).toBe(false);
     await provider.disconnect();
+  });
+
+  test("Stop reaches a run on the first connection while a failed second connect still closes its own connection", async () => {
+    const slow = gate();
+    const interrupt = gate();
+    const release = gate();
+    let shows = 0;
+    const script = scripted({
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT },
+      stream: (sql, request, call) => {
+        if (sql === "SLOW") return heldStream(request, call, ONE, slow.promise);
+        if (sql !== "SHOW CURRENT NAMESPACE") return undefined;
+        shows += 1;
+        return shows === 2 ? failingStream(unavailable()) : undefined;
+      },
+      unary: (rpc, request) => {
+        if (rpc === "Interrupt" && sessionOf(request) === runSession()) {
+          return interrupt.promise.then(() => ({ interrupted_ids: [] }));
+        }
+        return rpc === "ReleaseSession" && sessionOf(request) === secondMetadata()
+          ? release.promise.then(() => ({}))
+          : undefined;
+      },
+    });
+    const runSession = () => script.calls.find((call) => statementOf(call.request) === "SLOW")?.sessionId;
+    // The first connection's metadata session, the run's scope session, then the second connect's metadata session.
+    const secondMetadata = () => script.calls.filter((call) => call.rpc === "Config")[2]?.sessionId;
+    const channels = channelsOf(script);
+    const provider = new SparkProvider(connection(1), {}, channels);
+    await provider.connect();
+    const running = failureOf(provider.query("SLOW", undefined, "q-first", "scope-first"));
+    await eventually(() => runSession() !== undefined);
+    const failed = failureOf(provider.connect());
+    // The failed connect is closing what it opened: the release of its metadata session waits on the test.
+    await eventually(() =>
+      script.calls.some((call) => call.rpc === "ReleaseSession" && call.sessionId === secondMetadata()),
+    );
+    expect(provider.isConnected()).toBe(false);
+    expect(await provider.cancelQuery("q-first")).toBe(true);
+    // The first connection's close stopped the run while that release is still held.
+    expect(await running).toBeInstanceOf(QueryCancelledError);
+    interrupt.open();
+    release.open();
+    const failure = await failed;
+    expect(failure).toBeInstanceOf(ConnectionError);
+    expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.notConnected("127.0.0.1", 1));
+    expect(script.calls.filter((call) => call.rpc === "Interrupt" && call.sessionId === runSession())).toHaveLength(1);
+    expect(channels.closed()).toStrictEqual([true, true]);
+    expect(provider.isConnected()).toBe(false);
+    expect(provider.hasRunsInFlight()).toBe(false);
   });
 
   test("a beat goes out under the heartbeat deadline on the run's own session, the setup under the control deadline", async () => {

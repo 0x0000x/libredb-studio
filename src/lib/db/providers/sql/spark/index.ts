@@ -408,11 +408,12 @@ export class SparkProvider extends SQLBaseProvider {
         this.connection = null;
         this.setError(failure);
       }
-      if (opened !== null) {
-        if (this.connecting === opened) this.connecting = null;
-        await this.close(opened);
-      }
-      if (previous !== null) await this.close(previous);
+      if (opened !== null && this.connecting === opened) this.connecting = null;
+      // Both closes start at once, so neither connection waits outside `connection`, `connecting` and `closing` for the
+      // other's close, and a Stop reaches its runs throughout. close() never rejects: the failure stays this connect's.
+      await Promise.all(
+        [opened, previous].filter((item): item is SparkConnection => item !== null).map((item) => this.close(item)),
+      );
       throw failure;
     }
     this.connecting = null;
