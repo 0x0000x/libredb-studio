@@ -1469,6 +1469,16 @@ export interface ProviderCapabilities {
    */
   containerLevels?: ContainerLevels;
   /**
+   * The schema-level segment of this engine's container and object paths is the engine's own spelling of a possibly
+   * multi-part name, already quoted where it needs quoting; absent: every segment is a raw name.
+   *
+   * `quoteObjectPath` reads that segment as parts joined by dots, each bare or quoted with the character
+   * `identifierQuoting` declares (that character doubled inside), so a declaration needs `identifierQuoting` beside it.
+   * Apache Spark declares it: a namespace of a catalog such as Iceberg's can hold several parts, and the tree shows it
+   * as Spark spells it.
+   */
+  containerNameSpelling?: "engine";
+  /**
    * Which container paths this engine accepts as an ADDRESS, beside `containerLevels` (#1147).
    *
    * `exact` accepts only the declared depth: every declared level is named, or the path is

@@ -15,6 +15,7 @@ import { metricSelector } from "@/lib/db/providers/timeseries/prometheus/promql"
 import { milvusSelectQuery, milvusTableQuery } from "@/lib/db/providers/vector/milvus/generators";
 import { qdrantSelectQuery, qdrantTableQuery } from "@/lib/db/providers/vector/qdrant/generators";
 import {
+  type ContainerLevelSpec,
   type ObjectReadRange,
   offersCountQuery,
   type PreviewTimeWindow,
@@ -160,6 +161,68 @@ export function quoteIdentifier(
   return !always && /^[a-z_][a-z0-9_$]*$/.test(name) ? name : `"${name.replaceAll('"', '""')}"`;
 }
 
+/** The quote character of each declared quoting, which an engine-spelled segment is read with. */
+const DECLARED_QUOTE_CHARACTER: Record<NonNullable<ProviderCapabilities["identifierQuoting"]>, string> = {
+  double: '"',
+  "double-always": '"',
+  backtick: "`",
+  "backtick-always": "`",
+};
+
+const BARE_SPELLED_PART = /^[A-Za-z_][A-Za-z0-9_]*/;
+
+/**
+ * The parts of an engine-spelled name: bare parts and parts quoted with `quote` (that character doubled inside), joined
+ * by dots; `undefined` when the text does not read completely as such a spelling, so the caller quotes it as one name.
+ */
+function readSpelledParts(text: string, quote: string): string[] | undefined {
+  const parts: string[] = [];
+  let i = 0;
+  for (;;) {
+    if (text[i] === quote) {
+      let part = "";
+      let j = i + 1;
+      while (j < text.length && !(text[j] === quote && text[j + 1] !== quote)) {
+        part += text[j];
+        j += text[j] === quote ? 2 : 1;
+      }
+      if (j >= text.length || part === "") return undefined;
+      parts.push(part);
+      i = j + 1;
+    } else {
+      const bare = BARE_SPELLED_PART.exec(text.slice(i));
+      if (bare === null) return undefined;
+      parts.push(bare[0]);
+      i += bare[0].length;
+    }
+    if (i === text.length) return parts;
+    if (text[i] !== ".") return undefined;
+    i++;
+  }
+}
+
+/** The index of the segment `containerNameSpelling: "engine"` covers: the schema level's, when a segment follows it. */
+function spelledSegmentIndex(path: readonly string[], capabilities: ProviderCapabilities): number {
+  if (capabilities.containerNameSpelling !== "engine") return -1;
+  const levels: readonly ContainerLevelSpec[] = capabilities.containerLevels ?? [];
+  const index = levels.findIndex((level) => level.id === "schema");
+  return index !== -1 && index < path.length - 1 ? index : -1;
+}
+
+function quoteSpelledSegment(
+  segment: string,
+  capabilities: ProviderCapabilities,
+  options: { always?: boolean },
+): string {
+  const declared = capabilities.identifierQuoting;
+  if (declared === undefined) {
+    throw new RangeError('containerNameSpelling "engine" needs a declared identifierQuoting to read the spelling with');
+  }
+  const parts = readSpelledParts(segment, DECLARED_QUOTE_CHARACTER[declared]);
+  if (parts === undefined) return quoteIdentifier(segment, capabilities, options);
+  return parts.map((part) => quoteIdentifier(part, capabilities, options)).join(".");
+}
+
 /**
  * Quote an object ADDRESS: one segment per container level, then the object's own
  * segment, each quoted independently and joined with `.`.
@@ -173,6 +236,10 @@ export function quoteIdentifier(
  *
  * Quoting stays per segment and stays conditional, so `["employees", "department"]` is
  * still `employees.department` and `["public", "Order"]` is still `public."Order"`.
+ *
+ * Where the engine declares `containerNameSpelling: "engine"`, the schema-level segment is
+ * its own spelling of a multi-part name and is quoted part by part; a segment that does not
+ * read as such a spelling is quoted as one name.
  *
  * Full qualification is emitted unconditionally, including inside the session default
  * container. `demo.orders`, `[libredb_objects].[app].[customers]` and `APP.APP_CUSTOMERS`
@@ -198,7 +265,14 @@ export function quoteObjectPath(
     }
     return influxqlSource(path[0], path[1]);
   }
-  return path.map((segment) => quoteIdentifier(segment, capabilities, options)).join(".");
+  const spelled = spelledSegmentIndex(path, capabilities);
+  return path
+    .map((segment, index) =>
+      index === spelled
+        ? quoteSpelledSegment(segment, capabilities, options)
+        : quoteIdentifier(segment, capabilities, options),
+    )
+    .join(".");
 }
 
 /**

@@ -822,6 +822,86 @@ describe('identifierQuoting "backtick-always"', () => {
   });
 });
 
+// `containerNameSpelling: "engine"` (Apache Spark): the schema-level segment is the engine's own spelling of a possibly
+// multi-part name, already quoted where it needs quoting, so it is quoted part by part; the last segment is always the
+// object's own name.
+describe('containerNameSpelling "engine"', () => {
+  const LEVELS = [
+    { id: "catalog", label: "Catalog", labelPlural: "Catalogs" },
+    { id: "schema", label: "Namespace", labelPlural: "Namespaces" },
+  ] as const;
+  const spelled = makeCaps({
+    defaultPort: 15002,
+    identifierQuoting: "backtick-always",
+    containerNameSpelling: "engine",
+    containerLevels: LEVELS,
+  });
+
+  test("a multi-part spelling is quoted part by part, and a one-part spelling as itself", () => {
+    expect(quoteObjectPath(["lake", "a.b", "t"], spelled)).toBe("`lake`.`a`.`b`.`t`");
+    expect(quoteObjectPath(["lake", "c1", "t"], spelled)).toBe("`lake`.`c1`.`t`");
+  });
+
+  test("a quoted part keeps its dots, and a doubled backtick stays one character of the name", () => {
+    expect(quoteObjectPath(["lake", "`x.y`", "t"], spelled)).toBe("`lake`.`x.y`.`t`");
+    expect(quoteObjectPath(["lake", "a.`b``c`", "t"], spelled)).toBe("`lake`.`a`.`b``c`.`t`");
+  });
+
+  test.each(["a b", "a.", ".a", "`a", "`a``", "a..b", "``", "1a", "a.`b`c"])(
+    "%j does not read completely as a spelling, so it is quoted as one name",
+    (segment) => {
+      expect(quoteObjectPath(["lake", segment, "t"], spelled)).toBe(
+        `\`lake\`.${quoteIdentifier(segment, spelled)}.\`t\``,
+      );
+    },
+  );
+
+  test("the last segment is always the object's own name, even where the schema level is last", () => {
+    expect(quoteObjectPath(["lake", "a.b"], spelled)).toBe("`lake`.`a.b`");
+    expect(quoteObjectPath(["lake", "a", "x.y"], spelled)).toBe("`lake`.`a`.`x.y`");
+  });
+
+  test("a one-level engine spells its first segment", () => {
+    const oneLevel = makeCaps({
+      identifierQuoting: "backtick-always",
+      containerNameSpelling: "engine",
+      containerLevels: [{ id: "schema", label: "Namespace", labelPlural: "Namespaces" }],
+    });
+    expect(quoteObjectPath(["a.b", "t"], oneLevel)).toBe("`a`.`b`.`t`");
+  });
+
+  test("with no schema level, or with the capability absent, every segment is a raw name, as before", () => {
+    const noSchema = makeCaps({
+      identifierQuoting: "backtick-always",
+      containerNameSpelling: "engine",
+      containerLevels: [{ id: "catalog", label: "Catalog", labelPlural: "Catalogs" }],
+    });
+    expect(quoteObjectPath(["a.b", "t"], noSchema)).toBe("`a.b`.`t`");
+    const absent = makeCaps({ identifierQuoting: "backtick-always", containerLevels: LEVELS });
+    expect(quoteObjectPath(["lake", "a.b", "t"], absent)).toBe("`lake`.`a.b`.`t`");
+  });
+
+  test("a double-quoting engine reads its own quote character", () => {
+    const double = makeCaps({
+      identifierQuoting: "double-always",
+      containerNameSpelling: "engine",
+      containerLevels: LEVELS,
+    });
+    expect(quoteObjectPath(["lake", 'a."b.c"', "t"], double)).toBe('"lake"."a"."b.c"."t"');
+  });
+
+  test("a declaration without identifierQuoting is refused: the spelling has no quote character to read", () => {
+    const noQuote = makeCaps({ containerNameSpelling: "engine", containerLevels: LEVELS });
+    expect(() => quoteObjectPath(["lake", "a.b", "t"], noQuote)).toThrow(RangeError);
+  });
+
+  test("the generated Count names the spelled parts", () => {
+    expect(generators.generateCountQuery(["lake", "a.b", "t"], spelled)).toBe(
+      "SELECT COUNT(*) AS row_count\nFROM `lake`.`a`.`b`.`t`;",
+    );
+  });
+});
+
 // ============================================================================
 // previewTimeWindow (InfluxDB spec 6.6, I20): a preview that reads a recent window,
 // newest first, driven by the capability and never by the type-id. The window here
