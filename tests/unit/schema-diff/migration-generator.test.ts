@@ -2140,7 +2140,7 @@ describe("generateMigrationSQL: spark", () => {
     const sql = generateMigrationSQL(makeModifiedTableDiff(), "spark");
     expect(sql).toContain('-- Apache Spark: Cannot alter column "name".');
     expect(sql).toContain(
-      "Whether a column's type can change depends on the catalog and the table format; write the change by hand.",
+      "Whether a column's type, nullability or default can change depends on the catalog and the table format; write the change by hand.",
     );
     expect(sql).not.toContain("ALTER COLUMN");
   });
@@ -2155,12 +2155,25 @@ describe("generateMigrationSQL: spark", () => {
     expect(generateMigrationSQL(makeAddedTableDiff(), "spark")).toContain(refusal);
   });
 
-  test("an added and a dropped foreign key are declined, and no constraint statement is written", () => {
+  test("an added and a dropped foreign key are declined as informational only, and no constraint statement is written", () => {
+    const reason =
+      "Spark accepts a foreign key only as an informational NOT ENFORCED constraint, in a catalog that implements constraints.";
     const sql = generateMigrationSQL(makeModifiedTableDiff(), "spark");
-    expect(sql).toContain("-- Apache Spark: Cannot add a foreign key. The engine has no foreign-key constraint.");
-    expect(sql).toContain("-- Apache Spark: Cannot drop a foreign key. The engine has no foreign-key constraint.");
+    expect(sql).toContain(`-- Apache Spark: Cannot add a foreign key. ${reason}`);
+    expect(sql).toContain(`-- Apache Spark: Cannot drop a foreign key. ${reason}`);
     expect(sql).not.toContain("DROP CONSTRAINT");
     expect(sql).not.toContain("FOREIGN KEY");
+    const added = makeAddedTableDiff();
+    added.tables[0].foreignKeys = [
+      {
+        action: "added",
+        columnName: "dept_id",
+        targetReferencedTable: "departments",
+        targetReferencedColumn: "id",
+        changes: ["Added FK"],
+      },
+    ];
+    expect(generateMigrationSQL(added, "spark")).toContain(`-- Apache Spark: Cannot add a foreign key. ${reason}`);
   });
 
   test("an added table's primary key is declined after the statement", () => {

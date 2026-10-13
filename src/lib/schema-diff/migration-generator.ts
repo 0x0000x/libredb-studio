@@ -132,12 +132,16 @@ const NO_COLUMN_MODIFICATION: Partial<Record<DatabaseType, { label: string; reas
     reason:
       "Whether a column can be retyped is the connector's answer, not Trino's; run the change in the system the catalog points at.",
   },
-  // Apache Spark: whether a column's type can change is the catalog's and the table format's answer, as Trino's is
-  // the connector's. On Spark 4.1.3 and 4.2.0 a session-catalog parquet column's type change fails with
-  // NOT_SUPPORTED_CHANGE_COLUMN (0A000) while a comment change succeeds, and a DSv2 catalog decides for itself.
+  // Apache Spark: whether a column's type, nullability or default can change is the catalog's and the table format's
+  // answer, as Trino's is the connector's, and this row declines every modified column, whichever of the three the
+  // diff records. On Spark 4.1.3 and 4.2.0 a session-catalog parquet column's type change fails with
+  // NOT_SUPPORTED_CHANGE_COLUMN (0A000) while a comment change succeeds; on 4.2.0 the same table refuses SET and DROP
+  // NOT NULL with UNSUPPORTED_FEATURE.TABLE_OPERATION (0A000) and takes SET and DROP DEFAULT. A DSv2 catalog decides
+  // for itself.
   spark: {
     label: "Apache Spark",
-    reason: "Whether a column's type can change depends on the catalog and the table format; write the change by hand.",
+    reason:
+      "Whether a column's type, nullability or default can change depends on the catalog and the table format; write the change by hand.",
   },
   // Measured 2026-08-19: `ALTER TABLE probe_orders ADD COLUMN x INT` and
   // `... MODIFY COLUMN customer TEXT` are refused by both grammars - Elasticsearch
@@ -450,12 +454,23 @@ const NO_PORTABLE_INDEX_DDL: Partial<Record<DatabaseType, string>> = {
     "Snowflake: Cannot generate index DDL. Snowflake has indexes only on hybrid tables; write the index change by hand.",
   spark: "Apache Spark: Cannot generate index DDL. Spark SQL has no index statements; write the index change by hand.",
 };
-const NO_FOREIGN_KEYS: Partial<Record<DatabaseType, string>> = {
-  clickhouse: "ClickHouse",
-  trino: "Trino",
-  databend: "Databend",
-  bigquery: "BigQuery",
-  spark: "Apache Spark",
+/** The value completes `-- <label>: Cannot add a foreign key. <reason>`, and the same with `drop`. */
+const NO_FOREIGN_KEY_CONSTRAINT = "The engine has no foreign-key constraint.";
+const NO_FOREIGN_KEYS: Partial<Record<DatabaseType, { label: string; reason: string }>> = {
+  clickhouse: { label: "ClickHouse", reason: NO_FOREIGN_KEY_CONSTRAINT },
+  trino: { label: "Trino", reason: NO_FOREIGN_KEY_CONSTRAINT },
+  databend: { label: "Databend", reason: NO_FOREIGN_KEY_CONSTRAINT },
+  bigquery: { label: "BigQuery", reason: NO_FOREIGN_KEY_CONSTRAINT },
+  // Spark 4.1 and later parse FOREIGN KEY ... REFERENCES (SPARK-51207) as an informational constraint, NOT ENFORCED
+  // by default with ENFORCED refused, kept only by a DSv2 catalog that implements constraints. A session-catalog table
+  // refuses every constraint operation (SPARK-54761): on 4.2.0 a parquet table refuses ADD CONSTRAINT ... FOREIGN KEY,
+  // with or without NOT ENFORCED, DROP CONSTRAINT and a CREATE TABLE that declares one, each with
+  // UNSUPPORTED_FEATURE.TABLE_OPERATION (0A000).
+  spark: {
+    label: "Apache Spark",
+    reason:
+      "Spark accepts a foreign key only as an informational NOT ENFORCED constraint, in a catalog that implements constraints.",
+  },
 };
 
 /**
@@ -670,9 +685,9 @@ function generateCreateTable(table: TableDiff, dialect: DatabaseType): string {
   // for everyone else this separate ALTER is the shape that has always been emitted here.
   if (!keyIsTableConstraint) {
     addedForeignKeys.forEach((fk) => {
-      const label = NO_FOREIGN_KEYS[dialect];
-      if (label) {
-        lines.push(`-- ${label}: Cannot add a foreign key. The engine has no foreign-key constraint.`);
+      const refusal = NO_FOREIGN_KEYS[dialect];
+      if (refusal) {
+        lines.push(`-- ${refusal.label}: Cannot add a foreign key. ${refusal.reason}`);
         return;
       }
       lines.push(
@@ -700,9 +715,9 @@ function generateAlterTable(table: TableDiff, dialect: DatabaseType): string {
   table.foreignKeys
     .filter((fk) => fk.action === "removed")
     .forEach((fk) => {
-      const label = NO_FOREIGN_KEYS[dialect];
-      if (label) {
-        lines.push(`-- ${label}: Cannot drop a foreign key. The engine has no foreign-key constraint.`);
+      const refusal = NO_FOREIGN_KEYS[dialect];
+      if (refusal) {
+        lines.push(`-- ${refusal.label}: Cannot drop a foreign key. ${refusal.reason}`);
         return;
       }
       const constraintName = escapeIdentifier(`fk_${table.tableName}_${fk.columnName}`, dialect);
@@ -913,9 +928,9 @@ function generateAlterTable(table: TableDiff, dialect: DatabaseType): string {
   table.foreignKeys
     .filter((fk) => fk.action === "added")
     .forEach((fk) => {
-      const label = NO_FOREIGN_KEYS[dialect];
-      if (label) {
-        lines.push(`-- ${label}: Cannot add a foreign key. The engine has no foreign-key constraint.`);
+      const refusal = NO_FOREIGN_KEYS[dialect];
+      if (refusal) {
+        lines.push(`-- ${refusal.label}: Cannot add a foreign key. ${refusal.reason}`);
         return;
       }
       const constraintName = escapeIdentifier(`fk_${table.tableName}_${fk.columnName}`, dialect);
