@@ -1042,3 +1042,78 @@ describe("readSqlSpan: raw strings", () => {
     expect(hasUnterminatedSpan("SELECT r'C:\\' AS a", ESCAPING)).toBe(true);
   });
 });
+
+// `hintsAreCode` (Spark's row): `/*+` opens an optimizer hint the engine lexes as code, not a block comment. Measured
+// on Spark 4.2.0: a `/*+` inside a comment opens no level, so the first `*/` after it ends the outer comment, and
+// inside a hint a plain comment nests and the hint ends at the next `*/`.
+describe("readSqlSpan: optimizer hints read as code", () => {
+  const HINTS: SqlGrammar = { ...DEFAULT_SQL_GRAMMAR, blockComment: "nesting", hintsAreCode: true };
+  const NESTING: SqlGrammar = { ...DEFAULT_SQL_GRAMMAR, blockComment: "nesting" };
+
+  test("`/*+` at a code position opens no span", () => {
+    const sql = "SELECT /*+ BROADCAST(u) */ * FROM t";
+    expect(readSqlSpan(sql, 7, HINTS)).toBeNull();
+    expect(spanOf(sql, 7, NESTING)).toBe("block-comment|/*+ BROADCAST(u) */");
+  });
+
+  test("a plain `/*` still opens a comment where hints are code", () => {
+    expect(spanOf("/* note */ SELECT 1", 0, HINTS)).toBe("block-comment|/* note */");
+  });
+
+  test("inside a comment, `/*+` opens no nested level, so the first `*/` ends the comment", () => {
+    const sql = "/* a /*+ b */ SELECT 1";
+    expect(spanOf(sql, 0, HINTS)).toBe("block-comment|/* a /*+ b */");
+    // A nesting reader that counts the `/*+` reads the rest as comment text with no end.
+    expect(readSqlSpan(sql, 0, NESTING)).toEqual({ kind: "block-comment", end: sql.length, terminated: false });
+  });
+
+  test("inside a nested comment, `/*+` opens no level either", () => {
+    expect(spanOf("/* a /* b /*+ c */ d */ SELECT 1", 0, HINTS)).toBe("block-comment|/* a /* b /*+ c */ d */");
+  });
+
+  test("a plain comment inside a hint nests, and the hint's own `*/` is code", () => {
+    const sql = "SELECT /*+ COALESCE(3) /* x /* y */ z */ */ 1";
+    expect(readSqlSpan(sql, 7, HINTS)).toBeNull();
+    expect(spanOf(sql, 23, HINTS)).toBe("block-comment|/* x /* y */ z */");
+    expect(readSqlSpan(sql, 41, HINTS)).toBeNull();
+    expect(hasUnterminatedSpan(sql, HINTS)).toBe(false);
+  });
+
+  test("a string inside a hint is a string, so a `*/` written in it ends nothing", () => {
+    const sql = "SELECT /*+ REPARTITION(3, '*/') */ 1";
+    expect(spanOf(sql, 26, HINTS)).toBe("string|'*/'");
+    expect(hasUnterminatedSpan(sql, HINTS)).toBe(false);
+    // Read as a comment, the hint ends inside the string, and the quote after it never closes.
+    expect(hasUnterminatedSpan(sql, NESTING)).toBe(true);
+  });
+
+  // Spark lexes every `*/` in code as one token, the hint's closer (`HENT_END`, SqlBaseLexer v4.1.0 and v4.2.0), so it
+  // reads `*/*` as the hint's end followed by `*`, and the `/` opens no comment. Read as an opener, a later `*/`, here
+  // inside a line comment, would close it, and the reader would take the DELETE that Spark runs for comment text.
+  test("a hint closed right before `*` opens no comment: the `/` belongs to the hint's closer", () => {
+    expect(readSqlSpan("SELECT /*+ X */* FROM t", 14, HINTS)).toBeNull();
+    expect(hasUnterminatedSpan("SELECT /*+ X */* FROM t", HINTS)).toBe(false);
+
+    const sql = "WITH c AS (SELECT /*+ H */* FROM t) DELETE FROM u -- */";
+    expect(readSqlSpan(sql, 25, HINTS)).toBeNull();
+    expect(spanOf(sql, 50, HINTS)).toBe("line-comment|-- */");
+    expect(hasUnterminatedSpan(sql, HINTS)).toBe(false);
+    // Without the fact the same `/` opens a comment, the reading every other row keeps.
+    expect(spanOf(sql, 25, NESTING)).toBe("block-comment|/* FROM t) DELETE FROM u -- */");
+  });
+
+  // The lexer has no hint context: a `*/` outside any hint is the same token, so its `/` opens nothing there either.
+  test("a `/` after a code `*` opens no comment outside a hint either", () => {
+    expect(readSqlSpan("SELECT 2 */* c */ 3", 10, HINTS)).toBeNull();
+    expect(spanOf("SELECT 2 */* c */ 3", 10, NESTING)).toBe("block-comment|/* c */");
+  });
+
+  test("a flat grammar with the fact also reads `/*+` as code", () => {
+    expect(readSqlSpan("/*+ x */", 0, { ...DEFAULT_SQL_GRAMMAR, hintsAreCode: true })).toBeNull();
+  });
+
+  test("absent: `/*+` opens an ordinary block comment, as before", () => {
+    expect(spanOf("/*+ x */ SELECT 1", 0, NESTING)).toBe("block-comment|/*+ x */");
+    expect(spanOf("/*+ x */ SELECT 1", 0, DEFAULT_SQL_GRAMMAR)).toBe("block-comment|/*+ x */");
+  });
+});

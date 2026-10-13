@@ -289,13 +289,20 @@ function readSubscripted(sql: string, index: number, grammar: SqlGrammar): SqlSp
  * keeps everywhere: it costs the statement its bound (an over-large read) and, since
  * #297, a confirmation prompt - where the guess would hide a write behind text the
  * reader claimed to have read.
+ *
+ * Where `hintsAreCode` holds, a `/*+` inside the run opens no level: the engine lexes it as a hint opener, which a
+ * comment cannot hold, so the first `*\/` after it closes the level it is in.
  */
-function readNestedBlockComment(sql: string, index: number): SqlSpan {
+function readNestedBlockComment(sql: string, index: number, hintsAreCode = false): SqlSpan {
   let depth = 0;
   let i = index;
 
   while (i + 1 < sql.length) {
     if (sql[i] === "/" && sql[i + 1] === "*") {
+      if (hintsAreCode && sql[i + 2] === "+") {
+        i += 3;
+        continue;
+      }
       depth++;
       i += 2;
       continue;
@@ -482,10 +489,10 @@ function measureDollarTag(sql: string, index: number): number {
  * Omitting it is a real answer, not a missing one: it means "no dialect was
  * named", and the compatibility default applies.
  *
- * Pass the whole statement, not a suffix of it: the alternate-quote and raw-string
- * branches look at the character BEFORE `index` to tell an opener from the tail of a name,
- * so a slice that cuts a name in half can answer differently than the same text in
- * place. A PREFIX slice is safe, which is what the callers here take (`sql.slice(0, end)`).
+ * Pass the whole statement, not a suffix of it: the alternate-quote, raw-string and hint
+ * branches look at the character BEFORE `index` to tell an opener from the tail of a name
+ * or of a hint's `*\/`, so a slice that cuts a name in half can answer differently than the
+ * same text in place. A PREFIX slice is safe, which is what the callers here take (`sql.slice(0, end)`).
  */
 export function readSqlSpan(sql: string, index: number, grammar: SqlGrammar = DEFAULT_SQL_GRAMMAR): SqlSpan | null {
   const ch = sql[index];
@@ -538,7 +545,12 @@ export function readSqlSpan(sql: string, index: number, grammar: SqlGrammar = DE
   // insert. The grammar record answers it now (#300), and the flat reading survives
   // as MySQL's, SQLite's, Oracle's and what a caller that named no dialect gets.
   if (ch === "/" && sql[index + 1] === "*") {
-    if (grammar.blockComment === "nesting") return readNestedBlockComment(sql, index);
+    // Spark lexes `/*+` as the opener of an optimizer hint, which is code (`hintsAreCode`), and every `*/` in code as
+    // one token, the hint's closer, so a `/` right after a code `*` opens nothing either: `*/*` is the closer and a
+    // `*`. Read as an opener there, any later `*/` would close it and turn the code between into comment text. No span
+    // ends with `*`, so the `*` before an index a walker asks about is code.
+    if (grammar.hintsAreCode && (sql[index + 2] === "+" || sql[index - 1] === "*")) return null;
+    if (grammar.blockComment === "nesting") return readNestedBlockComment(sql, index, grammar.hintsAreCode === true);
 
     const close = sql.indexOf("*/", index + 2);
     if (close === -1) return { kind: "block-comment", end: sql.length, terminated: false };

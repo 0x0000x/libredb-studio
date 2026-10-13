@@ -233,6 +233,17 @@ export interface SqlGrammar {
    */
   readonly rawStrings?: boolean;
   /**
+   * Whether `/*+` opens an optimizer hint the engine lexes as code rather than a block comment; absent means false.
+   * Where true, `/*+` at a code position opens no span, so the hint's opener, its body and its closing `*\/` are read
+   * as code, with strings and comments inside it read as spans, and inside a nesting block comment a `/*+` opens no
+   * nested level. The engine lexes every `*\/` in code as that closer, so a `/` right after a code `*` opens no comment
+   * either: `*\/*` is the closer and a `*`.
+   *
+   * It is a fact the text cannot settle: in `/* a /*+ b *\/ DELETE FROM t; -- *\/`, a nesting reader that counts the
+   * `/*+` keeps the DELETE inside the comment, while the engine ends the comment at the first `*\/` and runs it.
+   */
+  readonly hintsAreCode?: boolean;
+  /**
    * How a script is cut into the units the engine receives (E2E pass of 2026-10-03/04,
    * #1312). Before this fact existed every code `;` was a boundary in every dialect, so a
    * PL/SQL procedure, a SQLite trigger and a T-SQL batch were each cut at their inner `;`

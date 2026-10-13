@@ -663,10 +663,12 @@ describe("dollarTags and doubleQuoteBackslashEscapes", () => {
 describe("rawStrings and hintsAreCode", () => {
   test("the compatibility default declares neither", () => {
     expect(DEFAULT_SQL_GRAMMAR.rawStrings).toBeUndefined();
+    expect(DEFAULT_SQL_GRAMMAR.hintsAreCode).toBeUndefined();
   });
 
   test.each(Object.keys(GRAMMAR_COVERAGE) as DatabaseType[])("%s declares neither", (type) => {
     expect(resolveSqlGrammar(type).rawStrings).toBeUndefined();
+    expect(resolveSqlGrammar(type).hintsAreCode).toBeUndefined();
   });
 });
 
