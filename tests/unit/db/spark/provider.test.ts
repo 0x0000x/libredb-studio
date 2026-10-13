@@ -51,6 +51,20 @@ const T_COLUMNS = [
   { name: "id", type: "bigint", nullable: true, isPrimary: false },
   { name: "#tag", type: "string", nullable: true, isPrimary: false },
 ];
+/** DESCRIBE TABLE's answer for a table of one column. */
+const DESCRIBED = columnsStream([
+  { name: "col_name", kind: "utf8", values: ["id"] },
+  { name: "data_type", kind: "utf8", values: ["int"] },
+  { name: "comment", kind: "utf8", values: [null] },
+]);
+/** The detail DESCRIBED reads for the table `name` in `spark_catalog`.`default`. */
+const detailOf = (name: string) => ({
+  path: ["spark_catalog", "default", name],
+  columns: [{ name: "id", type: "int", nullable: true, isPrimary: false }],
+  indexes: [],
+  foreignKeys: [],
+});
+const NO_FUNCTIONS = columnsStream([{ name: "function", kind: "utf8", values: [] }]);
 
 /** SHOW TABLES or SHOW VIEWS in `spark_catalog`.`default`: every name in `default`, none temporary. */
 const listing = (column: "tableName" | "viewName", names: readonly string[]) =>
@@ -683,45 +697,37 @@ describe("SparkProvider: the object surface on the metadata session", () => {
 describe("SparkProvider: one deadline for a bulk column read", () => {
   const TIMEOUT = 1_000;
   const START = 1_000_000;
-  /** DESCRIBE TABLE's answer for a table of one column. */
-  const DESCRIBED = columnsStream([
-    { name: "col_name", kind: "utf8", values: ["id"] },
-    { name: "data_type", kind: "utf8", values: ["int"] },
-    { name: "comment", kind: "utf8", values: [null] },
-  ]);
-  const detailOf = (name: string) => ({
-    path: ["spark_catalog", "default", name],
-    columns: [{ name: "id", type: "int", nullable: true, isPrimary: false }],
-    indexes: [],
-    foreignKeys: [],
-  });
 
   /**
-   * A connected provider on a test clock, over a channel whose namespace `default` lists `tables`. The listing answers
-   * at once and each DESCRIBE TABLE `cost` ms after it was sent; one whose answer would come past its call's deadline
-   * fails at that deadline, as grpc-js fails a call past its deadline. The clock starts at START once connected.
+   * A connected provider on a test clock, over a channel whose namespace `default` lists `tables`. Each listing answers
+   * `listingCost` ms after it was sent, at once unless given, and each DESCRIBE TABLE `cost` ms after it was sent; one
+   * whose answer would come past its call's deadline fails at that deadline, as grpc-js fails a call past its deadline.
+   * The clock starts at START once connected.
    */
-  async function timed(tables: readonly string[], cost: number) {
+  async function timed(tables: readonly string[], cost: number, listingCost = 0) {
     let now = Date.now();
+    const listings: Readonly<Record<string, Uint8Array>> = {
+      [`SHOW VIEWS IN ${DEFAULT}`]: listing("viewName", []),
+      [`SHOW TABLES IN ${DEFAULT}`]: listing("tableName", tables),
+      [`SHOW USER FUNCTIONS IN ${DEFAULT}`]: NO_FUNCTIONS,
+    };
     const script = scripted({
-      commands: {
-        "SHOW CURRENT NAMESPACE": CURRENT,
-        [`SHOW VIEWS IN ${DEFAULT}`]: listing("viewName", []),
-        [`SHOW TABLES IN ${DEFAULT}`]: listing("tableName", tables),
-      },
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT },
       stream: (sql, request, call) => {
-        if (!sql.startsWith("DESCRIBE TABLE ")) return undefined;
+        const answer = sql.startsWith("DESCRIBE TABLE ") ? DESCRIBED : listings[sql];
+        if (answer === undefined) return undefined;
+        const took = answer === DESCRIBED ? cost : listingCost;
         let reads = 0;
         return {
           read: async () => {
             reads += 1;
             if (reads > 1) return undefined;
-            if (now + cost > call.deadline.getTime()) {
+            if (now + took > call.deadline.getTime()) {
               now = call.deadline.getTime();
               throw deadlineStatus();
             }
-            now += cost;
-            return commandAnswer(request, DESCRIBED);
+            now += took;
+            return commandAnswer(request, answer);
           },
           receivedBytes: 0,
           truncated: false,
@@ -810,8 +816,9 @@ describe("SparkProvider: one deadline for a bulk column read", () => {
     }
   });
 
-  test("every other read gives each of its statements the whole timeout", async () => {
-    const read = await timed(["a"], TIMEOUT / 2);
+  test("every other read gives each of its statements the whole timeout, a read of one statement or of several", async () => {
+    const cost = TIMEOUT / 2;
+    const read = await timed(["a"], cost, cost);
     try {
       expect(await read.provider.describeObject(["spark_catalog", "default", "a"], "table")).toStrictEqual(
         detailOf("a"),
@@ -819,9 +826,19 @@ describe("SparkProvider: one deadline for a bulk column read", () => {
       expect(await read.provider.describeObject(["spark_catalog", "default", "a"], "table")).toStrictEqual(
         detailOf("a"),
       );
+      // A count sends three statements, each once the one before answered: under one deadline for the whole count, its
+      // last statement would have no time left.
+      expect(await read.provider.countObjects(["spark_catalog", "default"])).toStrictEqual({
+        table: { count: 1 },
+        view: { count: 0 },
+        function: { count: 0 },
+      });
       expect(read.statements()).toStrictEqual([
         { sql: `DESCRIBE TABLE ${DEFAULT}.\`a\``, at: START, deadline: START + TIMEOUT },
-        { sql: `DESCRIBE TABLE ${DEFAULT}.\`a\``, at: START + TIMEOUT / 2, deadline: START + (3 * TIMEOUT) / 2 },
+        { sql: `DESCRIBE TABLE ${DEFAULT}.\`a\``, at: START + cost, deadline: START + cost + TIMEOUT },
+        { sql: `SHOW VIEWS IN ${DEFAULT}`, at: START + 2 * cost, deadline: START + 2 * cost + TIMEOUT },
+        { sql: `SHOW TABLES IN ${DEFAULT}`, at: START + 3 * cost, deadline: START + 3 * cost + TIMEOUT },
+        { sql: `SHOW USER FUNCTIONS IN ${DEFAULT}`, at: START + 4 * cost, deadline: START + 4 * cost + TIMEOUT },
       ]);
     } finally {
       await read.end();
@@ -841,23 +858,28 @@ describe("SparkProvider: the metadata statements in flight on one connection", (
       call.signal.addEventListener("abort", () => reject(clientCancel()), { once: true });
     });
   const NO_NAMESPACES = columnsStream([{ name: "namespace", kind: "utf8", values: [] }]);
-  const NO_FUNCTIONS = columnsStream([{ name: "function", kind: "utf8", values: [] }]);
   const DEFAULT_COUNTS = { table: { count: 1 }, view: { count: 0 }, function: { count: 0 } };
+  const START = 1_000_000;
+  const describing = (name: string) => `DESCRIBE TABLE ${DEFAULT}.\`${name}\``;
 
   /**
    * A connected provider over a channel that counts the statements open on it at once, each from its ExecutePlan until
    * its stream ended or failed. Catalog `lake<n>` lists the namespaces n0 to n<n-1>, and each of those answers that it
-   * holds none once `child` settles, or fails as `child` fails; the listings of `default` answer at once.
+   * holds none once `child` settles, or fails as `child` fails. The listings of `default` answer at once, its tables
+   * being `tables`, and a DESCRIBE TABLE of a table in it answers once `describe` settles for the table's name.
    */
   async function counted(options: ProviderOptions = {}) {
     let open = 0;
     let most = 0;
     const sent: string[] = [];
-    const control: { child: (call: SparkWireCall) => Promise<void> } = { child: () => later(2) };
+    const control: {
+      child: (call: SparkWireCall) => Promise<void>;
+      describe: (name: string) => Promise<void>;
+      tables: readonly string[];
+    } = { child: () => later(2), describe: async () => undefined, tables: ["t"] };
     const fixed: Readonly<Record<string, Uint8Array>> = {
       "SHOW CURRENT NAMESPACE": CURRENT,
       [`SHOW VIEWS IN ${DEFAULT}`]: listing("viewName", []),
-      [`SHOW TABLES IN ${DEFAULT}`]: listing("tableName", ["t"]),
       [`SHOW USER FUNCTIONS IN ${DEFAULT}`]: NO_FUNCTIONS,
     };
     const answer = async (sql: string, call: SparkWireCall): Promise<Uint8Array> => {
@@ -869,6 +891,12 @@ describe("SparkProvider: the metadata statements in flight on one connection", (
       if (/^SHOW NAMESPACES IN `lake\d+`\.`n\d+`$/.test(sql)) {
         await control.child(call);
         return NO_NAMESPACES;
+      }
+      if (sql === `SHOW TABLES IN ${DEFAULT}`) return listing("tableName", control.tables);
+      const described = /^DESCRIBE TABLE `spark_catalog`\.`default`\.`(\w+)`$/.exec(sql);
+      if (described !== null) {
+        await control.describe(described[1]);
+        return DESCRIBED;
       }
       const known = fixed[sql];
       if (known === undefined) throw new Error(`unexpected statement: ${sql}`);
@@ -1043,6 +1071,136 @@ describe("SparkProvider: the metadata statements in flight on one connection", (
       }
     },
   );
+
+  test("a bulk column read's later statement still waiting for a slot is refused unsent at the read's own deadline", async () => {
+    const timeout = 10_000;
+    const left = 100;
+    const read = await counted({ queryTimeout: timeout });
+    let now = START;
+    const clock = spyOn(Date, "now").mockImplementation(() => now);
+    const children = gate();
+    try {
+      read.control.tables = ["a", "b"];
+      const first = gate();
+      read.control.describe = (name) => (name === "a" ? first.promise : Promise.resolve());
+      read.control.child = () => children.promise;
+      const bulk = failureOf(read.provider.describeObjects(["spark_catalog", "default"], "table"));
+      await eventually(() => read.sent.includes(describing("a")));
+      // A walk takes every other slot, and its last namespace waits for one.
+      const walk = read.provider.listContainers([`lake${MAX}`]);
+      await eventually(() => read.open() === MAX);
+      // DESCRIBE a answers with `left` ms of the read's time left. Its slot goes to the namespace, which asked first, so
+      // DESCRIBE b waits for a slot from then on.
+      now = START + timeout - left;
+      const from = performance.now();
+      first.open();
+      const failure = await Promise.race([
+        bulk,
+        later(timeout / 4).then(() => "still waiting at a quarter of the timeout"),
+      ]);
+      const waited = performance.now() - from;
+      expect(failure).toBeInstanceOf(QueryError);
+      expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.deadlineBeforeSend(timeout));
+      expect(read.sent).not.toContain(describing("b"));
+      // Refused once the read's time was up, `left` ms on, not a whole timeout after its wait began.
+      expect(waited).toBeGreaterThanOrEqual(left / 2);
+      children.open();
+      expect(await walk).toHaveLength(MAX);
+    } finally {
+      children.open();
+      clock.mockRestore();
+      await read.provider.disconnect();
+    }
+  });
+
+  test("statements waiting for a slot are given one in the order they asked for it", async () => {
+    const read = await counted();
+    const children: ReturnType<typeof gate>[] = [];
+    try {
+      read.control.child = () => {
+        const held = gate();
+        children.push(held);
+        return held.promise;
+      };
+      const first = gate();
+      read.control.describe = (name) => (name === "a" ? first.promise : Promise.resolve());
+      const walk = read.provider.listContainers([`lake${MAX}`]);
+      await eventually(() => read.open() === MAX);
+      expect(children).toHaveLength(MAX);
+      const a = read.provider.describeObject(["spark_catalog", "default", "a"], "table");
+      const b = read.provider.describeObject(["spark_catalog", "default", "b"], "table");
+      const described = () => read.sent.filter((sql) => sql.startsWith("DESCRIBE TABLE "));
+      await later(5);
+      expect(described()).toStrictEqual([]);
+      // One namespace answers: its slot goes to DESCRIBE a, which asked first, and DESCRIBE b waits on.
+      children[0].open();
+      await eventually(() => described().length > 0);
+      await later(5);
+      expect(described()).toStrictEqual([describing("a")]);
+      // DESCRIBE a answers, and its slot goes to DESCRIBE b.
+      first.open();
+      expect(await a).toStrictEqual(detailOf("a"));
+      expect(await b).toStrictEqual(detailOf("b"));
+      expect(described()).toStrictEqual([describing("a"), describing("b")]);
+      for (const held of children) held.open();
+      expect(await walk).toHaveLength(MAX);
+    } finally {
+      for (const held of children) held.open();
+      await read.provider.disconnect();
+    }
+  });
+
+  test("a statement given a slot before its deadline leaves the statements still waiting alone once that deadline passes", async () => {
+    const timeout = 10_000;
+    const left = 500;
+    const read = await counted({ queryTimeout: timeout });
+    let now = START;
+    const clock = spyOn(Date, "now").mockImplementation(() => now);
+    const children: ReturnType<typeof gate>[] = [];
+    const first = gate();
+    const second = gate();
+    try {
+      read.control.tables = ["a", "b"];
+      read.control.describe = (name) =>
+        name === "a" ? first.promise : name === "b" ? second.promise : Promise.resolve();
+      read.control.child = () => {
+        const child = gate();
+        children.push(child);
+        return child.promise;
+      };
+      // A bulk column read holds a slot with DESCRIBE a while a walk takes every other one.
+      const bulk = read.provider.describeObjects(["spark_catalog", "default"], "table");
+      await eventually(() => read.sent.includes(describing("a")));
+      const walk = read.provider.listContainers([`lake${MAX}`]);
+      await eventually(() => read.open() === MAX);
+      // DESCRIBE a answers with `left` ms of the read's time left: its slot goes to the walk's last namespace, and
+      // DESCRIBE b waits for one until the read's deadline.
+      now = START + timeout - left;
+      first.open();
+      await later(5);
+      // A namespace answers well before that deadline: its slot goes to DESCRIBE b, which keeps it.
+      children[0].open();
+      await eventually(() => read.sent.includes(describing("b")));
+      // A statement of another read waits behind DESCRIBE b until past the deadline DESCRIBE b waited under.
+      const other = read.provider.describeObject(["spark_catalog", "default", "t"], "table");
+      await later(left + 250);
+      // Another namespace answers, and its slot goes to the statement still waiting.
+      children[1].open();
+      expect(
+        await Promise.race([other, later(timeout / 4).then(() => "still waiting at a quarter of the timeout")]),
+      ).toStrictEqual(detailOf("t"));
+      second.open();
+      expect(await bulk).toStrictEqual({ details: [detailOf("a"), detailOf("b")] });
+      for (const child of children) child.open();
+      expect(await walk).toHaveLength(MAX);
+    } finally {
+      for (const child of children) child.open();
+      first.open();
+      second.open();
+      clock.mockRestore();
+      await read.provider.disconnect();
+    }
+  });
 });
 
 describe("SparkProvider: refusals before any call", () => {
