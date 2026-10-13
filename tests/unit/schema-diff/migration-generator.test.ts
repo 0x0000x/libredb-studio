@@ -2131,7 +2131,7 @@ describe("an Oracle MODIFY states the nullability only when it changes (#1240)",
 });
 
 /**
- * Apache Spark (spec 8.2 row 2.12): a column type change, an index, a foreign key and a primary key are each declined
+ * Apache Spark: a column type change, an index, a foreign key and a primary key are each declined
  * in a comment, because whether a Spark table takes them is the catalog's and the table format's answer, and no
  * transaction spans two Spark statements.
  */
@@ -2147,7 +2147,7 @@ describe("generateMigrationSQL: spark", () => {
 
   test("an added and a dropped index are declined, and no index statement is written", () => {
     const refusal =
-      "-- Apache Spark: Cannot generate index DDL. Spark SQL has no index statements; write the index change by hand.";
+      "-- Apache Spark: Cannot generate index DDL. Spark SQL's index statements work only in a catalog whose tables support indexes; write the index change by hand.";
     const modified = generateMigrationSQL(makeModifiedTableDiff(), "spark");
     expect(modified.split(refusal).length - 1).toBe(2);
     expect(modified).not.toContain("CREATE INDEX");

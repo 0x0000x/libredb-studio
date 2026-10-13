@@ -452,7 +452,8 @@ const NO_PORTABLE_INDEX_DDL: Partial<Record<DatabaseType, string>> = {
     "BigQuery: Cannot generate index DDL. BigQuery has search and vector indexes only; write the index change by hand.",
   snowflake:
     "Snowflake: Cannot generate index DDL. Snowflake has indexes only on hybrid tables; write the index change by hand.",
-  spark: "Apache Spark: Cannot generate index DDL. Spark SQL has no index statements; write the index change by hand.",
+  spark:
+    "Apache Spark: Cannot generate index DDL. Spark SQL's index statements work only in a catalog whose tables support indexes; write the index change by hand.",
 };
 /** The value completes `-- <label>: Cannot add a foreign key. <reason>`, and the same with `drop`. */
 const NO_FOREIGN_KEY_CONSTRAINT = "The engine has no foreign-key constraint.";
