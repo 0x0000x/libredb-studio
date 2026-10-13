@@ -15,7 +15,7 @@ const SPARK = "src/lib/db/providers/sql/spark";
 /** Files whose every import is `import type`. */
 const TYPE_ONLY: readonly string[] = [`${SPARK}/sc-uri.ts`];
 /** Files that import no I/O, no logger and no transport. */
-const PURE: readonly string[] = [`${SPARK}/sc-uri.ts`, `${SPARK}/ipc-guard.ts`];
+const PURE: readonly string[] = [`${SPARK}/sc-uri.ts`, `${SPARK}/ipc-guard.ts`, `${SPARK}/arrow.ts`];
 const FORBIDDEN: readonly RegExp[] = [
   /^(?:node:)?(?:fs|fs\/promises|net|tls|http|https|http2|dgram|dns|child_process|worker_threads)$/,
   /^@grpc\//,
@@ -46,8 +46,8 @@ function importLines(path: string): ImportLine[] {
   return lines;
 }
 
-/** The files that import apache-arrow, held exactly: under src/ only arrow.ts (T6.2 adds it), and the test stream writer. */
-const ARROW_IMPORTERS: readonly string[] = ["tests/helpers/spark-ipc.ts"];
+/** The files that import apache-arrow, held exactly: under src/ only arrow.ts, and the test stream writer. */
+const ARROW_IMPORTERS: readonly string[] = ["src/lib/db/providers/sql/spark/arrow.ts", "tests/helpers/spark-ipc.ts"];
 const SCANNED = /\.(?:ts|tsx|mts|js|mjs)$/;
 
 function filesUnder(dir: string): string[] {
