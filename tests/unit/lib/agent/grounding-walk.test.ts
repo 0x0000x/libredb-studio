@@ -401,6 +401,32 @@ describe("a scoped walk over two levels with no deepest default", () => {
     expect(snapshot.objects).toEqual([]);
     expect(snapshot.unreadContainers?.count).toBe(4);
   });
+
+  test("with the fallback and two databases marked, reads no container, as with no default", async () => {
+    const { snapshot, harness } = await captured({
+      kinds: [TABLE],
+      containersUnder: (parent) =>
+        parent === undefined
+          ? [
+              { path: ["OTHER"], name: "OTHER", level: 0, isSessionDefault: true },
+              { path: ["SALES"], name: "SALES", level: 0, isSessionDefault: true },
+            ]
+          : containersUnder(parent),
+      counts: () => ({ table: { count: 1 } }),
+      objects: table,
+      extra: {
+        ...twoLevels,
+        agentWalkScope: {
+          mode: "session-default",
+          whenNoDefault: { walk: "parent-default-children", skip: ["INFORMATION_SCHEMA"] },
+        },
+      },
+    });
+
+    expect(harness.countObjects).not.toHaveBeenCalled();
+    expect(snapshot.objects).toEqual([]);
+    expect(snapshot.unreadContainers?.count).toBe(4);
+  });
 });
 
 describe("an object with no columns", () => {
