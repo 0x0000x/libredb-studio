@@ -30,6 +30,7 @@ import {
   DatabendIcon,
   S3Icon,
   FirestoreIcon,
+  SparkIcon,
 } from "@/components/icons/db-icons";
 
 describe("db-icons", () => {
@@ -64,6 +65,7 @@ describe("db-icons", () => {
     { name: "DatabendIcon", Component: DatabendIcon, brandAsset: true },
     { name: "S3Icon", Component: S3Icon },
     { name: "FirestoreIcon", Component: FirestoreIcon },
+    { name: "SparkIcon", Component: SparkIcon },
   ];
 
   for (const { name, Component, brandAsset } of icons) {
@@ -143,5 +145,24 @@ describe("db-icons", () => {
     expect(html).toContain('fill="none"');
     expect(html).toContain('stroke="currentColor"');
     expect([...html.matchAll(/<path /g)]).toHaveLength(5);
+  });
+
+  test("SparkIcon is a stroked mark on the house 24-unit grid, drawn for Studio", () => {
+    // A stage DAG drawn for Studio: one rounded node on the left joined by two strokes to two nodes on the right.
+    // No star, burst or spark shape, so nothing in it derives from the Apache Spark logo.
+    const html = renderToStaticMarkup(React.createElement(SparkIcon));
+    expect(html).toContain('viewBox="0 0 24 24"');
+    expect(html).toContain('fill="none"');
+    expect(html).toContain('stroke="currentColor"');
+    expect(html).toContain('stroke-width="1.5"');
+    expect(html).not.toMatch(/\swidth="/);
+    expect(html).not.toMatch(/\sheight="/);
+    // No filled shape: the only fill attribute is the svg's own fill="none".
+    expect([...html.matchAll(/fill="/g)]).toHaveLength(1);
+    expect(html).not.toMatch(/<(circle|rect|polygon|ellipse)\b/);
+    const paths = [...html.matchAll(/<path d="([^"]+)"/g)].map((match) => match[1]);
+    // Three nodes (closed paths) joined by two strokes (open paths).
+    expect(paths.filter((d) => /z$/i.test(d.trim()))).toHaveLength(3);
+    expect(paths.filter((d) => !/z$/i.test(d.trim()))).toHaveLength(2);
   });
 });

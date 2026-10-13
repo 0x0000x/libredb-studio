@@ -880,3 +880,24 @@ export const OpcuaIcon: React.FC<IconProps> = ({ className, ...props }) => (
     <path d="M11 12 V18 H17" />
   </svg>
 );
+
+// A stage DAG drawn for Studio, never the Apache Spark logo: one rounded node on the left joined by two strokes to two
+// nodes on the right, on the house 24-unit grid at stroke weight 1.5.
+export const SparkIcon: React.FC<IconProps> = ({ className, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <path d="M4 9h3a1.5 1.5 0 0 1 1.5 1.5v3A1.5 1.5 0 0 1 7 15H4a1.5 1.5 0 0 1-1.5-1.5v-3A1.5 1.5 0 0 1 4 9z" />
+    <path d="M17 3h3a1.5 1.5 0 0 1 1.5 1.5v3A1.5 1.5 0 0 1 20 9h-3a1.5 1.5 0 0 1-1.5-1.5v-3A1.5 1.5 0 0 1 17 3z" />
+    <path d="M17 15h3a1.5 1.5 0 0 1 1.5 1.5v3A1.5 1.5 0 0 1 20 21h-3a1.5 1.5 0 0 1-1.5-1.5v-3A1.5 1.5 0 0 1 17 15z" />
+    <path d="M8.5 12H11a2 2 0 0 0 2-2V8a2 2 0 0 1 2-2h.5" />
+    <path d="M8.5 12H11a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h.5" />
+  </svg>
+);
