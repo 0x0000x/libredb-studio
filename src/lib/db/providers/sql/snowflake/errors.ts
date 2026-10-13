@@ -26,6 +26,7 @@ import {
 } from "@/lib/db/errors";
 import { TransportError } from "@/lib/db/http/node-transport";
 import { serverText } from "@/lib/db/utils/server-text";
+import { quoteLiteral } from "@/lib/sql/values";
 import type { DatabaseType } from "@/lib/types";
 
 /** The one place the type id is written; every module of the provider names it through this constant. */
@@ -141,7 +142,7 @@ export const SNOWFLAKE_ERROR_SENTENCES = Object.freeze({
     "No warehouse is selected for this connection. Enter one in the connection settings, or ask an administrator to set DEFAULT_WAREHOUSE on the user. Browsing works without one; queries do not.",
   objectMissing: (role: string, roleLiteral: string, text: string) =>
     withText(
-      `Snowflake says this object does not exist or role ${role} may not see it. Check the name, the database and schema, and the role; CALL EXPLAIN_PRIVILEGES(statement => '<statement>', missing_only => true) lists what is missing, and an administrator adds for_role => '${roleLiteral}'.`,
+      `Snowflake says this object does not exist or role ${role} may not see it. Check the name, the database and schema, and the role; CALL EXPLAIN_PRIVILEGES(statement => '<statement>', missing_only => true) lists what is missing, and an administrator adds for_role => ${roleLiteral}.`,
       text,
     ),
   privileges: (role: string, text: string) => withText(`Role ${role} lacks a privilege this statement needs.`, text),
@@ -316,7 +317,7 @@ export function failureError(failure: SnowflakeFailure, context: SnowflakeFailur
   if (code === "390142") return new SnowflakeError("defect", sentences.invalidPayload);
   if (code !== null && NO_WAREHOUSE_CODES.has(code)) return new SnowflakeError("query", sentences.noWarehouse);
   if (code === "002003") {
-    return new SnowflakeError("query", sentences.objectMissing(context.role, context.role.replaceAll("'", "''"), text));
+    return new SnowflakeError("query", sentences.objectMissing(context.role, quoteLiteral(context.role, SNOWFLAKE), text));
   }
   if (code === "003001") return new SnowflakeError("query", sentences.privileges(context.role, text));
   if (code === UNSUPPORTED_COMMAND_CODE) return new SnowflakeError("query", sentences.unsupportedCommand(text));

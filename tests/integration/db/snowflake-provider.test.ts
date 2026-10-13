@@ -447,7 +447,7 @@ describe("each refusal the fixtures hold, with its class and its sentence", () =
     [
       "refusal-002003",
       "SELECT * FROM STUDIO_DEMO.PROBE.MISSING",
-      (message) => SNOWFLAKE_ERROR_SENTENCES.objectMissing("STUDIO_RO", "STUDIO_RO", message),
+      (message) => SNOWFLAKE_ERROR_SENTENCES.objectMissing("STUDIO_RO", "'STUDIO_RO'", message),
     ],
     [
       "refusal-003001",

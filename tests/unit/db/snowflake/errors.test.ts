@@ -551,6 +551,11 @@ describe("copyable identifiers", () => {
     expect(statements(call)).toHaveLength(1);
   });
 
+  test("the object-missing for_role literal doubles a backslash, so a role ending in one stays a closed literal", () => {
+    const error = failureError(failure({ status: 422, code: "002003", message: "gone" }), context({ role: "ops\\" }));
+    expect(error.message).toContain("for_role => 'ops\\\\'.");
+  });
+
   test("the key name form", () => {
     expect(keyPairName("0a1b2c3d")).toBe("libredb_studio_0a1b2c3d");
   });
