@@ -595,6 +595,35 @@ describe("a scoped walk over two levels where a catalog's namespaces cannot be l
     ]);
   });
 
+  // A character outside the Basic Multilingual Plane is two UTF-16 units and one code point: the bound counts code
+  // points, and the cut never splits one.
+  test.each([
+    ["199 code points is kept whole", "a".repeat(199), "a".repeat(199)],
+    ["200 code points is kept whole", "a".repeat(200), "a".repeat(200)],
+    ["201 code points is cut at 200 and marked", "a".repeat(201), `${"a".repeat(200)}...`],
+    [
+      "200 code points ending outside the Basic Multilingual Plane is kept whole",
+      `${"a".repeat(199)}\u{1D538}`,
+      `${"a".repeat(199)}\u{1D538}`,
+    ],
+    [
+      "201 code points whose 200th is outside the Basic Multilingual Plane keeps that one whole",
+      `${"a".repeat(199)}\u{1D538}b`,
+      `${"a".repeat(199)}\u{1D538}...`,
+    ],
+    [
+      "201 code points whose 201st is outside the Basic Multilingual Plane leaves that one out whole",
+      `${"a".repeat(200)}\u{1D538}`,
+      `${"a".repeat(200)}...`,
+    ],
+  ])("a sentence of %s", async (_case, message, reason) => {
+    const { snapshot } = await captured(
+      walk({ spark_catalog: ["default"], lakehouse: new QueryError(message, "spark") }, scoped),
+    );
+
+    expect(snapshot.unreadContainers?.unlistedParents).toStrictEqual([{ path: "lakehouse", label: "Catalog", reason }]);
+  });
+
   test("the session's catalog failing to list ends the capture, as before", async () => {
     const { capture, harness } = await refusedCapture(walk({ spark_catalog: notLoaded(), warehouse: ["raw"] }, scoped));
 
