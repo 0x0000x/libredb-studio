@@ -280,7 +280,6 @@ describe("docs/providers/snowflake.md", () => {
       SNOWFLAKE_INTROSPECT_SENTENCES.notResuming("<wh>"),
       SNOWFLAKE_INTROSPECT_SENTENCES.emptyWarehouse,
       SNOWFLAKE_INTROSPECT_SENTENCES.treeCap,
-      SNOWFLAKE_INTROSPECT_SENTENCES.silentCap,
       SNOWFLAKE_INTROSPECT_SENTENCES.countFloor,
       SNOWFLAKE_INTROSPECT_SENTENCES.pairCap,
       SNOWFLAKE_INTROSPECT_SENTENCES.secureView,
@@ -446,6 +445,26 @@ describe("docs/providers/snowflake.md", () => {
     }
   });
 
+  test("states what the operator measured by hand on the trial", () => {
+    const pinned: Record<string, readonly string[]> = {
+      "### 2.4 Programmatic access token": [
+        "On the trial on 2026-10-13 that policy let a token sign in for a user with no network policy, and each policy change took up to about 45 s to show.",
+      ],
+      "## 3. The recommended Snowflake setup": [
+        "On the trial on 2026-10-13 a key restricted to one role signed in under that role and under no role, and was refused under another with 390186.",
+        "On 2026-10-12 a token restricted to one role signed in under that role and was refused under another with 390186.",
+        "On the trial on 2026-10-13 a monitor at its quota suspended the warehouse mid-statement, and the statement ended with HTTP 422, code 000629 and SQLSTATE 57014, `Warehouse ... was suspended immediate by resource monitor ..., statement aborted.`, which Studio shows with Snowflake's text and code; a statement that needs no warehouse still answered.",
+        "The recipe ran as written on the trial on 2026-10-13, and its user was refused an INSERT with 003001.",
+      ],
+      "## 11. Errors": [
+        "A data movement policy refusal answers HTTP 422 with code 001003, the code a syntax error answers, and `Data movement policy triggered. Contact your administrator for details.`, so Studio shows Snowflake's text.",
+      ],
+    };
+    for (const [section, sentences] of Object.entries(pinned)) {
+      for (const sentence of sentences) expect(flat(sectionOf(DOC, section))).toContain(sentence);
+    }
+  });
+
   test("quotes the bounds the code holds", () => {
     expect(FLAT_DOC).toContain(`${SNOWFLAKE_RESULT_BYTE_BUDGET / MIB} MiB`);
     expect(FLAT_DOC).toContain(`${SNOWFLAKE_FIRST_ANSWER_MAX_BYTES / MIB} MiB`);
@@ -528,8 +547,23 @@ describe("every other number and sentence the doc states is the code's", () => {
 
   test("the tree's cut is stated as silent, since listObjects carries no truncation", () => {
     expect(FLAT_DOC).toContain(
-      "The tree has no place for a listing's sentence, so it shows the first 50,000 (or 10,000) objects of a kind without one; the object inventory, which the agent and the inventory route read, carries the two listing sentences above.",
+      "The tree has no place for a listing's sentence, so it shows the first 50,000 objects of a pageable kind without one; the object inventory, which the agent and the inventory route read, carries that sentence.",
     );
+  });
+
+  test("the SHOW bounds are stated as measured, Studio's LIMIT as Studio's own", () => {
+    const tree = flat(sectionOf(DOC, "## 7. The tree"));
+    expect(tree).not.toContain("Snowflake answers at most 10,000 rows for one `SHOW`");
+    expect(tree).not.toContain("whether or not Snowflake repeats the name");
+    for (const pinned of [
+      "On the trial on 2026-10-13, over 10,250 tables in one scratch schema and 10,250 sequences in another, `SHOW TABLES` and `SHOW TERSE OBJECTS` without a `LIMIT` answered all 10,250 rows, with no error and no 10,000-row ceiling.",
+      "Studio still sends `LIMIT 10000` wherever Snowflake offers paging, so each answer stays bounded:",
+      "each from the previous page's last name with `FROM`, which starts after the name it is given (a page with nothing past that name ends the listing), up to five pages",
+      "Any other listing has no paging and is sent with no `LIMIT`: `SHOW SEQUENCES` answered all 10,250 rows with and without `LIMIT` and `FROM`, since it ignores both, and the 10,000 rows Snowflake's reference gives as the most the other listings answer is not measured.",
+      "A count of exactly 10,000, Studio's own `LIMIT`: `Studio counts at most 10,000 objects here, so this is a floor.`",
+    ]) {
+      expect(tree).toContain(pinned);
+    }
   });
 
   test("quotes the sentence a restored Source tab shows while the connection is held", () => {
