@@ -1,0 +1,200 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:42.334Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/ExecutePlan",
+    "surface": "O14: 1E10BD under allowNegativeScaleOfDecimal: relation step",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation_id": "<operation>",
+      "tags": [
+        "<tag>"
+      ],
+      "request_options": [
+        {
+          "result_chunking_options": {
+            "allow_arrow_batch_chunking": true,
+            "preferred_arrow_chunk_size": "4194304"
+          }
+        }
+      ],
+      "plan": {
+        "root": {
+          "common": null,
+          "sql": {
+            "pos_args": [],
+            "pos_arguments": [],
+            "args": {},
+            "named_arguments": {},
+            "query": "SELECT 1E10BD AS d"
+          },
+          "rel_type": "sql"
+        }
+      }
+    }
+  },
+  "outcome": "pass",
+  "payload": [
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": {
+        "struct": {
+          "fields": [
+            {
+              "name": "d",
+              "data_type": {
+                "decimal": {
+                  "type_variation_reference": 0,
+                  "scale": -10,
+                  "_scale": "scale",
+                  "precision": 1,
+                  "_precision": "precision"
+                },
+                "kind": "decimal"
+              },
+              "nullable": false
+            }
+          ],
+          "type_variation_reference": 0
+        },
+        "kind": "struct"
+      },
+      "operation_id": "<operation>",
+      "response_id": "8918ed1e-cd0d-45d8-8178-d69bb1c973de",
+      "server_side_session_id": "4796299b-73cc-4847-96bb-f4548c4b31bb"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "c6809d0b-2f84-468e-b91f-2bed4f2d3d1f",
+      "server_side_session_id": "4796299b-73cc-4847-96bb-f4548c4b31bb",
+      "execution_progress": {
+        "stages": [],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "4cbb206c-0a22-452d-b9eb-8cfe0a894808",
+      "server_side_session_id": "4796299b-73cc-4847-96bb-f4548c4b31bb",
+      "arrow_batch": {
+        "row_count": "1",
+        "data": {
+          "$bytes": "/////5AAAAAQAAAAAAAKAA4ABgANAAgACgAAAAAABAAQAAAAAAEKAAwAAAAIAAQACgAAAAgAAAAIAAAAAAAAAAEAAAAYAAAAAAASABgAFAAAABMADAAAAAgABAASAAAAFAAAABQAAAAcAAAAAAAAByAAAAAAAAAAAAAAAAgADAAIAAQACAAAAPb///8BAAAAAQAAAGQAAAD/////iAAAABQAAAAAAAAADAAWAA4AFQAQAAQADAAAABgAAAAAAAAAAAAEABAAAAAAAwoAGAAMAAgABAAKAAAAFAAAADgAAAABAAAAAAAAAAAAAAACAAAAAAAAAAAAAAABAAAAAAAAAAgAAAAAAAAAEAAAAAAAAAAAAAAAAQAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAD/////AAAAAA=="
+        },
+        "start_offset": "0",
+        "_start_offset": "start_offset",
+        "chunk_index": "0",
+        "_chunk_index": "chunk_index",
+        "num_chunks_in_batch": "1",
+        "_num_chunks_in_batch": "num_chunks_in_batch"
+      },
+      "response_type": "arrow_batch"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "5165391a-0276-42b8-b46f-8380db66d66a",
+      "server_side_session_id": "4796299b-73cc-4847-96bb-f4548c4b31bb",
+      "execution_progress": {
+        "stages": [
+          {
+            "stage_id": "6",
+            "num_tasks": "1",
+            "num_completed_tasks": "1",
+            "input_bytes_read": "0",
+            "done": true
+          }
+        ],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "8d403bc0-f7aa-4cda-bc5d-9860f4a9aab9",
+      "server_side_session_id": "4796299b-73cc-4847-96bb-f4548c4b31bb",
+      "execution_progress": {
+        "stages": [
+          {
+            "stage_id": "6",
+            "num_tasks": "1",
+            "num_completed_tasks": "1",
+            "input_bytes_read": "0",
+            "done": true
+          }
+        ],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": {
+        "metrics": [
+          {
+            "execution_metrics": {
+              "pipelineTime": {
+                "name": "duration",
+                "value": "0",
+                "metric_type": "timing"
+              }
+            },
+            "name": "WholeStageCodegen (1)",
+            "plan_id": "277",
+            "parent": "277"
+          },
+          {
+            "execution_metrics": {},
+            "name": "Project",
+            "plan_id": "276",
+            "parent": "277"
+          },
+          {
+            "execution_metrics": {
+              "numOutputRows": {
+                "name": "number of output rows",
+                "value": "1",
+                "metric_type": "sum"
+              }
+            },
+            "name": "Scan OneRowRelation",
+            "plan_id": "275",
+            "parent": "276"
+          }
+        ]
+      },
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "bd8a94e8-d049-48e8-a5f8-021dc62c9275",
+      "server_side_session_id": "4796299b-73cc-4847-96bb-f4548c4b31bb"
+    }
+  ]
+}

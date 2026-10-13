@@ -1,0 +1,69 @@
+{
+  "$captured": {
+    "service": "spark-4-1",
+    "image": "apache/spark:4.1.3",
+    "digest": "sha256:bf9d035a7c32a8ca46aa58d6348182ffd7d2dff6409206ecfbb3915ff1fef211",
+    "sparkVersion": "4.1.3",
+    "date": "2026-10-13T10:08:03.518Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/Config",
+    "surface": "connect: the metadata session's Config set of nine pairs",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation": {
+        "set": {
+          "pairs": [
+            {
+              "key": "spark.sql.variable.substitute",
+              "value": "false"
+            },
+            {
+              "key": "spark.sql.execution.arrow.compression.codec",
+              "value": "none"
+            },
+            {
+              "key": "spark.sql.execution.arrow.useLargeVarTypes",
+              "value": "false"
+            },
+            {
+              "key": "spark.connect.session.resultChunking.maxChunkSize",
+              "value": "4194304"
+            },
+            {
+              "key": "spark.sql.execution.arrow.maxRecordsPerBatch",
+              "value": "1000"
+            },
+            {
+              "key": "spark.connect.progress.reportInterval",
+              "value": "2s"
+            },
+            {
+              "key": "spark.sql.connect.enrichError.enabled",
+              "value": "true"
+            },
+            {
+              "key": "spark.sql.legacy.keepCommandOutputSchema",
+              "value": "false"
+            },
+            {
+              "key": "spark.sql.debug.maxToStringFields",
+              "value": "10000"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "outcome": "pass",
+  "payload": {
+    "pairs": [],
+    "warnings": [],
+    "session_id": "<session>",
+    "server_side_session_id": "1afab98d-963c-4612-b60e-6e8d9df4b871"
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:44.198Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/ExecutePlan",
+    "surface": "a result after a session SET of the codec to zstd: command step",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation_id": "<operation>",
+      "tags": [
+        "<tag>"
+      ],
+      "request_options": [
+        {
+          "result_chunking_options": {
+            "allow_arrow_batch_chunking": true,
+            "preferred_arrow_chunk_size": "4194304"
+          }
+        }
+      ],
+      "plan": {
+        "command": {
+          "sql_command": {
+            "input": {
+              "sql": {
+                "query": "SELECT id, 'x' AS v FROM range(0, 3, 1, 1)"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "outcome": "pass",
+  "payload": [
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "2e6ffcf3-1e6c-48da-9849-973e980d0cd1",
+      "server_side_session_id": "2d2b9078-4d24-421e-88c7-e435078e1ecb",
+      "sql_command_result": {
+        "relation": {
+          "common": null,
+          "sql": {
+            "pos_args": [],
+            "pos_arguments": [],
+            "args": {},
+            "named_arguments": {},
+            "query": "SELECT id, 'x' AS v FROM range(0, 3, 1, 1)"
+          },
+          "rel_type": "sql"
+        }
+      },
+      "response_type": "sql_command_result"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "d5c389cc-302c-4ce0-8699-07842e3a44cb",
+      "server_side_session_id": "2d2b9078-4d24-421e-88c7-e435078e1ecb",
+      "execution_progress": {
+        "stages": [],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    }
+  ]
+}

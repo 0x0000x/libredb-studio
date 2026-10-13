@@ -1,0 +1,83 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:42.296Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/ExecutePlan",
+    "surface": "O14: 1E10BD under allowNegativeScaleOfDecimal: command step",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation_id": "<operation>",
+      "tags": [
+        "<tag>"
+      ],
+      "request_options": [
+        {
+          "result_chunking_options": {
+            "allow_arrow_batch_chunking": true,
+            "preferred_arrow_chunk_size": "4194304"
+          }
+        }
+      ],
+      "plan": {
+        "command": {
+          "sql_command": {
+            "input": {
+              "sql": {
+                "query": "SELECT 1E10BD AS d"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "outcome": "pass",
+  "payload": [
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "e9b61563-d85f-4d92-a18e-4118209978a5",
+      "server_side_session_id": "4796299b-73cc-4847-96bb-f4548c4b31bb",
+      "sql_command_result": {
+        "relation": {
+          "common": null,
+          "sql": {
+            "pos_args": [],
+            "pos_arguments": [],
+            "args": {},
+            "named_arguments": {},
+            "query": "SELECT 1E10BD AS d"
+          },
+          "rel_type": "sql"
+        }
+      },
+      "response_type": "sql_command_result"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "5801b9ba-dd62-45c0-afcc-ac46edf15d65",
+      "server_side_session_id": "4796299b-73cc-4847-96bb-f4548c4b31bb",
+      "execution_progress": {
+        "stages": [],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    }
+  ]
+}

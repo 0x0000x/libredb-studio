@@ -1,0 +1,69 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:41.865Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/Config",
+    "surface": "connect: the metadata session's Config set of nine pairs",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation": {
+        "set": {
+          "pairs": [
+            {
+              "key": "spark.sql.variable.substitute",
+              "value": "false"
+            },
+            {
+              "key": "spark.sql.execution.arrow.compression.codec",
+              "value": "none"
+            },
+            {
+              "key": "spark.sql.execution.arrow.useLargeVarTypes",
+              "value": "false"
+            },
+            {
+              "key": "spark.connect.session.resultChunking.maxChunkSize",
+              "value": "4194304"
+            },
+            {
+              "key": "spark.sql.execution.arrow.maxRecordsPerBatch",
+              "value": "1000"
+            },
+            {
+              "key": "spark.connect.progress.reportInterval",
+              "value": "2s"
+            },
+            {
+              "key": "spark.sql.connect.enrichError.enabled",
+              "value": "true"
+            },
+            {
+              "key": "spark.sql.legacy.keepCommandOutputSchema",
+              "value": "false"
+            },
+            {
+              "key": "spark.sql.debug.maxToStringFields",
+              "value": "10000"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "outcome": "pass",
+  "payload": {
+    "pairs": [],
+    "warnings": [],
+    "session_id": "<session>",
+    "server_side_session_id": "afe746aa-3269-4ef1-ada9-d04dc360da89"
+  }
+}

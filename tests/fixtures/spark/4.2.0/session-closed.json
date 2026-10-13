@@ -1,0 +1,36 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:42.978Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/Config",
+    "surface": "a call on a released session",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation": {
+        "get_option": {
+          "keys": [
+            "spark.sql.ansi.enabled"
+          ]
+        }
+      }
+    }
+  },
+  "outcome": "error",
+  "code": 13,
+  "details": "[INVALID_HANDLE.SESSION_CLOSED] The handle <session> is invalid. Session was closed. SQLSTATE: HY000",
+  "metadata": {
+    "content-type": "application/grpc",
+    "grpc-status-details-bin": {
+      "$bytes": "CA0Sf1tJTlZBTElEX0hBTkRMRS5TRVNTSU9OX0NMT1NFRF0gVGhlIGhhbmRsZSAyZDhjNjQwNi0wMTE5LTQ0Y2YtYmQ4Mi01NmZhMWZiMWEyNGQgaXMgaW52YWxpZC4gU2Vzc2lvbiB3YXMgY2xvc2VkLiBTUUxTVEFURTogSFkwMDAa9gIKKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5FcnJvckluZm8SyQIKIm9yZy5hcGFjaGUuc3BhcmsuU3BhcmtTUUxFeGNlcHRpb24SEG9yZy5hcGFjaGUuc3BhcmsaiAEKB2NsYXNzZXMSfVsib3JnLmFwYWNoZS5zcGFyay5TcGFya1NRTEV4Y2VwdGlvbiIsImphdmEuc3FsLlNRTEV4Y2VwdGlvbiIsImphdmEubGFuZy5FeGNlcHRpb24iLCJqYXZhLmxhbmcuVGhyb3dhYmxlIiwiamF2YS5sYW5nLk9iamVjdCJdGhEKCHNxbFN0YXRlEgVIWTAwMBorCgplcnJvckNsYXNzEh1JTlZBTElEX0hBTkRMRS5TRVNTSU9OX0NMT1NFRBpGChFtZXNzYWdlUGFyYW1ldGVycxIxeyJoYW5kbGUiOiIyZDhjNjQwNi0wMTE5LTQ0Y2YtYmQ4Mi01NmZhMWZiMWEyNGQifQ=="
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:42.637Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/ExecutePlan",
+    "surface": "a syntax error with ErrorInfo: command step",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation_id": "<operation>",
+      "tags": [
+        "<tag>"
+      ],
+      "request_options": [
+        {
+          "result_chunking_options": {
+            "allow_arrow_batch_chunking": true,
+            "preferred_arrow_chunk_size": "4194304"
+          }
+        }
+      ],
+      "plan": {
+        "command": {
+          "sql_command": {
+            "input": {
+              "sql": {
+                "query": "SELEC 1"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "outcome": "error",
+  "code": 13,
+  "details": "\n[PARSE_SYNTAX_ERROR] Syntax error at or near 'SELEC'. SQLSTATE: 42601 (line 1, pos 0)\n\n== SQL ==\nSELEC 1\n^^^\n",
+  "metadata": {
+    "content-type": "application/grpc",
+    "grpc-status-details-bin": {
+      "$bytes": "CA0SbgpbUEFSU0VfU1lOVEFYX0VSUk9SXSBTeW50YXggZXJyb3IgYXQgb3IgbmVhciAnU0VMRUMnLiBTUUxTVEFURTogNDI2MDEgKGxpbmUgMSwgcG9zIDApCgo9PSBTUUwgPT0KU0VMRUMgMQpeXl4KGrwDCih0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuRXJyb3JJbmZvEo8DCjNvcmcuYXBhY2hlLnNwYXJrLnNxbC5jYXRhbHlzdC5wYXJzZXIuUGFyc2VFeGNlcHRpb24SEG9yZy5hcGFjaGUuc3BhcmsaqwEKB2NsYXNzZXMSnwFbIm9yZy5hcGFjaGUuc3Bhcmsuc3FsLmNhdGFseXN0LnBhcnNlci5QYXJzZUV4Y2VwdGlvbiIsIm9yZy5hcGFjaGUuc3Bhcmsuc3FsLkFuYWx5c2lzRXhjZXB0aW9uIiwiamF2YS5sYW5nLkV4Y2VwdGlvbiIsImphdmEubGFuZy5UaHJvd2FibGUiLCJqYXZhLmxhbmcuT2JqZWN0Il0aEQoIc3FsU3RhdGUSBTQyNjAxGiAKCmVycm9yQ2xhc3MSElBBUlNFX1NZTlRBWF9FUlJPUhoyChFtZXNzYWdlUGFyYW1ldGVycxIdeyJlcnJvciI6IidTRUxFQyciLCJoaW50IjoiIn0aLwoHZXJyb3JJZBIkMzgyNWQ3N2MtNDZmMi00ZGQ0LTg2NmMtMjJkMjVkZTUwMjJi"
+    }
+  }
+}

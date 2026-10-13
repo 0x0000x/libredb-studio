@@ -1,0 +1,106 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:44.433Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/ExecutePlan",
+    "surface": "object surface: DESCRIBE TABLE every_type: command step",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation_id": "<operation>",
+      "tags": [
+        "<tag>"
+      ],
+      "request_options": [
+        {
+          "result_chunking_options": {
+            "allow_arrow_batch_chunking": true,
+            "preferred_arrow_chunk_size": "4194304"
+          }
+        }
+      ],
+      "plan": {
+        "command": {
+          "sql_command": {
+            "input": {
+              "sql": {
+                "query": "DESCRIBE TABLE `spark_catalog`.studio.`every_type`"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "outcome": "pass",
+  "payload": [
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "bc5002d1-34c6-48f8-88f7-2bc719e41af6",
+      "server_side_session_id": "a030b536-f44f-46e1-b886-14d0ca274580",
+      "sql_command_result": {
+        "relation": {
+          "common": null,
+          "local_relation": {
+            "data": {
+              "$bytes": "/////xACAAAQAAAAAAAKAA4ABgANAAgACgAAAAAABAAQAAAAAAEKAAwAAAAIAAQACgAAAAgAAAAIAAAAAAAAAAMAAABAAQAAoAAAABgAAAAAABIAGAAUABMAEgAMAAAACAAEABIAAAAUAAAAaAAAAGgAAAAAAAUBZAAAAAEAAAAEAAAA4P7//wgAAAAsAAAAIwAAAHsiY29tbWVudCI6ImNvbW1lbnQgb2YgdGhlIGNvbHVtbiJ9ABUAAABTUEFSSzo6bWV0YWRhdGE6Ompzb24AAAAAAAAA2P7//wcAAABjb21tZW50AHb///8UAAAAbAAAAGwAAAAAAAAFaAAAAAEAAAAEAAAAZP///wgAAAAwAAAAJQAAAHsiY29tbWVudCI6ImRhdGEgdHlwZSBvZiB0aGUgY29sdW1uIn0AAAAVAAAAU1BBUks6Om1ldGFkYXRhOjpqc29uAAAAAAAAAGD///8JAAAAZGF0YV90eXBlABIAGAAUAAAAEwAMAAAACAAEABIAAAAUAAAAcAAAAHQAAAAAAAAFcAAAAAEAAAAMAAAACAAMAAgABAAIAAAACAAAACwAAAAgAAAAeyJjb21tZW50IjoibmFtZSBvZiB0aGUgY29sdW1uIn0AAAAAFQAAAFNQQVJLOjptZXRhZGF0YTo6anNvbgAAAAAAAAAEAAQABAAAAAgAAABjb2xfbmFtZQAAAAD/////GAEAABQAAAAAAAAADAAWAA4AFQAQAAQADAAAAFAEAAAAAAAAAAAEABAAAAAAAwoAGAAMAAgABAAKAAAAFAAAAKgAAAAgAAAAAAAAAAAAAAAJAAAAAAAAAAAAAAAEAAAAAAAAAAgAAAAAAAAAhAAAAAAAAACQAAAAAAAAAE4BAAAAAAAA4AEAAAAAAAAEAAAAAAAAAOgBAAAAAAAAhAAAAAAAAABwAgAAAAAAAEwBAAAAAAAAwAMAAAAAAAAEAAAAAAAAAMgDAAAAAAAAhAAAAAAAAABQBAAAAAAAAAAAAAAAAAAAAAAAAAMAAAAgAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAD/////AAAAAAAAAAAJAAAAEgAAABwAAAAhAAAALgAAADwAAABDAAAASwAAAFcAAABjAAAAbAAAAHkAAACFAAAAjQAAAJ4AAACkAAAArQAAALUAAAC7AAAAxQAAANAAAADfAAAA7AAAAPsAAAAIAQAAFwEAAB4BAAAjAQAAMwEAADsBAABEAQAATgEAAAAAAABjX2Jvb2xlYW5jX3RpbnlpbnRjX3NtYWxsaW50Y19pbnRjX2JpZ2ludF9zYWZlY19iaWdpbnRfbGFyZ2VjX2Zsb2F0Y19kb3VibGVjX2RvdWJsZV9uYW5jX2RvdWJsZV9pbmZjX2RlY2ltYWxjX2RlY2ltYWxfbmVnY19kZWNpbWFsXzM4Y19zdHJpbmdjX3N0cmluZ19jb2xsYXRlZGNfY2hhcmNfdmFyY2hhcmNfYmluYXJ5Y19kYXRlY19kYXRlX21pbmNfdGltZXN0YW1wY190aW1lc3RhbXBfbnR6Y195bV9pbnRlcnZhbGNfeWVhcl9pbnRlcnZhbGNfZHRfaW50ZXJ2YWxjX2hvdXJfaW50ZXJ2YWxjX2FycmF5Y19tYXBjX21hcF9uZXN0ZWRfa2V5Y19zdHJ1Y3RjX3ZhcmlhbnRjX251bGxfaW50AAD/////AAAAAAAAAAAHAAAADgAAABYAAAAZAAAAHwAAACUAAAAqAAAAMAAAADYAAAA8AAAASQAAAFUAAABiAAAAaAAAAIEAAACIAAAAkwAAAJkAAACdAAAAoQAAAKoAAAC3AAAAzQAAANoAAADwAAAA/QAAAAcBAAAWAQAALAEAAEIBAABJAQAATAEAAAAAAABib29sZWFudGlueWludHNtYWxsaW50aW50YmlnaW50YmlnaW50ZmxvYXRkb3VibGVkb3VibGVkb3VibGVkZWNpbWFsKDEwLDIpZGVjaW1hbCg0LDIpZGVjaW1hbCgzOCwwKXN0cmluZ3N0cmluZyBjb2xsYXRlIFVURjhfTENBU0VjaGFyKDUpdmFyY2hhcigxMCliaW5hcnlkYXRlZGF0ZXRpbWVzdGFtcHRpbWVzdGFtcF9udHppbnRlcnZhbCB5ZWFyIHRvIG1vbnRoaW50ZXJ2YWwgeWVhcmludGVydmFsIGRheSB0byBzZWNvbmRpbnRlcnZhbCBob3VyYXJyYXk8aW50Pm1hcDxzdHJpbmcsaW50Pm1hcDxhcnJheTxpbnQ+LHN0cmluZz5zdHJ1Y3Q8eDppbnQseTpzdHJpbmc+dmFyaWFudGludAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/////AAAAAA=="
+            },
+            "_data": "data"
+          },
+          "rel_type": "local_relation"
+        }
+      },
+      "response_type": "sql_command_result"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": {
+        "metrics": [
+          {
+            "execution_metrics": {
+              "numOutputRows": {
+                "name": "number of output rows",
+                "value": "0",
+                "metric_type": "sum"
+              }
+            },
+            "name": "CommandResult",
+            "plan_id": "435",
+            "parent": "435"
+          }
+        ]
+      },
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "fae883ac-7020-4e8f-b63a-89f3da1eb075",
+      "server_side_session_id": "a030b536-f44f-46e1-b886-14d0ca274580"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "21e7f4cc-cde2-43a0-a629-b7f9fcc2ab1b",
+      "server_side_session_id": "a030b536-f44f-46e1-b886-14d0ca274580",
+      "execution_progress": {
+        "stages": [],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    }
+  ]
+}

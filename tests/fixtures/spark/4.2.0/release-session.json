@@ -1,0 +1,26 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:42.437Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/ReleaseSession",
+    "surface": "ReleaseSession at the end of a request",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "allow_reconnect": false
+    }
+  },
+  "outcome": "pass",
+  "payload": {
+    "session_id": "<session>",
+    "server_side_session_id": "cde2f54e-dccd-45c6-9e05-690e142a3b72"
+  }
+}

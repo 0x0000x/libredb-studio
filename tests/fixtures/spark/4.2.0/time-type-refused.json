@@ -1,0 +1,53 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:42.136Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/ExecutePlan",
+    "surface": "a TIME literal with TIME values off: relation step",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation_id": "<operation>",
+      "tags": [
+        "<tag>"
+      ],
+      "request_options": [
+        {
+          "result_chunking_options": {
+            "allow_arrow_batch_chunking": true,
+            "preferred_arrow_chunk_size": "4194304"
+          }
+        }
+      ],
+      "plan": {
+        "root": {
+          "common": null,
+          "sql": {
+            "pos_args": [],
+            "pos_arguments": [],
+            "args": {},
+            "named_arguments": {},
+            "query": "SELECT TIME'12:34:56' AS t"
+          },
+          "rel_type": "sql"
+        }
+      }
+    }
+  },
+  "outcome": "error",
+  "code": 13,
+  "details": "[UNSUPPORTED_TIME_TYPE] The data type TIME is not supported. SQLSTATE: 0A000",
+  "metadata": {
+    "grpc-status-details-bin": {
+      "$bytes": "CA0STFtVTlNVUFBPUlRFRF9USU1FX1RZUEVdIFRoZSBkYXRhIHR5cGUgVElNRSBpcyBub3Qgc3VwcG9ydGVkLiBTUUxTVEFURTogMEEwMDAa3wIKKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5FcnJvckluZm8SsgIKJm9yZy5hcGFjaGUuc3Bhcmsuc3FsLkFuYWx5c2lzRXhjZXB0aW9uEhBvcmcuYXBhY2hlLnNwYXJrGnQKB2NsYXNzZXMSaVsib3JnLmFwYWNoZS5zcGFyay5zcWwuQW5hbHlzaXNFeGNlcHRpb24iLCJqYXZhLmxhbmcuRXhjZXB0aW9uIiwiamF2YS5sYW5nLlRocm93YWJsZSIsImphdmEubGFuZy5PYmplY3QiXRoRCghzcWxTdGF0ZRIFMEEwMDAaIwoKZXJyb3JDbGFzcxIVVU5TVVBQT1JURURfVElNRV9UWVBFGhcKEW1lc3NhZ2VQYXJhbWV0ZXJzEgJ7fRovCgdlcnJvcklkEiQ2NDIxZjNlNy05ODY4LTRmYTgtYmI5ZS1hZTk3ODcwZjBmN2U="
+    }
+  }
+}

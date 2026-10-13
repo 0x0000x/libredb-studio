@@ -1,0 +1,106 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:42.229Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/ExecutePlan",
+    "surface": "EXPLAIN FORMATTED of a never-run SELECT: command step",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation_id": "<operation>",
+      "tags": [
+        "<tag>"
+      ],
+      "request_options": [
+        {
+          "result_chunking_options": {
+            "allow_arrow_batch_chunking": true,
+            "preferred_arrow_chunk_size": "4194304"
+          }
+        }
+      ],
+      "plan": {
+        "command": {
+          "sql_command": {
+            "input": {
+              "sql": {
+                "query": "EXPLAIN FORMATTED SELECT c_int, c_string FROM spark_catalog.studio.every_type WHERE c_int > 0"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "outcome": "pass",
+  "payload": [
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "4cee976f-3f59-4cbf-8537-a2bf6be08b75",
+      "server_side_session_id": "20209518-60ab-4d73-8311-3f72b04d4340",
+      "sql_command_result": {
+        "relation": {
+          "common": null,
+          "local_relation": {
+            "data": {
+              "$bytes": "/////4gAAAAQAAAAAAAKAA4ABgANAAgACgAAAAAABAAQAAAAAAEKAAwAAAAIAAQACgAAAAgAAAAIAAAAAAAAAAEAAAAYAAAAAAASABgAFAATABIADAAAAAgABAASAAAAFAAAABQAAAAYAAAAAAAFARQAAAAAAAAAAAAAAAQABAAEAAAABAAAAHBsYW4AAAAA/////5gAAAAUAAAAAAAAAAwAFgAOABUAEAAEAAwAAABwAgAAAAAAAAAABAAQAAAAAAMKABgADAAIAAQACgAAABQAAABIAAAAAQAAAAAAAAAAAAAAAwAAAAAAAAAAAAAAAQAAAAAAAAAIAAAAAAAAAAgAAAAAAAAAEAAAAAAAAABbAgAAAAAAAAAAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAFsCAAA9PSBQaHlzaWNhbCBQbGFuID09CiogRmlsdGVyICgzKQorLSAqIENvbHVtbmFyVG9Sb3cgKDIpCiAgICstIFNjYW4gcGFycXVldCBzcGFya19jYXRhbG9nLnN0dWRpby5ldmVyeV90eXBlICgxKQoKCigxKSBTY2FuIHBhcnF1ZXQgc3BhcmtfY2F0YWxvZy5zdHVkaW8uZXZlcnlfdHlwZQpPdXRwdXQgWzJdOiBbY19pbnQjNDgwLCBjX3N0cmluZyM0OTBdCkJhdGNoZWQ6IHRydWUKTG9jYXRpb246IEluTWVtb3J5RmlsZUluZGV4IFtmaWxlOi9vcHQvc3Bhcmsvd29yay1kaXIvc3Bhcmstd2FyZWhvdXNlL3N0dWRpby5kYi9ldmVyeV90eXBlXQpQdXNoZWRGaWx0ZXJzOiBbSXNOb3ROdWxsKGNfaW50KSwgR3JlYXRlclRoYW4oY19pbnQsMCldClJlYWRTY2hlbWE6IHN0cnVjdDxjX2ludDppbnQsY19zdHJpbmc6c3RyaW5nPgoKKDIpIENvbHVtbmFyVG9Sb3cgW2NvZGVnZW4gaWQgOiAxXQpJbnB1dCBbMl06IFtjX2ludCM0ODAsIGNfc3RyaW5nIzQ5MF0KCigzKSBGaWx0ZXIgW2NvZGVnZW4gaWQgOiAxXQpJbnB1dCBbMl06IFtjX2ludCM0ODAsIGNfc3RyaW5nIzQ5MF0KQ29uZGl0aW9uIDogKGlzbm90bnVsbChjX2ludCM0ODApIEFORCAoY19pbnQjNDgwID4gMCkpCgoAAAAAAP////8AAAAA"
+            },
+            "_data": "data"
+          },
+          "rel_type": "local_relation"
+        }
+      },
+      "response_type": "sql_command_result"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": {
+        "metrics": [
+          {
+            "execution_metrics": {
+              "numOutputRows": {
+                "name": "number of output rows",
+                "value": "0",
+                "metric_type": "sum"
+              }
+            },
+            "name": "CommandResult",
+            "plan_id": "255",
+            "parent": "255"
+          }
+        ]
+      },
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "b5e92d62-c787-4906-8e2c-0661f9f8fe9b",
+      "server_side_session_id": "20209518-60ab-4d73-8311-3f72b04d4340"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "e05f005f-ea18-4d9c-adab-5e88d4525482",
+      "server_side_session_id": "20209518-60ab-4d73-8311-3f72b04d4340",
+      "execution_progress": {
+        "stages": [],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    }
+  ]
+}

@@ -1,0 +1,207 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:44.314Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/ExecutePlan",
+    "surface": "a result after a session SET of the codec to lz4: relation step",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation_id": "<operation>",
+      "tags": [
+        "<tag>"
+      ],
+      "request_options": [
+        {
+          "result_chunking_options": {
+            "allow_arrow_batch_chunking": true,
+            "preferred_arrow_chunk_size": "4194304"
+          }
+        }
+      ],
+      "plan": {
+        "root": {
+          "common": null,
+          "sql": {
+            "pos_args": [],
+            "pos_arguments": [],
+            "args": {},
+            "named_arguments": {},
+            "query": "SELECT id, 'x' AS v FROM range(0, 3, 1, 1)"
+          },
+          "rel_type": "sql"
+        }
+      }
+    }
+  },
+  "outcome": "pass",
+  "payload": [
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": {
+        "struct": {
+          "fields": [
+            {
+              "name": "id",
+              "data_type": {
+                "long": {
+                  "type_variation_reference": 0
+                },
+                "kind": "long"
+              },
+              "nullable": false
+            },
+            {
+              "name": "v",
+              "data_type": {
+                "string": {
+                  "type_variation_reference": 0,
+                  "collation": ""
+                },
+                "kind": "string"
+              },
+              "nullable": false
+            }
+          ],
+          "type_variation_reference": 0
+        },
+        "kind": "struct"
+      },
+      "operation_id": "<operation>",
+      "response_id": "e4aac622-fd0f-4b38-97ff-af155963da12",
+      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "d7c231eb-37da-4aef-9748-9a8632041413",
+      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2",
+      "execution_progress": {
+        "stages": [],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "bc8f4f5f-8759-42b2-8a06-a932daf69039",
+      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2",
+      "arrow_batch": {
+        "row_count": "3",
+        "data": {
+          "$bytes": "/////8AAAAAQAAAAAAAKAA4ABgANAAgACgAAAAAABAAQAAAAAAEKAAwAAAAIAAQACgAAAAgAAAAIAAAAAAAAAAIAAABIAAAABAAAANL///8UAAAAFAAAABgAAAAAAAAFFAAAAAAAAAAAAAAABAAEAAQAAAABAAAAdgASABgAFAAAABMADAAAAAgABAASAAAAFAAAABQAAAAcAAAAAAAAAiAAAAAAAAAAAAAAAAgADAAIAAcACAAAAAAAAAFAAAAAAgAAAGlkAAD/////2AAAABQAAAAAAAAADAAYAA4AFwAQAAQADAAAAGgAAAAAAAAAAAAEABQAAAAAAAADDAAcABAADAAIAAQADAAAABwAAAAcAAAAcAAAAAMAAAAAAAAAAAAAAAQABAAEAAAABQAAAAAAAAAAAAAACQAAAAAAAAAQAAAAAAAAACAAAAAAAAAAMAAAAAAAAAAJAAAAAAAAAEAAAAAAAAAAGAAAAAAAAABYAAAAAAAAAAsAAAAAAAAAAAAAAAIAAAADAAAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAP//////////BwAAAAAAAAD//////////wAAAAAAAAAAAQAAAAAAAAACAAAAAAAAAP//////////BwAAAAAAAAD//////////wAAAAABAAAAAgAAAAMAAAD//////////3h4eAAAAAAA/////wAAAAA="
+        },
+        "start_offset": "0",
+        "_start_offset": "start_offset",
+        "chunk_index": "0",
+        "_chunk_index": "chunk_index",
+        "num_chunks_in_batch": "1",
+        "_num_chunks_in_batch": "num_chunks_in_batch"
+      },
+      "response_type": "arrow_batch"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "4333f83b-4960-4202-8acd-ddc6338a615f",
+      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2",
+      "execution_progress": {
+        "stages": [
+          {
+            "stage_id": "15",
+            "num_tasks": "1",
+            "num_completed_tasks": "1",
+            "input_bytes_read": "0",
+            "done": true
+          }
+        ],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "ee78c3c4-b49d-437f-ab1c-e2fc1c093113",
+      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2",
+      "execution_progress": {
+        "stages": [
+          {
+            "stage_id": "15",
+            "num_tasks": "1",
+            "num_completed_tasks": "1",
+            "input_bytes_read": "0",
+            "done": true
+          }
+        ],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": {
+        "metrics": [
+          {
+            "execution_metrics": {
+              "pipelineTime": {
+                "name": "duration",
+                "value": "2",
+                "metric_type": "timing"
+              }
+            },
+            "name": "WholeStageCodegen (1)",
+            "plan_id": "393",
+            "parent": "393"
+          },
+          {
+            "execution_metrics": {},
+            "name": "Project",
+            "plan_id": "392",
+            "parent": "393"
+          },
+          {
+            "execution_metrics": {
+              "numOutputRows": {
+                "name": "number of output rows",
+                "value": "3",
+                "metric_type": "sum"
+              }
+            },
+            "name": "Range",
+            "plan_id": "391",
+            "parent": "392"
+          }
+        ]
+      },
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "ca4a3f37-e7ca-4fdf-a0f3-cf8abb183214",
+      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2"
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "$captured": {
+    "service": "spark",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:07:42.187Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/ExecutePlan",
+    "surface": "a command answered inline with no Spark job: command step",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation_id": "<operation>",
+      "tags": [
+        "<tag>"
+      ],
+      "request_options": [
+        {
+          "result_chunking_options": {
+            "allow_arrow_batch_chunking": true,
+            "preferred_arrow_chunk_size": "4194304"
+          }
+        }
+      ],
+      "plan": {
+        "command": {
+          "sql_command": {
+            "input": {
+              "sql": {
+                "query": "SHOW TABLES IN spark_catalog.studio"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "outcome": "pass",
+  "payload": [
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "d94960ad-643e-4e1d-ba0f-f880ed3c7cad",
+      "server_side_session_id": "31a044ef-c86f-4a50-8332-5118a431ba4f",
+      "sql_command_result": {
+        "relation": {
+          "common": null,
+          "local_relation": {
+            "data": {
+              "$bytes": "//////gAAAAQAAAAAAAKAA4ABgANAAgACgAAAAAABAAQAAAAAAEKAAwAAAAIAAQACgAAAAgAAAAIAAAAAAAAAAMAAACEAAAAPAAAAAQAAACa////FAAAABQAAAAUAAAAAAAABhAAAAAAAAAAAAAAAIj///8LAAAAaXNUZW1wb3JhcnkAzv///xQAAAAUAAAAFAAAAAAAAAUQAAAAAAAAAAAAAAC8////CQAAAHRhYmxlTmFtZQASABgAFAAAABMADAAAAAgABAASAAAAFAAAABQAAAAYAAAAAAAABRQAAAAAAAAAAAAAAAQABAAEAAAACQAAAG5hbWVzcGFjZQAAAP////8IAQAAFAAAAAAAAAAMABYADgAVABAABAAMAAAAgAAAAAAAAAAAAAQAEAAAAAADCgAYAAwACAAEAAoAAAAUAAAAmAAAAAMAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAEAAAAAAAAACAAAAAAAAAAQAAAAAAAAABgAAAAAAAAAEgAAAAAAAAAwAAAAAAAAAAEAAAAAAAAAOAAAAAAAAAAQAAAAAAAAAEgAAAAAAAAAJAAAAAAAAABwAAAAAAAAAAEAAAAAAAAAeAAAAAAAAAABAAAAAAAAAAAAAAADAAAAAwAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAABwAAAAAAAAAAAAAABgAAAAwAAAASAAAAc3R1ZGlvc3R1ZGlvc3R1ZGlvAAAAAAAABwAAAAAAAAAAAAAACgAAABkAAAAkAAAAZXZlcnlfdHlwZWV2ZXJ5X3R5cGVfdmlld3dpZGVfc3RydWN0AAAAAAcAAAAAAAAAAAAAAAAAAAD/////AAAAAA=="
+            },
+            "_data": "data"
+          },
+          "rel_type": "local_relation"
+        }
+      },
+      "response_type": "sql_command_result"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": {
+        "metrics": [
+          {
+            "execution_metrics": {
+              "numOutputRows": {
+                "name": "number of output rows",
+                "value": "0",
+                "metric_type": "sum"
+              }
+            },
+            "name": "CommandResult",
+            "plan_id": "236",
+            "parent": "236"
+          }
+        ]
+      },
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "4f52caea-149b-4d25-996d-4d738615b450",
+      "server_side_session_id": "31a044ef-c86f-4a50-8332-5118a431ba4f"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "81df031b-9b10-4c35-9a40-876b13ffdf59",
+      "server_side_session_id": "31a044ef-c86f-4a50-8332-5118a431ba4f",
+      "execution_progress": {
+        "stages": [],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    }
+  ]
+}

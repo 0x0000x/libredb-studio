@@ -1,0 +1,52 @@
+{
+  "$captured": {
+    "service": "spark-auth",
+    "image": "apache/spark:4.2.0",
+    "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
+    "sparkVersion": "4.2.0",
+    "date": "2026-10-13T10:10:14.350Z",
+    "runtime": "bun 1.4.2",
+    "rpc": "SparkConnectService/ExecutePlan",
+    "surface": "O16: a command answer above 0.7 times spark.connect.grpc.arrow.maxBatchSize=1m: command step",
+    "request": {
+      "session_id": "<session>",
+      "user_context": {
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
+      "client_type": "libredb-studio",
+      "operation_id": "<operation>",
+      "tags": [
+        "<tag>"
+      ],
+      "request_options": [
+        {
+          "result_chunking_options": {
+            "allow_arrow_batch_chunking": true,
+            "preferred_arrow_chunk_size": "4194304"
+          }
+        }
+      ],
+      "plan": {
+        "command": {
+          "sql_command": {
+            "input": {
+              "sql": {
+                "query": "SHOW TABLES"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "outcome": "error",
+  "code": 13,
+  "details": "assertion failed: remaining batches: 1",
+  "metadata": {
+    "content-type": "application/grpc",
+    "grpc-status-details-bin": {
+      "$bytes": "CA0SJmFzc2VydGlvbiBmYWlsZWQ6IHJlbWFpbmluZyBiYXRjaGVzOiAxGu4BCih0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuRXJyb3JJbmZvEsEBChhqYXZhLmxhbmcuQXNzZXJ0aW9uRXJyb3ISEG9yZy5hcGFjaGUuc3BhcmsaYgoHY2xhc3NlcxJXWyJqYXZhLmxhbmcuQXNzZXJ0aW9uRXJyb3IiLCJqYXZhLmxhbmcuRXJyb3IiLCJqYXZhLmxhbmcuVGhyb3dhYmxlIiwiamF2YS5sYW5nLk9iamVjdCJdGi8KB2Vycm9ySWQSJDBlOWRlNGE1LThhN2MtNDBjMy04Y2M2LThhNjFjMDQwNGJiNw=="
+    }
+  }
+}
