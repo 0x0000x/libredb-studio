@@ -5,7 +5,8 @@
  * Every capture is one RPC exchange in a fresh session. A query flows over two ExecutePlan calls, the command step and
  * the relation step (spec 4.6), and the integration replay needs both, so a relation-step capture names the capture of
  * its command step. The replay also sends every statement an entry runs before its capture, so each of those is
- * captured under its own name; only statements no replay sends run uncaptured. The session settings are copies of the
+ * captured under its own name; a statement runs uncaptured only when another entry captures it, as set-catalog does
+ * the session setup's SET CATALOG, or no replay sends it. The session settings are copies of the
  * provider's SPARK_SESSION_CONF and
  * SPARK_METADATA_SESSION_CONF, held to the same values by tests/unit/db/spark/capture-catalog.test.ts, because the
  * harness never imports the provider: a capture records what Spark sent independently of the code under test.
@@ -21,6 +22,7 @@ export const SPARK_CAPTURE_NAMES = [
   "set-catalog",
   "use-namespace",
   "use-namespace-current",
+  "connect-current-namespace-studio",
   "session-conf-readback",
   "tokenless-connect",
   "every-type-command",
@@ -229,7 +231,10 @@ export interface SparkCaptureEntry {
   readonly conf?: readonly (readonly [string, string])[];
   /** Statements run after the setup in the same session, each answered inline and captured, expecting pass. */
   readonly before?: readonly SparkBeforeStatement[];
-  /** Statements run after the setup and never captured, because no replay sends them (held by capture-catalog.test.ts). */
+  /**
+   * Statements run after the setup and not captured by this entry: a setup step another entry captures, or a statement
+   * no replay sends (held by capture-catalog.test.ts).
+   */
   readonly uncaptured?: readonly string[];
   readonly action: SparkCaptureAction;
   /** The outcome of the capture named `name`; any other stops the run, so a surprise is reported, not recorded. */
@@ -321,6 +326,19 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     session: "user",
     uncaptured: ["SET CATALOG 'spark_catalog'", "USE NAMESPACE studio_unloaded"],
     surface: "O10: SHOW CURRENT NAMESPACE after USE NAMESPACE studio_unloaded",
+    action: { kind: "statement", sql: "SHOW CURRENT NAMESPACE", step: "command" },
+    expect: "pass",
+  },
+  {
+    name: "connect-current-namespace-studio",
+    versions: BOTH,
+    service: "spark",
+    token: "none",
+    session: "metadata",
+    // The two setup statements a connection with Catalog spark_catalog and Namespace studio sends, which set-catalog
+    // and use-namespace capture.
+    uncaptured: ["SET CATALOG 'spark_catalog'", "USE NAMESPACE `studio`"],
+    surface: "connect with a catalog and a namespace: SHOW CURRENT NAMESPACE on the metadata session, in studio",
     action: { kind: "statement", sql: "SHOW CURRENT NAMESPACE", step: "command" },
     expect: "pass",
   },

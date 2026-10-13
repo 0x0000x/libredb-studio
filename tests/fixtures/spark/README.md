@@ -49,6 +49,7 @@ The integration replay builds two cases from these captures and labels them: the
 | `compressed-zstd-set` | spark | SparkConnectService/ExecutePlan | a result after a session SET of the codec to zstd: the statement run before it, command step | pass | 2026-10-13T11:06:35.372Z | bun 1.4.2 |
 | `compressed-zstd` | spark | SparkConnectService/ExecutePlan | a result after a session SET of the codec to zstd: relation step | pass | 2026-10-13T11:06:35.427Z | bun 1.4.2 |
 | `config-catalog-keys` | spark | SparkConnectService/Config | tree: Config get_all of spark.sql.catalog., values written <value> | pass | 2026-10-13T11:06:35.545Z | bun 1.4.2 |
+| `connect-current-namespace-studio` | spark | SparkConnectService/ExecutePlan | connect with a catalog and a namespace: SHOW CURRENT NAMESPACE on the metadata session, in studio: command step | pass | 2026-10-13T22:01:32.549Z | bun 1.4.2 |
 | `connect-current-namespace` | spark | SparkConnectService/ExecutePlan | connect: SHOW CURRENT NAMESPACE on the metadata session: command step | pass | 2026-10-13T11:06:32.034Z | bun 1.4.2 |
 | `connect-session-setup` | spark | SparkConnectService/Config | connect: the metadata session's Config set of nine pairs | pass | 2026-10-13T11:06:31.970Z | bun 1.4.2 |
 | `connect-version` | spark | SparkConnectService/AnalyzePlan | connect: AnalyzePlan spark_version on a fresh session | pass | 2026-10-13T11:06:31.960Z | bun 1.4.2 |
@@ -118,6 +119,7 @@ The integration replay builds two cases from these captures and labels them: the
 | `cancel-interrupt-command` | spark-4-1 | SparkConnectService/ExecutePlan | Interrupt by tag of a running statement: command step | pass | 2026-10-13T21:14:10.207Z | bun 1.4.2 |
 | `cancel-interrupt-relation` | spark-4-1 | SparkConnectService/ExecutePlan | Interrupt by tag of a running statement: relation step | error | 2026-10-13T21:14:10.491Z | bun 1.4.2 |
 | `cancel-interrupt` | spark-4-1 | SparkConnectService/Interrupt | Interrupt by tag of a running statement | pass | 2026-10-13T21:14:10.490Z | bun 1.4.2 |
+| `connect-current-namespace-studio` | spark-4-1 | SparkConnectService/ExecutePlan | connect with a catalog and a namespace: SHOW CURRENT NAMESPACE on the metadata session, in studio: command step | pass | 2026-10-13T22:01:32.819Z | bun 1.4.2 |
 | `connect-current-namespace` | spark-4-1 | SparkConnectService/ExecutePlan | connect: SHOW CURRENT NAMESPACE on the metadata session: command step | pass | 2026-10-13T11:07:12.242Z | bun 1.4.2 |
 | `connect-session-setup` | spark-4-1 | SparkConnectService/Config | connect: the metadata session's Config set of nine pairs | pass | 2026-10-13T11:07:12.187Z | bun 1.4.2 |
 | `connect-version` | spark-4-1 | SparkConnectService/AnalyzePlan | connect: AnalyzePlan spark_version on a fresh session | pass | 2026-10-13T11:07:12.180Z | bun 1.4.2 |

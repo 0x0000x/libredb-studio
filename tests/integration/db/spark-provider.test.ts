@@ -113,6 +113,21 @@ const CONNECT: readonly SparkCaptureName[] = [
 ];
 /** A statement's own session: its Config set of the seven pairs, the setup every request session sends first. */
 const STATEMENT_SESSION: readonly SparkCaptureName[] = ["request-session-setup"];
+/** A connection's Catalog and Namespace: the sample namespace of the session catalog. */
+const STUDIO_PLACE: Partial<DatabaseConnection> = { database: "spark_catalog", schema: SPARK_SAMPLE_NAMESPACE };
+/**
+ * A connect with STUDIO_PLACE: the metadata session's setup sends SET CATALOG and USE NAMESPACE, and SHOW CURRENT
+ * NAMESPACE then answers the studio namespace, recorded after the same two statements. Masked, that request is
+ * connect-current-namespace's, so the two captures never share a transport: the first one listed would answer both.
+ */
+const CONNECT_STUDIO: readonly SparkCaptureName[] = [
+  "connect-version",
+  "release-session",
+  "connect-session-setup",
+  "set-catalog",
+  "use-namespace",
+  "connect-current-namespace-studio",
+];
 
 const config = (extra: Partial<DatabaseConnection> = {}): DatabaseConnection =>
   ({
@@ -223,26 +238,11 @@ for (const version of ["4.2.0", "4.1.3"] as const) {
     });
 
     test("connect with a catalog and a namespace: the metadata session runs SET CATALOG and USE NAMESPACE before its first read", async () => {
-      // SHOW CURRENT NAMESPACE is answered by use-namespace-current, recorded after a USE NAMESPACE. Masked, its
-      // request is connect-current-namespace's, so the two never share a transport: the first one listed would answer
-      // both.
-      const names: readonly SparkCaptureName[] = [
-        "connect-version",
-        "release-session",
-        "connect-session-setup",
-        "set-catalog",
-        "use-namespace",
-        "use-namespace-current",
-      ];
-      const transport = recorded(version, names);
-      const provider = new SparkProvider(
-        config({ database: "spark_catalog", schema: SPARK_SAMPLE_NAMESPACE }),
-        {},
-        { transport },
-      );
+      const transport = recorded(version, CONNECT_STUDIO);
+      const provider = new SparkProvider(config(STUDIO_PLACE), {}, { transport });
       await provider.connect();
       expect(provider.isConnected()).toBe(true);
-      expect(transport.served).toStrictEqual([...names]);
+      expect(transport.served).toStrictEqual([...CONNECT_STUDIO]);
       await provider.disconnect();
     });
 
@@ -541,39 +541,58 @@ describe("replay on 4.2.0 only", () => {
     await provider.disconnect();
   });
 
-  test("overview: the version, the spark.app. start time and the current namespace's table count, on the metadata session", async () => {
-    const { provider, transport } = await connected("4.2.0", [
-      "overview-app-conf",
-      "show-views-default",
-      "show-tables-default",
-    ]);
-    const before = transport.served.length;
-    // The clock stands 90 minutes after spark.app.startTime as overview-app-conf answers it.
-    setSystemTime(new Date(APP_START_MS + 90 * 60_000));
-    try {
-      expect(await provider.getOverview()).toStrictEqual({
-        version: "4.2.0",
-        uptime: "1.50h",
-        startTime: new Date(APP_START_MS),
-        maxConnections: 0,
-        databaseSize: "N/A",
-        tableCount: 0,
-        tableCountSampledFrom: "the tables of spark_catalog.default, the connection's current namespace",
-        indexCount: 0,
-      });
-    } finally {
-      setSystemTime();
-    }
-    // The table count lists the namespace SHOW CURRENT NAMESPACE answers, default on this server, which holds none.
-    expect(transport.served.slice(before)).toStrictEqual([
-      "connect-version",
-      "overview-app-conf",
-      "connect-current-namespace",
-      "show-views-default",
-      "show-tables-default",
-    ]);
-    await provider.disconnect();
-  });
+  // The table count lists the namespace SHOW CURRENT NAMESPACE answers: with no Catalog or Namespace set the server's
+  // default, which holds no table; with the studio namespace set, the three rows of SHOW TABLES less the view.
+  for (const place of [
+    {
+      label: "spark_catalog.default, no catalog or namespace set",
+      extra: {},
+      connect: CONNECT,
+      current: "connect-current-namespace",
+      listing: ["show-views-default", "show-tables-default"],
+      namespace: "spark_catalog.default",
+      tableCount: 0,
+    },
+    {
+      label: "spark_catalog.studio, set as the connection's catalog and namespace",
+      extra: STUDIO_PLACE,
+      connect: CONNECT_STUDIO,
+      current: "connect-current-namespace-studio",
+      listing: ["show-views", "show-tables"],
+      namespace: "spark_catalog.studio",
+      tableCount: 2,
+    },
+  ] as const) {
+    test(`overview in ${place.label}: the version, the spark.app. start time and the table count, on the metadata session`, async () => {
+      const transport = recorded("4.2.0", [...place.connect, "overview-app-conf", ...place.listing]);
+      const provider = new SparkProvider(config(place.extra), {}, { transport });
+      await provider.connect();
+      const before = transport.served.length;
+      // The clock stands 90 minutes after spark.app.startTime as overview-app-conf answers it.
+      setSystemTime(new Date(APP_START_MS + 90 * 60_000));
+      try {
+        expect(await provider.getOverview()).toStrictEqual({
+          version: "4.2.0",
+          uptime: "1.50h",
+          startTime: new Date(APP_START_MS),
+          maxConnections: 0,
+          databaseSize: "N/A",
+          tableCount: place.tableCount,
+          tableCountSampledFrom: `the tables of ${place.namespace}, the connection's current namespace`,
+          indexCount: 0,
+        });
+      } finally {
+        setSystemTime();
+      }
+      expect(transport.served.slice(before)).toStrictEqual([
+        "connect-version",
+        "overview-app-conf",
+        place.current,
+        ...place.listing,
+      ]);
+      await provider.disconnect();
+    });
+  }
 
   test("a released session answers SESSION_CLOSED and the metadata session is re-created", async () => {
     // session-closed-show-catalogs answers the first SHOW CATALOGS only: masked, the repeat on the new session is the

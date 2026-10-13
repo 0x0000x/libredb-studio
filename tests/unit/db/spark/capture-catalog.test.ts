@@ -136,12 +136,26 @@ describe("the catalog", () => {
       ["compressed-zstd", "compressed-zstd-set"],
       ["compressed-lz4", "compressed-lz4-set"],
     ]);
-    // The session setup steps set-catalog holds, O10's namespace switch and O16's 200 temp views: no replay sends them.
-    expect(SPARK_CAPTURE_CATALOG.filter((entry) => entry.uncaptured !== undefined).map((entry) => entry.name)).toEqual([
+    // Entries that run statements uncaptured: setup steps whose answers set-catalog and use-namespace hold, which the
+    // replay sends, and the namespace switch before use-namespace-current and the 200 temp views of
+    // command-over-batch-bound, which no replay sends.
+    expect(
+      SPARK_CAPTURE_CATALOG.filter((entry) => entry.uncaptured !== undefined).map((entry) => entry.name),
+    ).toStrictEqual([
       "use-namespace",
       "use-namespace-current",
+      "connect-current-namespace-studio",
       "command-over-batch-bound",
     ]);
+    // The answer a connect with a catalog and a namespace replays is recorded after the very statements it sends.
+    const sql = (name: SparkCaptureName): string => {
+      const { action } = SPARK_CAPTURE_CATALOG.find((entry) => entry.name === name) as SparkCaptureEntry;
+      if (action.kind !== "statement") throw new Error(`the capture plan's ${name} runs no statement`);
+      return action.sql;
+    };
+    expect(
+      SPARK_CAPTURE_CATALOG.find((entry) => entry.name === "connect-current-namespace-studio")?.uncaptured,
+    ).toStrictEqual([sql("set-catalog"), sql("use-namespace")]);
   });
 
   test("a FetchErrorDetails entry writes its failing step, the details of that failure's errorId, and a passing command step before a failing relation step", () => {
