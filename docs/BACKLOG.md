@@ -3306,11 +3306,11 @@ Found 2026-10-12 while designing the Snowflake provider.
 ### D321. Snowflake's grammar row has no Scripting block member
 
 The Snowflake row in `src/lib/sql/grammar.ts` reads `script.blocks` as `"none"`, so a bare `BEGIN ... END` block splits at its first `;` and Snowflake refuses the fragment; the doc tells the user to wrap it in `EXECUTE IMMEDIATE $$ ... $$`.
-Whether the SQL API takes a bare block, and whether `a$b$c` is an identifier there, are unmeasured; the second decides whether the row needs a `dollarTags: false` opt-out from the shared reader's tagged-string reading.
+The trial capture measured that the SQL API takes a bare block (M58).
 
 Found 2026-10-12 while designing the Snowflake provider.
 
-**Done when:** both questions are measured on a live account, the grammar row reads a bare block as one unit if the API takes it, a `dollarTags` opt-out exists if `a$b$c` is an identifier, and the grammar tests pin both.
+**Done when:** the grammar row reads a bare block as one unit and the grammar tests pin it.
 
 ### D322. Snowflake sends a script one statement per request
 
