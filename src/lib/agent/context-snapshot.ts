@@ -1358,7 +1358,8 @@ function renderColumn(table: AgentInventoryObject, column: ColumnSchema): string
  *    session-default container and the ones the provider names, and the note says how many others exist and
  *    names the ones read, since a read that lists no object names none of them through its entries. A parent
  *    the scope reads nothing below whose listing failed is named with the provider's sentence, since its
- *    children were never listed and so are in no count.
+ *    children were never listed and so are in no count; past the first five such parents the rest are only
+ *    counted, so however many fail the note leaves the packing room for its rows.
  *
  * Inside the fence with the inventory rather than in the preface, the same as the omission
  * notice already is: each one is about the lines beside it, and the bound belongs to the
@@ -1373,7 +1374,14 @@ function inventoryNotes(inventory: AgentInventory, shown: readonly AgentInventor
     );
   }
   if (unreadContainers !== undefined) {
-    const { count, label, labelPlural, read, unlistedParents = [] } = unreadContainers;
+    const {
+      count,
+      label,
+      labelPlural,
+      read,
+      unlistedParents = [],
+      unlistedParentsNotNamed: notNamed,
+    } = unreadContainers;
     // The containers read are named here, not left to the entries: a read that lists nothing names none. They are
     // not counted under the level's label, because a container the provider names (Kubernetes' `Cluster`) may not
     // be one of what the label calls the others.
@@ -1387,6 +1395,14 @@ function inventoryNotes(inventory: AgentInventory, shown: readonly AgentInventor
           (parent) =>
             `The ${parent.label} ${JSON.stringify(parent.path)} was not read: listing its ${labelPlural} failed with ${JSON.stringify(parent.reason)}.`,
         ),
+        // The parents past the few named are only counted, so however many fail, these notes leave room for the rows.
+        ...(notNamed === undefined
+          ? []
+          : [
+              notNamed.count === 1
+                ? `1 more ${notNamed.label} was not read: listing its ${labelPlural} failed as well, and it is not named here.`
+                : `${notNamed.count} more ${notNamed.labelPlural} were not read: listing their ${labelPlural} failed as well, and they are not named here.`,
+            ]),
         `This inventory covers only what it read in (${names}), so an object in any other ${label} is not listed below. Do not read its absence as an absence in the database.`,
       ].join(" "),
     );

@@ -568,6 +568,17 @@ export interface AgentUnlistedParent {
 }
 
 /**
+ * The parents a scoped walk could not list past the ones it names (`AgentUnlistedParent`), counted and not named, so
+ * that however many fail their notes leave a packing room for its rows.
+ */
+export interface AgentUnlistedParentsNotNamed {
+  readonly count: number;
+  /** Their level's own words, singular and plural: "Catalog" and "Catalogs". */
+  readonly label: string;
+  readonly labelPlural: string;
+}
+
+/**
  * A kind the engine declared, as the run's prose needs it.
  *
  * The `ObjectKindSpec` fields a renderer needs, plus the three facts that decide whether
@@ -647,11 +658,13 @@ export interface AgentInventory {
     readonly labelPlural: string;
     readonly read: readonly string[];
     /**
-     * Each parent the walk could not list and that the scope reads nothing below, in walk order. Its children were
-     * never listed, so none of them is in `count`, which is 0 where they are all the walk left out. Absent where
-     * every listing answered.
+     * Each parent the walk could not list and that the scope reads nothing below, in walk order, the first five it
+     * met. Its children were never listed, so none of them is in `count`, which is 0 where they are all the walk left
+     * out. Absent where every listing answered.
      */
     readonly unlistedParents?: readonly AgentUnlistedParent[];
+    /** The parents past those five that the walk could not list either, counted. Absent where it named every one. */
+    readonly unlistedParentsNotNamed?: AgentUnlistedParentsNotNamed;
   };
   /**
    * The container the session is IN, where the reading that produced this knew it (#789).

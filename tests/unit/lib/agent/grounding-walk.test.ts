@@ -6,7 +6,12 @@
  * The provider is a stub answering the four object methods, so each rule is pinned apart from any engine.
  */
 import { describe, expect, mock, test } from "bun:test";
-import { captureContextSnapshot, packContextForTask, packOperationsInventory } from "@/lib/agent/context-snapshot";
+import {
+  AGENT_CONTEXT_PACK_MAX_CHARS,
+  captureContextSnapshot,
+  packContextForTask,
+  packOperationsInventory,
+} from "@/lib/agent/context-snapshot";
 import { AgentRunDeadline } from "@/lib/agent/deadline";
 import { AGENT_WORKFLOW_BUDGETS } from "@/lib/agent/execution-policy";
 import { AgentRepairLedger } from "@/lib/agent/repair-ledger";
@@ -622,6 +627,112 @@ describe("a scoped walk over two levels where a catalog's namespaces cannot be l
     );
 
     expect(snapshot.unreadContainers?.unlistedParents).toStrictEqual([{ path: "lakehouse", label: "Catalog", reason }]);
+  });
+
+  describe("more catalogs failing than the inventory names", () => {
+    /** The provider's sentence for a configured catalog named `name` that it cannot load. */
+    const notLoadedSentence = (name: string) => `[CATALOG_NOT_FOUND] The catalog \`${name}\` cannot be loaded.`;
+    /** The session's catalog and its `default` namespace, then each named catalog failing to load, in this order. */
+    const failing = (names: readonly string[]) => ({
+      spark_catalog: ["default"],
+      ...Object.fromEntries(names.map((name) => [name, new QueryError(notLoadedSentence(name), "spark")])),
+    });
+    const named = (names: readonly string[]) =>
+      names.map((name) => ({ path: name, label: "Catalog", reason: notLoadedSentence(name) }));
+    /** What the note says of one catalog it names. */
+    const namedNote = (name: string) =>
+      `The Catalog "${name}" was not read: listing its Namespaces failed with ${JSON.stringify(notLoadedSentence(name))}.`;
+    const COVERS =
+      'This inventory covers only what it read in ("spark_catalog.default"), so an object in any other Namespace is not listed below. Do not read its absence as an absence in the database.';
+    // Walk order is not name order, so a note that sorted or picked by name would name the wrong five.
+    const FIVE = ["lake_e", "lake_d", "lake_c", "lake_b", "lake_a"];
+
+    test("five are each named in walk order, and the note is what it was", async () => {
+      const { snapshot } = await captured(walk(failing(FIVE), scoped));
+
+      expect(snapshot.unreadContainers).toStrictEqual({
+        count: 0,
+        label: "Namespace",
+        labelPlural: "Namespaces",
+        read: ["spark_catalog.default"],
+        unlistedParents: named(FIVE),
+      });
+      for (const packed of packings(snapshot)) {
+        expect(scopeNotes(packed)).toStrictEqual([[...FIVE.map(namedNote), COVERS].join(" ")]);
+      }
+    });
+
+    test("past five, the first five the walk met are named and the rest are counted", async () => {
+      const names = [...FIVE, "lake_z", "lake_y", "lake_x"];
+      const { snapshot, harness } = await captured(walk(failing(names), scoped));
+
+      // The bound is on what the inventory names: every catalog is still asked for its namespaces.
+      expect(harness.listContainers.mock.calls).toStrictEqual([
+        [],
+        ...["spark_catalog", ...names].map((name): [readonly string[]] => [[name]]),
+      ]);
+      expect(snapshot.unreadContainers).toStrictEqual({
+        count: 0,
+        label: "Namespace",
+        labelPlural: "Namespaces",
+        read: ["spark_catalog.default"],
+        unlistedParents: named(FIVE),
+        unlistedParentsNotNamed: { count: 3, label: "Catalog", labelPlural: "Catalogs" },
+      });
+      for (const packed of packings(snapshot)) {
+        expect(scopeNotes(packed)).toStrictEqual([
+          [
+            ...FIVE.map(namedNote),
+            "3 more Catalogs were not read: listing their Namespaces failed as well, and they are not named here.",
+            COVERS,
+          ].join(" "),
+        ]);
+      }
+    });
+
+    test("one past five is counted in the singular", async () => {
+      const { snapshot } = await captured(walk(failing([...FIVE, "lake_z"]), scoped));
+
+      expect(snapshot.unreadContainers?.unlistedParents).toStrictEqual(named(FIVE));
+      expect(snapshot.unreadContainers?.unlistedParentsNotNamed).toStrictEqual({
+        count: 1,
+        label: "Catalog",
+        labelPlural: "Catalogs",
+      });
+      for (const packed of packings(snapshot)) {
+        expect(scopeNotes(packed)).toStrictEqual([
+          [
+            ...FIVE.map(namedNote),
+            "1 more Catalog was not read: listing its Namespaces failed as well, and it is not named here.",
+            COVERS,
+          ].join(" "),
+        ]);
+      }
+    });
+
+    test("forty failing with sentences at the cut leave both packings inside their bound, holding the session's rows", async () => {
+      // Every one named, their notes alone were about twice the bound, and no row fitted beside them.
+      const tree = {
+        spark_catalog: ["default"],
+        ...Object.fromEntries(
+          Array.from({ length: 40 }, (_unused, index) => [
+            `lake_${index}`,
+            new QueryError(`Spark could not load the catalog lake_${index}: ${"x".repeat(300)}`, "spark"),
+          ]),
+        ),
+      };
+      const { snapshot } = await captured(walk(tree, scoped));
+
+      expect(snapshot.unreadContainers?.unlistedParents).toHaveLength(5);
+      expect(snapshot.unreadContainers?.unlistedParentsNotNamed?.count).toBe(35);
+      for (const packed of packings(snapshot)) {
+        expect(packed.length).toBeLessThanOrEqual(AGENT_CONTEXT_PACK_MAX_CHARS);
+        expect(packed).toContain("spark_catalog.default.ORDERS");
+        expect(packed).toContain(
+          "35 more Catalogs were not read: listing their Namespaces failed as well, and they are not named here.",
+        );
+      }
+    });
   });
 
   test("the session's catalog failing to list ends the capture, as before", async () => {

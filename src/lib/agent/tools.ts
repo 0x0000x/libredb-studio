@@ -122,7 +122,7 @@ import { offersRefusalExamples } from "./models";
 import type { ColumnSchema, DatabaseConnection, QueryResult } from "@/lib/types";
 import { resolveInventoryAddress } from "./inventory-address";
 import { addressableObjects } from "./inventory-objects";
-import type { AgentInventory, AgentInventoryObject, AgentUnlistedParent } from "./types";
+import type { AgentInventory, AgentInventoryObject, AgentUnlistedParent, AgentUnlistedParentsNotNamed } from "./types";
 import {
   type AgentCatalogKind,
   AgentComposedSqlError,
@@ -3089,7 +3089,7 @@ async function walkObjectInventory(
   // rest are counted, and a parent the scope reads nothing below whose listing failed is named, so the inventory
   // can say what it did not read.
   const grounding = await enumerateGroundingContainers(provider, capabilities);
-  const { unlistedParents } = grounding;
+  const { unlistedParents, unlistedParentsNotNamed } = grounding;
   const scoped = scopeGroundingContainers(grounding.enumeration, capabilities.agentWalkScope, grounding.parentDefault);
   const enumeration = scoped.enumeration;
   const { containers, defaultContainer } = enumeration;
@@ -3218,6 +3218,7 @@ async function walkObjectInventory(
             labelPlural: level.labelPlural,
             read: containers.map((path) => path.join(".")),
             ...(unlistedParents.length === 0 ? {} : { unlistedParents }),
+            ...(unlistedParentsNotNamed === undefined ? {} : { unlistedParentsNotNamed }),
           },
         }
       : {}),
@@ -3249,7 +3250,9 @@ async function walkObjectInventory(
  * a parent is carried in `unlistedParents` with the provider's sentence, and the walk goes on, because a configured
  * catalog the engine cannot load, or one too large for the provider to walk, would otherwise leave every run on the
  * connection with no inventory over containers it would never have read. Any other failure, including one below
- * a parent the scope reads, ends the walk as before, and a walk whose listings all answer is unchanged.
+ * a parent the scope reads, ends the walk as before, and a walk whose listings all answer is unchanged. Past the first
+ * `UNLISTED_PARENTS_NAMED_MAX` such parents, in walk order, the rest are counted in `unlistedParentsNotNamed` and not
+ * named, and every one of them is still asked.
  */
 async function enumerateGroundingContainers(
   provider: DatabaseProvider,
@@ -3258,6 +3261,7 @@ async function enumerateGroundingContainers(
   readonly enumeration: ContainerEnumeration;
   readonly parentDefault?: readonly string[];
   readonly unlistedParents: readonly AgentUnlistedParent[];
+  readonly unlistedParentsNotNamed?: AgentUnlistedParentsNotNamed;
 }> {
   const depth = containerDepth(capabilities);
   if (depth === 0) return { enumeration: { containers: [[]], defaultContainer: [] }, unlistedParents: [] };
@@ -3267,28 +3271,33 @@ async function enumerateGroundingContainers(
   let level = await listContainers();
   let parentDefault: readonly string[] | undefined;
   const unlistedParents: AgentUnlistedParent[] = [];
+  let unlistedParentsNotNamed: AgentUnlistedParentsNotNamed | undefined;
   for (let below = 1; below < depth; below += 1) {
     parentDefault = sessionDefaultContainer(level);
+    const { label, labelPlural } = levels[below - 1];
     const next: Container[] = [];
     for (const parent of level) {
       try {
         next.push(...(await listContainers(parent.path)));
       } catch (error) {
         if (!(error instanceof DatabaseError) || scopeReadsUnder(capabilities.agentWalkScope, parent)) throw error;
-        unlistedParents.push({
-          path: parent.path.join("."),
-          label: levels[below - 1].label,
-          reason: unlistedReason(error.message),
-        });
+        if (unlistedParents.length < UNLISTED_PARENTS_NAMED_MAX) {
+          unlistedParents.push({ path: parent.path.join("."), label, reason: unlistedReason(error.message) });
+        } else {
+          unlistedParentsNotNamed = { count: (unlistedParentsNotNamed?.count ?? 0) + 1, label, labelPlural };
+        }
       }
     }
     level = next;
   }
 
   const enumeration = enumerationOf(level);
-  return parentDefault === undefined
-    ? { enumeration, unlistedParents }
-    : { enumeration, parentDefault, unlistedParents };
+  return {
+    enumeration,
+    ...(parentDefault === undefined ? {} : { parentDefault }),
+    unlistedParents,
+    ...(unlistedParentsNotNamed === undefined ? {} : { unlistedParentsNotNamed }),
+  };
 }
 
 /**
@@ -3297,6 +3306,15 @@ async function enumerateGroundingContainers(
  * inventory and recorded with the snapshot.
  */
 const UNLISTED_REASON_MAX_CHARS = 200;
+
+/**
+ * How many of the parents it could not list the walk names, each with the provider's sentence; the rest are counted.
+ * Each note is read inside every packing of the inventory, at about 300 characters with a sentence at the cut, so five
+ * of them stay well inside `AGENT_CONTEXT_PACK_MAX_CHARS` and leave the packing room for its rows however many
+ * configured catalogs cannot load. Five is also how many unlisted containers the inventory route names in a refusal
+ * before it counts the rest.
+ */
+const UNLISTED_PARENTS_NAMED_MAX = 5;
 
 /**
  * A provider's sentence as `AgentUnlistedParent.reason` carries it: on one line, so it cannot read as a line of the
