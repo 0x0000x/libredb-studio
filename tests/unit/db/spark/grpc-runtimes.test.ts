@@ -64,8 +64,9 @@ function holdsExpectations(outcomes: readonly SparkRuntimeOutcome[]): void {
 }
 
 /**
- * The rows with the number any outcome opens with written as `<port>` wherever it appears in that outcome: a TLS row
- * opens with its own port, the one text that differs from run to run, and any other leading number is masked too.
+ * The rows with the number an outcome opens with, if any, written as `<port>` wherever it appears in that outcome. Any
+ * row whose outcome opens with a number is masked this way: the two TLS rows, which open with their own port, the
+ * one text that differs from run to run, and the status details rows, whose leading sizes are masked with them.
  */
 function withoutPorts(outcomes: readonly SparkRuntimeOutcome[]): SparkRuntimeOutcome[] {
   return outcomes.map(({ name, outcome }) => {

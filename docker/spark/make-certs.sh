@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Writes the throwaway TLS material of the spark-tls proxy (spec 10.5) into <dir>, outside the repository:
+# Writes the throwaway TLS material of the spark-tls proxy into <dir>, outside the repository:
 #   <dir>/ca.pem      the CA a client pastes under SSL / TLS (verify-full or verify-ca)
 #   <dir>/server.pem  the proxy's certificate, SAN DNS:localhost and IP:127.0.0.1, signed by that CA
 #   <dir>/server.key  its private key, readable by the proxy's worker

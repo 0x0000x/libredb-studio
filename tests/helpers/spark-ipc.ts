@@ -1,7 +1,8 @@
 /**
  * Arrow IPC streams for the Spark provider's decoder tests, written with apache-arrow 21.2.0 (the version the provider
- * pins) or by hand. The one test file that imports apache-arrow, as tests/unit/db/spark/pure-seam-guard.test.ts
- * holds. No bun:test import and no Bun global, so the Node child of tests/unit/db/spark/grpc-runtimes.test.ts loads
+ * pins) or by hand. One of the two test files that import apache-arrow, with
+ * tests/unit/db/spark/arrow-reader-failure.test.ts, as the ARROW_IMPORTERS list of
+ * tests/unit/db/spark/pure-seam-guard.test.ts holds. No bun:test import and no Bun global, so the Node child of tests/unit/db/spark/grpc-runtimes.test.ts loads
  * it too.
  */
 import {

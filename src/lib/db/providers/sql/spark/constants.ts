@@ -1,5 +1,5 @@
 /**
- * Every fixed number and fixed identity value of the Apache Spark provider, each with its evidence.
+ * Every fixed number and fixed identity value of the Apache Spark provider.
  * Pure: no I/O, no logger (tests/unit/db/spark/seam-guard.test.ts).
  */
 
