@@ -3,9 +3,10 @@
  * the capture shape, from its service's pinned image and the server version of its directory; every captured request is
  * stored as the provider's codec reads it back; no capture holds the token, a client-chosen id or a configured
  * catalog's value, inside its bytes values included; each stays under 2 MB; every statement an entry runs before its
- * capture is captured too, and a FetchErrorDetails capture asks for the errorId of its own failure capture; the session
- * settings the harness sends are the provider's; the harness dials only an address a fixture container publishes; and
- * README.md is what the harness renders.
+ * capture is captured too, and a FetchErrorDetails capture asks for the errorId of its own failure capture; every
+ * capture's surface is the one its entry gives it, which `--surfaces` rewrites alone; the session settings the harness
+ * sends are the provider's; the harness dials only an address a fixture container publishes; and README.md is what the
+ * harness renders.
  */
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -17,6 +18,7 @@ import {
   type SparkCaptureVersion,
 } from "../../../helpers/spark-captures";
 import {
+  captureSurfaces,
   captureText,
   fixtureAddress,
   reencodedRequest,
@@ -25,6 +27,7 @@ import {
   type SparkCaptureRpc,
   statusDetailsOf,
   withoutCatalogValues,
+  withSurface,
 } from "../../../live/spark-evidence";
 import {
   capturesOf,
@@ -235,6 +238,18 @@ describe.each([...VERSIONS])("the captures of %s", (version) => {
     }
   });
 
+  test("every capture's surface is the one its entry gives it, so --surfaces leaves each as written", () => {
+    const differing = [...names]
+      .map(([name, { entry }]) => ({
+        name,
+        stored: readSparkCapture(version, name).$captured.surface,
+        given: captureSurfaces(entry).get(name),
+      }))
+      .filter(({ stored, given }) => stored !== given);
+    // The failure lists every capture whose surface differs: bun tests/live/spark-evidence.ts --surfaces rewrites them.
+    expect(differing).toEqual([]);
+  });
+
   test("an error capture's status details carry the message its details show, ids masked alike", () => {
     for (const name of names.keys()) {
       const capture = readSparkCapture(version, name);
@@ -390,6 +405,21 @@ describe("what the harness writes", () => {
     expect(() => captureText("every-type-relation", header, { outcome: "pass", payload }, IDS, [TOKEN])).toThrow(
       message,
     );
+  });
+
+  test("--surfaces changes a capture's surface and no other byte, and refuses a text the harness did not write", () => {
+    const text = readFileSync(path.join(FIXTURES, "4.2.0", "batch-rows.json"), "utf8");
+    const { surface } = JSON.parse(text).$captured as { readonly surface: string };
+    const rewritten = withSurface("4.2.0/batch-rows", text, "a new surface: relation step");
+    expect(rewritten).not.toBe(text);
+    expect(JSON.parse(rewritten).$captured.surface).toBe("a new surface: relation step");
+    expect(withSurface("4.2.0/batch-rows", rewritten, surface)).toBe(text);
+    expect(withSurface("4.2.0/batch-rows", text, surface)).toBe(text);
+    for (const changed of [text.trimEnd(), text.replace("{\n  ", "{\n    "), JSON.stringify(JSON.parse(text))]) {
+      expect(() => withSurface("4.2.0/batch-rows", changed, surface)).toThrow(
+        "4.2.0/batch-rows: the capture is not as the harness writes it; nothing was written",
+      );
+    }
   });
 
   test("a Config answer's value is written <value> when a shorter get_all prefix returns a catalog key", () => {

@@ -18,8 +18,10 @@
  *   bun tests/live/spark-evidence.ts --setup <spark|spark-4-1|spark-auth>   create the sample objects
  *   bun tests/live/spark-evidence.ts --capture <spark|spark-4-1|spark-auth|spark-tls> [<entry> ...]
  *   bun tests/live/spark-evidence.ts --readme                                render tests/fixtures/spark/README.md
+ *   bun tests/live/spark-evidence.ts --surfaces                              rewrite each capture's surface
  * Named entries, each an entry of SPARK_CAPTURE_CATALOG that runs on the service, retake only their captures; with no
- * entry named, every entry of the service runs.
+ * entry named, every entry of the service runs. `--surfaces` contacts no server: it writes into each capture's header
+ * the surface its entry gives it now, every other byte as written, so a changed surface needs no retake.
  */
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -54,7 +56,7 @@ const ROOT = path.resolve(import.meta.dir, "../..");
 const FIXTURES = path.join(ROOT, "tests", "fixtures", "spark");
 const MAX_CAPTURE_BYTES = 2_000_000;
 const USAGE =
-  "Usage: bun tests/live/spark-evidence.ts --setup <spark|spark-4-1|spark-auth> | --capture <spark|spark-4-1|spark-auth|spark-tls> [<entry> ...] | --readme";
+  "Usage: bun tests/live/spark-evidence.ts --setup <spark|spark-4-1|spark-auth> | --capture <spark|spark-4-1|spark-auth|spark-tls> [<entry> ...] | --readme | --surfaces";
 const USER_CONTEXT = { user_id: "libredb-studio", user_name: "libredb-studio" };
 const CLIENT_TYPE = "libredb-studio";
 const CHUNKING = [
@@ -397,6 +399,19 @@ export function captureText(
   return text;
 }
 
+/**
+ * A capture's text with the surface in its header replaced and every other byte as written. A text that JSON does not
+ * write back byte for byte, so not as captureText wrote it, is refused rather than rewritten.
+ */
+export function withSurface(name: string, text: string, surface: string): string {
+  const capture = JSON.parse(text) as { readonly $captured: { surface: string } };
+  if (`${JSON.stringify(capture, null, 2)}\n` !== text) {
+    throw new Error(`${name}: the capture is not as the harness writes it; nothing was written`);
+  }
+  capture.$captured.surface = surface;
+  return `${JSON.stringify(capture, null, 2)}\n`;
+}
+
 let sparkVersion = "";
 
 function writeCapture(
@@ -670,6 +685,48 @@ async function runEntry(ctx: Context, entry: SparkCaptureEntry): Promise<void> {
       return;
     }
   }
+}
+
+/**
+ * The surface each capture of `entry` holds in its header, by capture name, as runEntry writes it: the entry's surface,
+ * followed by the step or the statement the capture holds where the entry writes more than one capture. `--surfaces`
+ * rewrites the stored captures to these, so a changed surface needs no retake.
+ */
+export function captureSurfaces(entry: SparkCaptureEntry): ReadonlyMap<SparkCaptureName, string> {
+  const { action, surface } = entry;
+  const command = `${surface}: command step`;
+  const relation = `${surface}: relation step`;
+  const surfaces = new Map<SparkCaptureName, string>();
+  switch (action.kind) {
+    case "version":
+    case "config-set":
+    case "config-get":
+    case "config-get-all":
+    case "release":
+      surfaces.set(entry.name, surface);
+      break;
+    case "statement":
+      surfaces.set(entry.name, action.step === "command" ? command : relation);
+      if (action.step === "relation" && action.commandName !== undefined) surfaces.set(action.commandName, command);
+      break;
+    case "interrupt":
+      surfaces.set(entry.name, surface);
+      surfaces.set(`${entry.name}-command` as SparkCaptureName, command);
+      surfaces.set(`${entry.name}-relation` as SparkCaptureName, relation);
+      break;
+    case "after-release":
+      surfaces.set(entry.name, action.sql === undefined ? surface : command);
+      break;
+    case "fetch-error-details":
+      surfaces.set(entry.name, action.commandName === undefined ? command : relation);
+      if (action.commandName !== undefined) surfaces.set(action.commandName, command);
+      surfaces.set(`${entry.name}-details` as SparkCaptureName, `${surface}: FetchErrorDetails of its errorId`);
+      break;
+  }
+  for (const statement of entry.before ?? []) {
+    surfaces.set(statement.name, `${surface}: the statement run before it, command step`);
+  }
+  return surfaces;
 }
 
 // -- status details, read with protobufjs only to render the answers; the provider reads them by hand (status-details.ts)
@@ -952,6 +1009,24 @@ async function main(argv: readonly string[]): Promise<number> {
   if (flag === "--readme" && argv.length === 1) {
     writeFileSync(path.join(FIXTURES, "README.md"), renderSparkFixturesReadme());
     console.log("Wrote tests/fixtures/spark/README.md");
+    return 0;
+  }
+  if (flag === "--surfaces" && argv.length === 1) {
+    // Every capture is read and checked before the first write, so a refused one leaves every file as it was.
+    const rewrites = SPARK_CAPTURE_CATALOG.flatMap((entry) =>
+      entry.versions.flatMap((version) =>
+        [...captureSurfaces(entry)].map(([name, surface]) => {
+          const file = path.join(FIXTURES, version, `${name}.json`);
+          const text = readFileSync(file, "utf8");
+          return { file, name: `${version}/${name}`, text, next: withSurface(`${version}/${name}`, text, surface) };
+        }),
+      ),
+    );
+    for (const { file, name, text, next } of rewrites) {
+      if (next === text) continue;
+      writeFileSync(file, next);
+      console.log(`rewrote the surface of ${name}.json`);
+    }
     return 0;
   }
   const services: readonly string[] =
