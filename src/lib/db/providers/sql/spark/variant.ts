@@ -9,6 +9,9 @@ import { dateText, timestampText } from "./temporal";
 
 const VARIANT_MAX_DEPTH = 64;
 const DECIMAL_MAX_SCALE = 38;
+const DECIMAL_MAX_PRECISION = 38;
+// The writer joins its parts into one string this often, so a long text is never held as millions of short ones.
+const PARTS_PER_CHUNK = 4_096;
 const OVER_BUDGET = Symbol("over budget");
 // BigInt(...) rather than literals: the repository's TypeScript target, ES2017, has no BigInt literal.
 const ZERO = BigInt(0);
@@ -44,21 +47,25 @@ export function float32Number(value: number): number {
   return Number(value.toExponential(8));
 }
 
-function bounded(bytes: Uint8Array, at: number, size: number): DataView {
+function inside(bytes: Uint8Array, at: number, size: number): void {
   if (!Number.isInteger(at) || at < 0 || size < 0 || at + size > bytes.length) malformed();
+}
+
+function bounded(bytes: Uint8Array, at: number, size: number): DataView {
+  inside(bytes, at, size);
   return new DataView(bytes.buffer, bytes.byteOffset + at, size);
 }
 
-/** A little-endian unsigned integer of 1 to 4 bytes. */
+/** A little-endian unsigned integer of 1 to 4 bytes, read from the bytes themselves: no view per read. */
 function unsigned(bytes: Uint8Array, at: number, size: number): number {
-  const view = bounded(bytes, at, size);
+  inside(bytes, at, size);
   let value = 0;
-  for (let index = size - 1; index >= 0; index -= 1) value = value * 256 + view.getUint8(index);
+  for (let index = size - 1; index >= 0; index -= 1) value = value * 256 + bytes[at + index];
   return value;
 }
 
 function utf8(bytes: Uint8Array, at: number, length: number): string {
-  bounded(bytes, at, length);
+  inside(bytes, at, length);
   try {
     return UTF8.decode(bytes.subarray(at, at + length));
   } catch {
@@ -66,7 +73,7 @@ function utf8(bytes: Uint8Array, at: number, length: number): string {
   }
 }
 
-/** The metadata dictionary's name of a field id, read when asked. */
+/** A field id's `"name":` text from the metadata dictionary, read the first time it is asked for and then kept. */
 function dictionary(metadata: Uint8Array): (id: number) => string {
   const header = unsigned(metadata, 0, 1);
   if ((header & 0x0f) !== 1) malformed();
@@ -75,28 +82,43 @@ function dictionary(metadata: Uint8Array): (id: number) => string {
   const offsetsAt = 1 + offsetSize;
   const bytesAt = offsetsAt + (size + 1) * offsetSize;
   if (bytesAt > metadata.length) malformed();
+  const keys = new Map<number, string>();
   return (id) => {
+    const known = keys.get(id);
+    if (known !== undefined) return known;
     if (id >= size) malformed();
     const from = unsigned(metadata, offsetsAt + id * offsetSize, offsetSize);
     const to = unsigned(metadata, offsetsAt + (id + 1) * offsetSize, offsetSize);
     if (to < from) malformed();
-    return utf8(metadata, bytesAt + from, to - from);
+    const key = `${JSON.stringify(utf8(metadata, bytesAt + from, to - from))}:`;
+    keys.set(id, key);
+    return key;
   };
 }
 
 class Writer {
-  private readonly parts: string[] = [];
+  private readonly chunks: string[] = [];
+  private parts: string[] = [];
   private written = 0;
   constructor(private readonly maxChars: number) {}
 
+  /** Stops the text, before anything is built, when `chars` more characters would pass `maxChars`. */
+  room(chars: number): void {
+    if (this.written + chars > this.maxChars) throw OVER_BUDGET;
+  }
+
   push(text: string): void {
+    this.room(text.length);
     this.written += text.length;
-    if (this.written > this.maxChars) throw OVER_BUDGET;
     this.parts.push(text);
+    if (this.parts.length === PARTS_PER_CHUNK) {
+      this.chunks.push(this.parts.join(""));
+      this.parts = [];
+    }
   }
 
   text(): string {
-    return this.parts.join("");
+    return this.chunks.join("") + this.parts.join("");
   }
 }
 
@@ -104,6 +126,8 @@ function scaledText(unscaled: bigint, scale: number): string {
   if (scale > DECIMAL_MAX_SCALE) malformed();
   const sign = unscaled < ZERO ? "-" : "";
   const digits = (unscaled < ZERO ? -unscaled : unscaled).toString();
+  // The encoding stores no precision: a decimal's is the digit count of its unscaled value, at most 38.
+  if (digits.length > DECIMAL_MAX_PRECISION) malformed();
   if (scale === 0) return `${sign}${digits}`;
   const padded = digits.padStart(scale + 1, "0");
   return `${sign}${padded.slice(0, -scale)}.${padded.slice(-scale)}`;
@@ -155,7 +179,9 @@ function writePrimitive(value: Uint8Array, at: number, id: number, out: Writer):
       return out.push(numberText(float32Number(bounded(value, body, 4).getFloat32(0, true))));
     case 15: {
       const length = unsigned(value, body, 4);
-      bounded(value, body + 4, length);
+      inside(value, body + 4, length);
+      // Base64 writes 4 characters for every 3 bytes, and JSON adds the 2 quotes.
+      out.room(4 * Math.ceil(length / 3) + 2);
       return out.push(JSON.stringify(Buffer.from(value.subarray(body + 4, body + 4 + length)).toString("base64")));
     }
     case 16:
@@ -184,9 +210,16 @@ function writeValue(value: Uint8Array, at: number, depth: number, names: (id: nu
   const valuesAt = offsetsAt + (count + 1) * offsetSize;
   if (valuesAt > value.length) malformed();
   out.push(isObject ? "{" : "[");
+  // An object's field names are unique, whether or not two of its fields share a dictionary id.
+  const keys = isObject && count > 1 ? new Set<string>() : undefined;
   for (let index = 0; index < count; index += 1) {
     if (index > 0) out.push(",");
-    if (isObject) out.push(`${JSON.stringify(names(unsigned(value, idsAt + index * idSize, idSize)))}:`);
+    if (isObject) {
+      const key = names(unsigned(value, idsAt + index * idSize, idSize));
+      if (keys?.has(key)) malformed();
+      keys?.add(key);
+      out.push(key);
+    }
     writeValue(value, valuesAt + unsigned(value, offsetsAt + index * offsetSize, offsetSize), depth + 1, names, out);
   }
   out.push(isObject ? "}" : "]");
@@ -194,6 +227,12 @@ function writeValue(value: Uint8Array, at: number, depth: number, names: (id: nu
 
 /** A VARIANT value as JSON text, or undefined the moment the text would pass `maxChars`. */
 export function variantJson(value: Uint8Array, metadata: Uint8Array, maxChars: number): string | undefined {
+  // A budget that is not a count of characters is the caller's defect: NaN would turn the bound off without a word,
+  // and Infinity would leave a short binary free to stand for an endless text. 0 is a budget spent to the end: no text
+  // fits, so the answer is undefined and the caller cuts before the row.
+  if (!Number.isSafeInteger(maxChars) || maxChars < 0) {
+    throw new TypeError(`variantJson: maxChars must be a non-negative safe integer, not ${maxChars}`);
+  }
   const names = dictionary(metadata);
   const out = new Writer(maxChars);
   try {

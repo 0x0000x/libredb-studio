@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { SPARK_RESULT_BYTE_BUDGET } from "@/lib/db/providers/sql/spark/constants";
 import { SPARK_ERROR_SENTENCES, SparkError } from "@/lib/db/providers/sql/spark/errors";
 import { float32Number, variantJson } from "@/lib/db/providers/sql/spark/variant";
 
@@ -55,6 +56,12 @@ function object(
 function shared(child: Uint8Array): Uint8Array {
   return Uint8Array.from([0x02, 2, 0, 1, 0, 0, child.length, ...child]);
 }
+/** That object repeated to depth 64: 449 bytes that stand for a text of 2^64 nulls. */
+function deepShared(): Uint8Array {
+  let value: Uint8Array = primitive(0);
+  for (let level = 0; level < 64; level += 1) value = shared(value);
+  return value;
+}
 const NO_NAMES = meta([]);
 const BIG = 1_000_000;
 const json = (value: Uint8Array, metadata: Uint8Array = NO_NAMES) => variantJson(value, metadata, BIG);
@@ -95,6 +102,9 @@ describe("variantJson: primitives", () => {
     expect(json(primitive(6, le(BigInt("9007199254740993"), 8)))).toBe("9007199254740993");
     expect(json(primitive(6, le(BigInt("-9223372036854775808"), 8)))).toBe("-9223372036854775808");
     expect(json(primitive(7, float64Bytes(1.5)))).toBe("1.5");
+    // A double is written as JavaScript writes it (spec 5.2), where Java would write 1.0 and 1.0E21.
+    expect(json(primitive(7, float64Bytes(1)))).toBe("1");
+    expect(json(primitive(7, float64Bytes(1e21)))).toBe("1e+21");
     expect(json(primitive(7, float64Bytes(Number.NaN)))).toBe('"NaN"');
     expect(json(primitive(7, float64Bytes(Number.POSITIVE_INFINITY)))).toBe('"Infinity"');
     expect(json(primitive(14, float32Bytes(0.1)))).toBe("0.1");
@@ -199,12 +209,20 @@ describe("variantJson: objects and arrays", () => {
 
 describe("variantJson: the text bound", () => {
   test("an object whose two fields share one nested value, repeated to depth 64, answers undefined at maxChars", () => {
-    const names = meta(["a", "b"]);
-    let value: Uint8Array = primitive(0);
-    for (let level = 0; level < 64; level += 1) value = shared(value);
     const started = performance.now();
-    expect(variantJson(value, names, 10_000)).toBeUndefined();
+    expect(variantJson(deepShared(), meta(["a", "b"]), 10_000)).toBeUndefined();
     expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
+  test("the same value at the statement's whole decoded budget answers undefined within the same second", () => {
+    const started = performance.now();
+    expect(variantJson(deepShared(), meta(["a", "b"]), SPARK_RESULT_BYTE_BUDGET)).toBeUndefined();
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
+  test("a text of more parts than the writer joins at once comes back whole and in order", () => {
+    const items = Array.from({ length: 5_000 }, (_, index) => String(index));
+    expect(variantJson(array(items.map(shortString), 4, true), NO_NAMES, BIG)).toBe(JSON.stringify(items));
   });
 
   test("the same shape at depth 2 decodes whole", () => {
@@ -220,7 +238,30 @@ describe("variantJson: the text bound", () => {
     const value = shared(shared(primitive(0)));
     expect(variantJson(value, meta(["a", "b"]), whole.length)).toBe(whole);
     expect(variantJson(value, meta(["a", "b"]), whole.length - 1)).toBeUndefined();
+    // A binary's base64 text is measured before it is built: four characters for every three bytes, and the quotes.
+    const binary = primitive(15, [...le(4, 4), 1, 2, 3, 4]);
+    expect(variantJson(binary, NO_NAMES, 10)).toBe('"AQIDBA=="');
+    expect(variantJson(binary, NO_NAMES, 9)).toBeUndefined();
+    expect(variantJson(primitive(0), NO_NAMES, 1)).toBeUndefined();
+    // A budget spent to exactly 0 has room for no text: the caller cuts before the row (T6.7, T7.3).
     expect(variantJson(primitive(0), NO_NAMES, 0)).toBeUndefined();
+  });
+});
+
+describe("variantJson: the caller's budget", () => {
+  test("a maxChars that is not a non-negative safe integer is the caller's defect, raised", () => {
+    for (const maxChars of [Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5, 2 ** 53]) {
+      let caught: unknown;
+      try {
+        variantJson(primitive(0), NO_NAMES, maxChars);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(TypeError);
+      expect((caught as TypeError).message).toBe(
+        `variantJson: maxChars must be a non-negative safe integer, not ${maxChars}`,
+      );
+    }
   });
 });
 
@@ -249,6 +290,19 @@ describe("variantJson: refusals, each offset and length checked", () => {
     refused(Uint8Array.from([0x02, 1, 0, 9, 10, 0x00]), meta(["a"]));
   });
 
+  test("a binary whose length runs past the end of the value", () => {
+    refused(primitive(15, [...le(5, 4), 1, 2]));
+  });
+
+  test("an empty array and an empty object without their one offset", () => {
+    refused(Uint8Array.from([0x03, 0]));
+    refused(Uint8Array.from([0x02, 0]));
+  });
+
+  test("a field id equal to the dictionary's size, whose name would come from the dictionary's bytes", () => {
+    refused(object([[1, primitive(0)]]), Uint8Array.from([0x01, 1, 0, 1, 0x02, 0x61]));
+  });
+
   test("a field id past the dictionary, metadata of another version or cut short, invalid UTF-8, a scale past 38", () => {
     refused(object([[3, primitive(0)]]), meta(["a"]));
     refused(primitive(0), Uint8Array.from([0x02, 0, 0]));
@@ -260,6 +314,33 @@ describe("variantJson: refusals, each offset and length checked", () => {
     refused(shortString("a").map((byte, index) => (index === 1 ? 0xff : byte)));
     refused(primitive(16, [...le(3, 4), 0xed, 0xa0, 0x80]));
     refused(primitive(8, [39, ...le(1, 4)]));
+  });
+
+  test("an object that holds one field name twice, by one dictionary id or by two", () => {
+    refused(
+      object([
+        [0, primitive(0)],
+        [0, primitive(1)],
+      ]),
+      meta(["a"]),
+    );
+    refused(
+      object([
+        [0, primitive(0)],
+        [1, primitive(1)],
+      ]),
+      meta(["a", "a"]),
+    );
+    expect(json(object([[0, object([[0, primitive(0)]])]]), meta(["a"]))).toBe('{"a":{"a":null}}');
+  });
+
+  test("a decimal of more than 38 digits, the encoding storing a scale and an unscaled value but no precision", () => {
+    const nines = BigInt(10) ** BigInt(38) - BigInt(1);
+    expect(json(primitive(10, [0, ...le(nines, 16)]))).toBe("9".repeat(38));
+    expect(json(primitive(10, [0, ...le(-nines, 16)]))).toBe(`-${"9".repeat(38)}`);
+    refused(primitive(10, [0, ...le(nines + BigInt(1), 16)]));
+    refused(primitive(10, [0, ...le(-nines - BigInt(1), 16)]));
+    refused(primitive(10, [38, ...le((BigInt(1) << BigInt(127)) - BigInt(1), 16)]));
   });
 });
 
