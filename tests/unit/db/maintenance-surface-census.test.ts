@@ -107,6 +107,7 @@ const EXPECTED: Readonly<Record<DatabaseType, SurfaceRow>> = {
   bigquery: NONE,
   // No operation: a kill would reach other users' statements from a shared connection.
   snowflake: NONE,
+  spark: NONE,
   s3: NONE,
   kubernetes: NONE,
   mqtt: NONE,

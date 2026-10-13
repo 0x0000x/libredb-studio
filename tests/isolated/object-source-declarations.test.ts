@@ -171,6 +171,7 @@ const SOURCE_DECLARATIONS: Readonly<Record<DatabaseType, readonly string[]>> = O
     "function/sql",
     "procedure/sql",
   ],
+  spark: ["table/sql", "view/sql"],
   // Both kinds have a source, JSON under the declared language: a bucket's parts and an object's metadata
   // and preview, serialised by the provider.
   s3: ["bucket/json", "object/json"],

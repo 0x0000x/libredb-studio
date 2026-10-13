@@ -447,6 +447,7 @@ const GRAMMAR_COVERAGE: Record<DatabaseType, "established" | "default"> = {
   bigquery: "established",
   // The Snowflake grammar row lands with the gate and the explain format, which flip this to established.
   snowflake: "established",
+  spark: "established",
   s3: "default",
   // One kubectl statement, not SQL: no SQL grammar is established for it, and none is read.
   kubernetes: "default",
@@ -732,6 +733,7 @@ const SQL_TEXT_COVERAGE: Record<DatabaseType, boolean> = {
   bigquery: true,
   // SQL, and the statement text IS what the provider submits; it extends SQLBaseProvider.
   snowflake: true,
+  spark: true,
   // AWS CLI words split by POSIX shell rules, not SQL text.
   s3: false,
   // A kubectl statement is words split by POSIX shell rules, not SQL text.

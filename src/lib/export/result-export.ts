@@ -398,6 +398,9 @@ const STANDS_ALONE: Record<DatabaseType, readonly string[]> = {
   // Not measured: no Snowflake account read a probe column back for this change, so every bare name is re-spelled
   // portably until one does.
   snowflake: NOTHING_STANDS_ALONE,
+  // Not measured: no Spark server read a probe column back for this change, so every bare name is re-spelled portably
+  // until one does.
+  spark: NOTHING_STANDS_ALONE,
   postgres: [
     "character varying",
     "varchar",
@@ -743,6 +746,8 @@ const BINARY_LITERAL: Record<DatabaseType, BinaryLiteral> = {
   bigquery: "text",
   // Snowflake reads `X'0102deadbeef'` as a BINARY constant, the standard form; not yet measured on an account.
   snowflake: "standard-hex",
+  // Spark reads `X'0102deadbeef'` as a BINARY literal, the standard form.
+  spark: "standard-hex",
   postgres: "pg-bytea",
   // Measured on MySQL 26.7.0: `SELECT HEX(X'0102deadbeef')` answers `0102DEADBEEF` and
   // `SELECT LENGTH(X'')` answers 0, so MySQL is here rather than in `zero-x` even

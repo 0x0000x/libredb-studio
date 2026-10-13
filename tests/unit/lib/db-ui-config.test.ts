@@ -24,6 +24,8 @@ import {
   readOnlyHint,
   SNOWFLAKE_FIELD_HINTS,
   SNOWFLAKE_FIELD_RULES,
+  SPARK_FIELD_HINTS,
+  SPARK_FIELD_RULES,
   S3_FIELD_HINTS,
   S3_FIELD_RULES,
   takesConnectionField,
@@ -51,7 +53,14 @@ import {
   readClusterEndpoint,
 } from "@/lib/db/providers/platform/kubernetes/connection-options";
 import { S3_ACCESS_KEY_ID_MAX_CHARS, S3_ACCESS_KEY_ID_MIN_CHARS } from "@/lib/db/providers/objectstore/s3/constants";
-import { DatabendIcon, FirestoreIcon, InfluxDBIcon, S3Icon, SnowflakeIcon } from "@/components/icons/db-icons";
+import {
+  DatabendIcon,
+  FirestoreIcon,
+  InfluxDBIcon,
+  S3Icon,
+  SnowflakeIcon,
+  SparkIcon,
+} from "@/components/icons/db-icons";
 import {
   SNOWFLAKE_ACCOUNT_PATTERN,
   SNOWFLAKE_FIELD_SENTENCES,
@@ -99,6 +108,7 @@ const ALL_TYPES: DatabaseType[] = [
   "databend",
   "bigquery",
   "snowflake",
+  "spark",
   "s3",
   "kubernetes",
   "mqtt",
@@ -499,10 +509,12 @@ describe("db-ui-config", () => {
      * user name: clear User. A bearer token goes under Token." (SB1-4.3) Kubernetes has no user name either: basic
      * authentication is refused, and its provider refuses a non-empty `config.user` naming the field. RabbitMQ has no
      * database: virtual hosts are discovered, and its provider refuses a non-empty `config.database` naming the field.
+     * Apache Spark has no user name either: every request uses one fixed Spark Connect user id, and its provider
+     * refuses a non-empty `config.user` naming the field (Spark spec 3.1).
      * Listed by name, so the read stays visible.
      */
     const READ_ONLY_TO_REFUSE: Readonly<Record<"user" | "database", readonly DatabaseType[]>> = {
-      user: ["qdrant", "influxdb3", "oxia", "kubernetes"],
+      user: ["qdrant", "influxdb3", "oxia", "kubernetes", "spark"],
       database: ["rabbitmq"],
     };
 
@@ -988,7 +1000,7 @@ describe("declared connection-field copy (#1085)", () => {
     }
   });
 
-  test("only libsql, db2, prometheus, kafka, etcd, neo4j, milvus, qdrant, the two InfluxDB types, oxia, databend, bigquery, snowflake, s3, kubernetes, mqtt, firestore, rabbitmq and opcua declare field copy, so every other engine draws every label and hint it drew before", () => {
+  test("only libsql, db2, prometheus, kafka, etcd, neo4j, milvus, qdrant, the two InfluxDB types, oxia, databend, bigquery, snowflake, spark, s3, kubernetes, mqtt, firestore, rabbitmq and opcua declare field copy, so every other engine draws every label and hint it drew before", () => {
     const declared = Object.entries(DB_UI_CONFIG)
       .filter(([, config]) => config.fieldLabels !== undefined || config.fieldHints !== undefined)
       .map(([type]) => type);
@@ -1007,6 +1019,7 @@ describe("declared connection-field copy (#1085)", () => {
       "databend",
       "bigquery",
       "snowflake",
+      "spark",
       "s3",
       "kubernetes",
       "mqtt",
@@ -1162,11 +1175,12 @@ describe("declared field rules (Databend design 6.3)", () => {
     // The field the provider's sentences call Host, not the dialog's "Host & Instance".
     expect(connectionFieldLabel(config, "host", "Host & Instance")).toBe("Host");
     // The shared Host row draws a port label only where one is declared, so no other engine's dialog gains one.
+    // Apache Spark declares a plain Port beside its relabelled Host, Token, Catalog and Namespace (Spark spec 3.1).
     expect(
       (Object.keys(DB_UI_CONFIG) as DatabaseType[]).filter(
         (type) => DB_UI_CONFIG[type].fieldLabels?.port !== undefined,
       ),
-    ).toEqual(["rabbitmq"]);
+    ).toEqual(["spark", "rabbitmq"]);
     expect(connectionFieldLabel(config, "amqpPort", "x")).toBe("AMQP port");
     expect(connectionFieldLabel(config, "apiPath", "x")).toBe("Path prefix");
     expect(connectionFieldPlaceholder(config, "amqpPort", "5672")).toBe("Empty: browse only");
@@ -1256,11 +1270,11 @@ describe("declared field rules (Databend design 6.3)", () => {
     );
   });
 
-  test("only databend, snowflake, s3, kubernetes and rabbitmq declare field rules, so no other engine's Test Connection or Save is checked", () => {
+  test("only databend, snowflake, spark, s3, kubernetes and rabbitmq declare field rules, so no other engine's Test Connection or Save is checked", () => {
     const declaring = Object.entries(DB_UI_CONFIG)
       .filter(([, config]) => config.fieldRules !== undefined)
       .map(([type]) => type);
-    expect(declaring).toEqual(["databend", "snowflake", "s3", "kubernetes", "rabbitmq"]);
+    expect(declaring).toEqual(["databend", "snowflake", "spark", "s3", "kubernetes", "rabbitmq"]);
     for (const type of ALL_TYPES.filter((candidate) => !declaring.includes(candidate))) {
       expect(
         connectionFieldRefusal(
@@ -1534,9 +1548,12 @@ describe("db-showcase", () => {
         // Behind RabbitMQ and ahead of libSQL: the third cloud data warehouse, so only libSQL and the embedded store
         // move, as they did for RabbitMQ.
         "snowflake",
+        // Behind Snowflake and ahead of libSQL: the open-source engine a data team runs its lakehouse SQL on, so only
+        // libSQL, the embedded store and OPC UA move.
+        "spark",
         "libsql",
         "libredb",
-        // Last (rank 34), behind the embedded store: an industrial address space is the least recognisable
+        // Last (rank 36), behind the embedded store: an industrial address space is the least recognisable
         // name on a page of databases, so no existing engine moves for it (#1677).
         "opcua",
       ]);
@@ -1784,6 +1801,70 @@ describe("the Snowflake entry", () => {
       for (const field of config.connectionFields) {
         expect(connectionFieldShown(config, field, {})).toBe(true);
       }
+    }
+  });
+});
+
+describe("the Apache Spark entry", () => {
+  const spark = getDBConfig("spark");
+  const connection = (fields: Record<string, unknown>): DatabaseConnection =>
+    ({
+      id: "spark",
+      name: "Apache Spark",
+      type: "spark",
+      host: "spark.example.internal",
+      port: 15002,
+      createdAt: new Date(0),
+      ...fields,
+    }) as DatabaseConnection;
+
+  test("declares its icon, hue, label, port, fields, labels, placeholders and hints, and offers both panels", () => {
+    expect(spark).toMatchObject({
+      icon: SparkIcon,
+      color: "text-hue-taupe",
+      label: "Apache Spark",
+      defaultPort: "15002",
+      showConnectionStringToggle: false,
+    });
+    // No `showSshTunnel` and no `showSslPanel` key: the SSH tunnel and the SSL / TLS panel are both offered (D5c).
+    expect(spark.showSshTunnel).toBeUndefined();
+    expect(spark.showSslPanel).toBeUndefined();
+    // No User box: every request uses one fixed Spark Connect user id, and Token is the credential (D5e).
+    expect(spark.connectionFields).toEqual(["host", "port", "password", "database", "schema"]);
+    expect(connectionFieldLabel(spark, "host", "Host & Instance")).toBe("Host");
+    expect(connectionFieldLabel(spark, "port", "fallback")).toBe("Port");
+    expect(connectionFieldLabel(spark, "password", "Password")).toBe("Token");
+    expect(connectionFieldLabel(spark, "database", "Database Name")).toBe("Catalog");
+    expect(connectionFieldLabel(spark, "schema", "Schema")).toBe("Namespace");
+    expect(connectionFieldPlaceholder(spark, "database", "")).toBe("server default (spark_catalog)");
+    expect(connectionFieldPlaceholder(spark, "schema", "")).toBe("catalog default");
+    expect(spark.fieldHints).toBe(SPARK_FIELD_HINTS);
+    expect(connectionFieldHint(spark, "password")).toBe(
+      "The server's spark.connect.authenticate.token (Spark 4.0 and later), sent on every call. Leave it empty for a server without a token. Studio sends a token only over TLS or an SSH tunnel, unless the host is this machine.",
+    );
+    expect(spark.fieldRules).toBe(SPARK_FIELD_RULES);
+  });
+
+  test("its rules refuse an empty Host, a token with a line break, a dotted Catalog and a malformed Namespace, and pass the rest", () => {
+    expect(connectionFieldRefusal(spark, connection({}))).toBeUndefined();
+    expect(connectionFieldRefusal(spark, connection({ host: "" }))).toBe(SPARK_FIELD_RULES.host?.required);
+    expect(connectionFieldRefusal(spark, connection({ password: "abc\ndef" }))).toBe(
+      SPARK_FIELD_RULES.password?.format?.sentence,
+    );
+    expect(connectionFieldRefusal(spark, connection({ password: "s3cr3t-token" }))).toBeUndefined();
+    expect(connectionFieldRefusal(spark, connection({ database: "spark_catalog" }))).toBeUndefined();
+    for (const catalog of ["a.b", "x".repeat(256), "tab\there"]) {
+      expect(connectionFieldRefusal(spark, connection({ database: catalog }))).toBe(
+        SPARK_FIELD_RULES.database?.format?.sentence,
+      );
+    }
+    for (const namespace of ["default", "a.b", "`x.y`", "`a``b`.c", "a.b.c.d.e.f.g.h"]) {
+      expect(connectionFieldRefusal(spark, connection({ schema: namespace }))).toBeUndefined();
+    }
+    for (const namespace of ["1a", "a.", ".a", "a..b", "``", "a.b.c.d.e.f.g.h.i", "a b"]) {
+      expect(connectionFieldRefusal(spark, connection({ schema: namespace }))).toBe(
+        SPARK_FIELD_RULES.schema?.format?.sentence,
+      );
     }
   });
 });

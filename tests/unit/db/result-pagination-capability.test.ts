@@ -97,6 +97,7 @@ const EXPECTED: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   bigquery: true,
   // Off by decision, not by its prepareQuery: see DECLINED below.
   snowflake: false,
+  spark: false,
   // One AWS CLI subset command per run; the console pages with --starting-token, never with LIMIT and OFFSET.
   s3: false,
   // The list form of a single-type get, through the provider's own paging line (console/paging.ts).

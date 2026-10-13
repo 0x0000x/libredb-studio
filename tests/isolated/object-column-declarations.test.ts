@@ -130,6 +130,7 @@ const EXPECTED_COLUMN_KINDS: Readonly<Record<DatabaseType, readonly string[]>> =
   bigquery: ["table", "view", "materialized_view"],
   // Ten kinds, columns on tables and views only, the two describe reads.
   snowflake: ["table", "view"],
+  spark: ["table", "view"],
   // Neither kind has columns: a bucket and an object are listed and their Source read, and neither declares
   // `hasColumns`.
   s3: [],

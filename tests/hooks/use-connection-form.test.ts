@@ -2021,6 +2021,7 @@ describe("useConnectionForm", () => {
     firestore: true,
     rabbitmq: true,
     snowflake: true,
+    spark: true,
     opcua: true,
   };
 

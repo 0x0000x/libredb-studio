@@ -1112,6 +1112,7 @@ describe("generateMigrationSQL: SQLite's grammar declares a foreign key only ins
     bigquery: "engine-has-no-foreign-key",
     // Snowflake parses FOREIGN KEY in ALTER TABLE and records it, unenforced on a standard table.
     snowflake: "key-follows-in-an-alter",
+    spark: "engine-has-no-foreign-key",
     s3: "engine-has-no-foreign-key",
     kubernetes: "engine-has-no-foreign-key",
     mqtt: "engine-has-no-foreign-key",
@@ -1258,6 +1259,7 @@ const MODIFIED_COLUMN_COVERAGE: Record<
   },
   // Its own arm: ALTER COLUMN ... SET DATA TYPE, the nullability, and a default only dropped (the snowflake block).
   snowflake: "has-own-branch",
+  spark: { label: "Apache Spark", reason: "the catalog and the table format" },
   // Not a table store: an object is bytes under a key, and the columns a listing shows are its fixed shape.
   s3: { label: "S3-compatible object storage", reason: "with no schema, so there is no column definition to change" },
   kubernetes: { label: "Kubernetes", reason: "and Studio writes none, so there is no column definition to change" },
@@ -1680,6 +1682,7 @@ const TRANSACTION_WRAPPER_COVERAGE: Record<DatabaseType, "BEGIN;" | "BEGIN TRANS
   databend: false, // a DDL statement commits the open transaction, so BEGIN; brackets nothing, the Oracle reason (module docstring)
   bigquery: false, // the provider declares no transactions
   snowflake: false, // DDL commits implicitly, and each statement runs in its own session
+  spark: false, // no transaction spans two statements (supportsTransactions: false)
   s3: false, // one AWS CLI subset command, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
   kubernetes: false, // one kubectl statement, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
   mqtt: false, // one JSON read request, not SQL text (`NON_SQL_DIALECTS`), and no table DDL to wrap (`NO_TABLE_DDL`)
