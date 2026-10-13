@@ -281,7 +281,8 @@ const rewritingIds = () =>
 
 /**
  * The fake's channel, with each Interrupt held before it is sent until the test lets it go or fails it; `order` records
- * the Interrupt when the run hands it over and the abort of the run's signal.
+ * the Interrupt when the run hands it over, the next event-loop turn after each Interrupt, and the abort of the run's
+ * signal.
  */
 function heldInterrupt(): {
   readonly wire: SparkWireChannel;
@@ -298,6 +299,7 @@ function heldInterrupt(): {
     unary: async (rpc, request, call) => {
       if (rpc !== "Interrupt") return channel.unary(rpc, request, call);
       order.push("Interrupt");
+      setImmediate(() => order.push("turn"));
       if ((await gate) === "fail") throw new Error("Interrupt failed by the test");
       return channel.unary(rpc, request, call);
     },
@@ -689,7 +691,7 @@ describe("the deadline and Stop", () => {
     // The run ends while its Interrupt is held: the abort did not wait for the Interrupt's answer.
     await waitFor(() => ended);
     expect((await running).error?.category).toBe("cancelled");
-    expect(held.order).toStrictEqual(["Interrupt", "abort"]);
+    expect(held.order).toStrictEqual(["Interrupt", "turn", "abort"]);
     expect(answered).toBeUndefined();
     held.letGo("send");
     expect(await stopping).toBe(true);
@@ -832,6 +834,45 @@ describe("the deadline and Stop", () => {
     await sessions.releaseAll();
   });
 
+  test("Stop on a run refused as cancelled while its statement session's release is held answers true once the run settles", async () => {
+    const release = heldUnary("ReleaseSession");
+    const { sessions, runs } = world(release.wire);
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const running = settle(
+      runs.run({
+        sql: "CREATE TABLE x",
+        queryId: "qc",
+        session: async () => {
+          await gate;
+          return sessions.forScope(undefined);
+        },
+        deadline: soon(),
+      }),
+    );
+    expect(await runs.cancel("qc")).toBe(true);
+    open();
+    await release.waiting;
+    let answered: boolean | undefined;
+    const stopping = runs.cancel("qc").then((value) => {
+      answered = value;
+      return value;
+    });
+    // The run's outcome is not settled while its release is held, so Stop has nothing to answer from yet.
+    await turn();
+    expect(answered).toBeUndefined();
+    release.open();
+    expect(await stopping).toBe(true);
+    expect((await running).error?.category).toBe("cancelled");
+    expect(plans()).toHaveLength(0);
+    expect(interrupts()).toHaveLength(0);
+    expect(fake.log.entries.filter((entry) => entry.rpc === "ReleaseSession")).toHaveLength(1);
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
   test("Stop on a run refused at its deadline whose release never answers answers false SPARK_CONTROL_DEADLINE_MS after the Stop", async () => {
     const release = heldUnary("ReleaseSession");
     const { sessions, runs } = world(release.wire);
@@ -912,7 +953,7 @@ describe("the deadline and Stop", () => {
         await waitFor(() => ended === 2);
         expect((await one).error?.category).toBe("cancelled");
         expect((await two).error?.category).toBe("cancelled");
-        expect(held.order).toStrictEqual(["Interrupt", "Interrupt", "abort", "abort"]);
+        expect(held.order).toStrictEqual(["Interrupt", "Interrupt", "turn", "abort", "turn", "abort"]);
         expect(stopped).toBe(false);
         held.letGo(how);
         await stopping;
