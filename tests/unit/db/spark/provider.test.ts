@@ -2400,4 +2400,47 @@ describe("SparkProvider: the metadata session after the server closed it", () =>
     expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.localClientError);
     await provider.disconnect();
   });
+
+  test.each<[string, Partial<DatabaseConnection>]>([
+    ["no Catalog or Namespace", {}],
+    ["a Catalog and a Namespace", { database: "spark_catalog", schema: "default" }],
+  ])(
+    "getHealth waiting for a new metadata session's setup when a disconnect begins is refused as cancelled, and only that session's release follows, with %s",
+    async (_label, place) => {
+      const setup = gate();
+      const server = laterSetupsHeld(setup.promise);
+      let closed = false;
+      const script = scripted({
+        commands: {
+          "SHOW CURRENT NAMESPACE": CURRENT,
+          "SET CATALOG 'spark_catalog'": SET_ANSWER,
+          "USE NAMESPACE `default`": SET_ANSWER,
+        },
+        // The version read meets the closed session in the form the provider's mapping gives it.
+        unary: (rpc, request) =>
+          closed && rpc === "AnalyzePlan" && sessionOf(request) === server.first()
+            ? Promise.reject(new SparkError("session-closed", SPARK_ERROR_SENTENCES.sessionClosed))
+            : server.unary(rpc, request),
+      });
+      const provider = new SparkProvider(connection(1, place), {}, script);
+      await provider.connect();
+      closed = true;
+      const setups = () => script.calls.filter((call) => call.rpc === "Config" && setsConfig(call.request));
+      const health = failureOf(provider.getHealth());
+      await eventually(() => setups().length === 2);
+      const fresh = setups()[1]?.sessionId;
+      const at = script.calls.length;
+      const closing = provider.disconnect();
+      setup.open();
+      await closing;
+      const failure = await health;
+      expect(failure).toBeInstanceOf(QueryCancelledError);
+      expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+      expect(script.calls.slice(at).map((call) => [call.rpc, call.sessionId])).toStrictEqual([
+        ["ReleaseSession", fresh],
+      ]);
+      expect(script.closed()).toBe(1);
+      expect(provider.hasRunsInFlight()).toBe(false);
+    },
+  );
 });

@@ -81,6 +81,17 @@ const setupOf = (sessionId: string) =>
       : (entry.request as { plan: { command: { sql_command: { input: { sql: { query: string } } } } } }).plan.command
           .sql_command.input.sql.query,
   );
+/** Every call the fake received, in order, with its session: an ExecutePlan by its statement, a Config set or read. */
+const received = () =>
+  fake.log.entries.map((entry) => {
+    const { plan, operation } = entry.request as {
+      plan?: { command: { sql_command: { input: { sql: { query: string } } } } };
+      operation?: { set?: unknown };
+    };
+    if (entry.rpc === "ExecutePlan") return [entry.sessionId, plan?.command.sql_command.input.sql.query];
+    if (entry.rpc !== "Config") return [entry.sessionId, entry.rpc];
+    return [entry.sessionId, operation?.set === null || operation?.set === undefined ? "Config read" : "Config set"];
+  });
 /** A failure mapped as the provider maps a control call's (spec 4.10). */
 const sparkErrorOf = (error: unknown) =>
   toSparkError(error, { connection: { host: "h", port: 1, secretForms: [] }, phase: "control" });
@@ -536,6 +547,110 @@ describe("releases (spec 4.5)", () => {
     await sessions.endScope("a");
     await sessions.releaseAll();
     expect(fake.log.entries).toHaveLength(0);
+  });
+});
+
+describe("a release that begins while a setup is in flight", () => {
+  /**
+   * Deps whose step `held`, the Config set or the setup statement it begins, is sent and answered as usual and then
+   * handed to the registry only once the test opens it, skipping the first `after` steps it names; `reached` settles
+   * once that step waits.
+   */
+  function heldStep(held: string, after = 0) {
+    const hold = Promise.withResolvers<void>();
+    const reached = Promise.withResolvers<void>();
+    let seen = 0;
+    const handOver = async (step: string, id: string) => {
+      if (!step.startsWith(held)) return id;
+      seen += 1;
+      if (seen <= after) return id;
+      reached.resolve();
+      await hold.promise;
+      return id;
+    };
+    return {
+      deps: deps({
+        configSet: async (session, pairs) => handOver("Config set", await deps().configSet(session, pairs)),
+        runSetup: async (session, sql) => handOver(sql, await runStatement(session, sql)),
+      }),
+      reached: reached.promise,
+      open: () => hold.resolve(),
+    };
+  }
+  const refusalOf = (error: unknown) =>
+    error instanceof SparkError ? [error.category, error.message] : ["not a SparkError", error];
+  const cancelled = ["cancelled", SPARK_ERROR_SENTENCES.cancelled];
+
+  test.each<[string, readonly string[]]>([
+    ["Config set", ["Config set", "ReleaseSession"]],
+    ["SET CATALOG", ["Config set", "SET CATALOG 'spark_catalog'", "ReleaseSession"]],
+  ])(
+    "a setup whose %s answers once releaseAll began sends no further step, is refused as cancelled and is released",
+    async (held, sent) => {
+      const step = heldStep(held);
+      const sessions = new SparkSessions(step.deps, PLACE);
+      const setup = sessions.metadata().then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      await step.reached;
+      const released = sessions.releaseAll();
+      step.open();
+      await released;
+      expect(refusalOf(await setup)).toStrictEqual(cancelled);
+      const session = fake.log.entries[0]?.sessionId;
+      expect(received()).toStrictEqual(sent.map((name) => [session, name]));
+      expect(sessions.openCount()).toBe(0);
+    },
+  );
+
+  test("a metadata read whose session's setup answers once releaseAll began is refused as cancelled, and nothing is sent for it", async () => {
+    const step = heldStep("Config set");
+    const sessions = new SparkSessions(step.deps, {});
+    const seen: string[] = [];
+    const read = sessions.readMetadata(configRead(seen)).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await step.reached;
+    const released = sessions.releaseAll();
+    step.open();
+    await released;
+    expect(refusalOf(await read)).toStrictEqual(cancelled);
+    expect(seen).toStrictEqual([]);
+    const session = fake.log.entries[0]?.sessionId;
+    expect(received()).toStrictEqual([
+      [session, "Config set"],
+      [session, "ReleaseSession"],
+    ]);
+    expect(sessions.openCount()).toBe(0);
+  });
+
+  test("a metadata read whose repeat's setup answers once releaseAll began is refused as cancelled after its one read of the closed session", async () => {
+    const step = heldStep("Config set", 1);
+    const sessions = new SparkSessions(step.deps, {});
+    const first = await sessions.metadata();
+    await channel.unary("ReleaseSession", releaseSessionRequest(first), call());
+    fake.log.clear();
+    const seen: string[] = [];
+    const read = sessions.readMetadata(configRead(seen)).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await step.reached;
+    const released = sessions.releaseAll();
+    step.open();
+    await released;
+    expect(refusalOf(await read)).toStrictEqual(cancelled);
+    expect(seen).toStrictEqual([first.sessionId]);
+    const fresh = fake.log.entries[1]?.sessionId;
+    expect(fresh).not.toBe(first.sessionId);
+    expect(received()).toStrictEqual([
+      [first.sessionId, "Config read"],
+      [fresh, "Config set"],
+      [fresh, "ReleaseSession"],
+    ]);
+    expect(sessions.openCount()).toBe(0);
   });
 });
 
