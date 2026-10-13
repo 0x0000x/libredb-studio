@@ -807,7 +807,7 @@ export const MqttIcon: React.FC<IconProps> = ({ className, ...props }) => (
 );
 
 /**
- *  * Firestore: a mark drawn for Studio, never the Firebase or Google Cloud logo: a document with a second one behind it,
+ * Firestore: a mark drawn for Studio, never the Firebase or Google Cloud logo: a document with a second one behind it,
  * the collection-of-documents shape in the plainest terms. Stroked on the house 24-unit grid like the others.
  */
 export const FirestoreIcon: React.FC<IconProps> = ({ className, ...props }) => (
@@ -857,7 +857,7 @@ export const SnowflakeIcon: React.FC<IconProps> = ({ className, ...props }) => (
 );
 
 /**
- *  * A mark drawn for Studio, never the OPC Foundation's logo or any vendor's asset.
+ * A mark drawn for Studio, never the OPC Foundation's logo or any vendor's asset.
  *
  * An address space is a tree of nodes with values hanging off it, so the mark is a root with two
  * branches and a leaf on each: what the Keys panel shows, rather than a protocol badge.

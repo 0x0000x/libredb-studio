@@ -179,12 +179,6 @@
   --studio-hue-yellow: #894b00;
   --studio-hue-yellow-alt: #733e0a;
   --studio-hue-yellow-tint: #f0b100;
-  /* Firestore's identity: the first new hue since BigQuery took the last free step. */
-  --studio-hue-lime: #3c6300;
-  /* OPC UA's identity (#1677): every hue and every -alt step was taken by the time it registered
-     (Firestore took lime and RabbitMQ its -alt), so the palette gains one, and a steel grey is the
-     one colour a plant's address space can carry without borrowing another engine's. */
-  --studio-hue-slate: #1d293d;
   --studio-hue-green: #016630;
   --studio-hue-green-alt: #0d542b;
   --studio-hue-green-tint: #00c950;
@@ -218,6 +212,9 @@
   --studio-hue-lime: #3c6300;
   --studio-hue-lime-alt: #35530e;
   --studio-hue-mist: #394447;
+  /* OPC UA (#1677): every hue and every -alt step was taken by the time it registered, so the
+     palette gains one, and a steel grey is the one colour a plant's address space can carry
+     without borrowing another engine's. */
   --studio-hue-slate: #1d293d;
 }
 
@@ -323,8 +320,6 @@
   --studio-hue-yellow: #fdc700;
   --studio-hue-yellow-alt: #ffdf20;
   --studio-hue-yellow-tint: #f0b100;
-  --studio-hue-lime: #9ae600;
-  --studio-hue-slate: #90a1b9;
   --studio-hue-green: #05df72;
   --studio-hue-green-alt: #7bf1a8;
   --studio-hue-green-tint: #00c950;
@@ -440,8 +435,6 @@
   --color-hue-yellow: var(--studio-hue-yellow);
   --color-hue-yellow-alt: var(--studio-hue-yellow-alt);
   --color-hue-yellow-tint: var(--studio-hue-yellow-tint);
-  --color-hue-lime: var(--studio-hue-lime);
-  --color-hue-slate: var(--studio-hue-slate);
   --color-hue-green: var(--studio-hue-green);
   --color-hue-green-alt: var(--studio-hue-green-alt);
   --color-hue-green-tint: var(--studio-hue-green-tint);

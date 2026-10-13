@@ -986,7 +986,6 @@ export interface ProviderCapabilities {
     | "firestore"
     | "rabbitmq"
     | "kubectl"
-    | "kubectl"
     | "opcua";
   supportsExplain: boolean;
   /**
