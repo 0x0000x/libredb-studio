@@ -137,6 +137,10 @@ export interface RecordedSparkTransport extends SparkWireTransport {
 export function recordedSparkTransport(
   version: SparkCaptureVersion,
   names: readonly SparkCaptureName[],
+  options: {
+    /** Captures that answer one request each: the next request they match goes to the next capture that matches it. */
+    readonly once?: readonly SparkCaptureName[];
+  } = {},
 ): RecordedSparkTransport {
   const captures = names.map((name) => {
     const capture = readSparkCapture(version, name);
@@ -145,6 +149,7 @@ export function recordedSparkTransport(
   });
   const served: SparkCaptureName[] = [];
   const missed: string[] = [];
+  const spent = new Set<(typeof captures)[number]>();
   // Each capture comes from its own run, so each holds another server-side id; one server keeps one id per session
   // for the session's life, and the provider reads a changed id as a restarted server. The replay therefore answers
   // a session's every call with the first server-side id it served that session (BUILT, with the client ids).
@@ -157,11 +162,12 @@ export function recordedSparkTransport(
   };
   const find = (rpc: string, request: object) => {
     const key = keyOf(rpc, request);
-    const found = captures.find((candidate) => candidate.rpc === rpc && candidate.key === key);
+    const found = captures.find((candidate) => candidate.rpc === rpc && candidate.key === key && !spent.has(candidate));
     if (found === undefined) {
       missed.push(`${rpc} ${key}`);
       throw new Error(`No ${version} capture of [${names.join(", ")}] answers ${rpc} ${key}`);
     }
+    if (options.once?.includes(found.name)) spent.add(found);
     served.push(found.name);
     return found.capture;
   };

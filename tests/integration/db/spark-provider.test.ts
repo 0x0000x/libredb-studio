@@ -10,11 +10,14 @@
  *
  * The captures were taken by `tests/live/spark-evidence.ts` on 2026-10-13, under bun, from two servers:
  * - `apache/spark:4.2.0@sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89`, whose AnalyzePlan
- *   answers the version "4.2.0" (services `spark` and `spark-auth`, into `tests/fixtures/spark/4.2.0/`);
+ *   answers the version "4.2.0" (services `spark`, `spark-auth` and `spark-tls`, the TLS proxy in front of
+ *   `spark-auth`, into `tests/fixtures/spark/4.2.0/`);
  * - `apache/spark:4.1.3@sha256:bf9d035a7c32a8ca46aa58d6348182ffd7d2dff6409206ecfbb3915ff1fef211`, whose AnalyzePlan
  *   answers the version "4.1.3" (service `spark-4-1`, into `tests/fixtures/spark/4.1.3/`).
- * `tests/fixtures/spark/README.md` lists every capture with its digest and date, and a test below holds every capture
- * to it.
+ * The digests are in each capture's own header, with the service that answered it: the provenance test below holds
+ * them to SPARK_SERVICE_IMAGES and finds each capture's row in `tests/fixtures/spark/README.md`, which lists every
+ * capture with its service, RPC, date and runtime and no digest, and `tests/unit/db/spark/capture-catalog.test.ts`
+ * holds those pins to database-compose.yml.
  *
  * What is BUILT rather than read from a capture, each labelled where it is built:
  * - the ids: the replay writes the request's own session, operation and tag ids into the echo fields of the captured
@@ -303,15 +306,25 @@ for (const version of ["4.2.0", "4.1.3"] as const) {
 }
 
 describe("replay on 4.2.0 only", () => {
-  test("no token and a wrong token are refused with the two sentences of 3.3", async () => {
+  test("a missing token and a wrong token are refused as an AuthenticationError, each with its own sentence", async () => {
     const none = new SparkProvider(config(), {}, { transport: recorded("4.2.0", ["auth-no-token"]) });
-    await expect(none.connect()).rejects.toBeInstanceOf(AuthenticationError);
+    const missing = await none.connect().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(missing).toBeInstanceOf(AuthenticationError);
+    expect((missing as Error).message).toBe(SPARK_ERROR_SENTENCES.tokenMissing);
     const wrong = new SparkProvider(
       config({ password: "not-the-token" }),
       {},
       { transport: recorded("4.2.0", ["auth-wrong-token"]) },
     );
-    await expect(wrong.connect()).rejects.toThrow(SPARK_ERROR_SENTENCES.tokenWrong);
+    const refused = await wrong.connect().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(refused).toBeInstanceOf(AuthenticationError);
+    expect((refused as Error).message).toBe(SPARK_ERROR_SENTENCES.tokenWrong);
   });
 
   test("a FROM-led result of 100,001 rows is cut by the row budget, with its warning and one Interrupt", async () => {
@@ -333,11 +346,28 @@ describe("replay on 4.2.0 only", () => {
     await provider.disconnect();
   });
 
-  test("a script in one scope: a temp view one statement makes, the next reads", async () => {
-    const { provider } = await connected("4.2.0", ["temp-view-create", "temp-view-script-command", "temp-view-script"]);
-    // oxlint-disable-next-line no-await-in-loop -- the script's statements run in order in one scope.
-    for (const statement of TEMP_VIEW_SCRIPT) await provider.query(statement, undefined, undefined, "scope-script");
+  test("a script in one scope: a temp view one statement makes, the next reads, both on the scope's one session", async () => {
+    const { provider, transport } = await connected("4.2.0", [
+      "temp-view-create",
+      "temp-view-script-command",
+      "temp-view-script",
+    ]);
+    const before = transport.served.length;
+    const rows: unknown[] = [];
+    for (const statement of TEMP_VIEW_SCRIPT) {
+      // oxlint-disable-next-line no-await-in-loop -- the script's statements run in order in one scope.
+      rows.push((await provider.query(statement, undefined, undefined, "scope-script")).rows);
+    }
+    expect(rows).toStrictEqual([[], [{ x: 1 }]]);
+    // One session setup, then both statements: a session per statement would set up and release one for each.
+    expect(transport.served.slice(before)).toStrictEqual([
+      "request-session-setup",
+      "temp-view-create",
+      "temp-view-script-command",
+      "temp-view-script",
+    ]);
     await provider.endOpenQueryTransaction("scope-script");
+    expect(transport.served.slice(before + 4)).toStrictEqual(["release-session"]);
     await provider.disconnect();
   });
 
@@ -424,13 +454,25 @@ describe("replay on 4.2.0 only", () => {
     expect(views.map((object) => object.name)).toEqual(["every_type_view"]);
     const functions = await provider.listObjects(studio, "function");
     expect(functions.map((object) => object.name)).toEqual(["f1"]);
-    for (const [name, kind] of [
-      ["every_type", "table"],
-      ["wide_struct", "table"],
-      ["every_type_view", "view"],
+    for (const [name, kind, columns] of [
+      ["every_type", "table", EVERY_TYPE_COLUMNS],
+      ["wide_struct", "table", [["s", WIDE_STRUCT_TYPE]]],
+      [
+        "every_type_view",
+        "view",
+        [
+          ["c_int", "int"],
+          ["c_string", "string"],
+        ],
+      ],
     ] as const) {
       // oxlint-disable-next-line no-await-in-loop -- one read at a time on one provider.
-      expect((await provider.describeObject([...studio, name], kind)).path).toEqual([...studio, name]);
+      expect(await provider.describeObject([...studio, name], kind)).toStrictEqual({
+        path: [...studio, name],
+        columns: columns.map(([column, type]) => ({ name: column, type, nullable: true, isPrimary: false })),
+        indexes: [],
+        foreignKeys: [],
+      });
     }
     for (const [name, kind] of [
       ["every_type", "table"],
@@ -527,8 +569,26 @@ describe("replay on 4.2.0 only", () => {
   });
 
   test("a released session answers SESSION_CLOSED and the metadata session is re-created", async () => {
-    const { provider } = await connected("4.2.0", ["session-closed", "show-catalogs", "config-catalog-keys"]);
-    await expect(provider.listContainers([])).resolves.toBeDefined();
+    // session-closed-show-catalogs answers the first SHOW CATALOGS only: masked, the repeat on the new session is the
+    // same request, and show-catalogs answers it.
+    const transport = recorded(
+      "4.2.0",
+      [...CONNECT, "session-closed-show-catalogs", "show-catalogs", "config-catalog-keys"],
+      { once: ["session-closed-show-catalogs"] },
+    );
+    const provider = new SparkProvider(config(), {}, { transport });
+    await provider.connect();
+    const before = transport.served.length;
+    const catalogs = await provider.listContainers([]);
+    expect(catalogs.map((container) => container.path)).toStrictEqual([["spark_catalog"], ["studio_unloaded"]]);
+    // The closed session is dropped unreleased, a new one is set up with the nine pairs, and the statement runs again.
+    expect(transport.served.slice(before)).toStrictEqual([
+      "connect-current-namespace",
+      "session-closed-show-catalogs",
+      "connect-session-setup",
+      "show-catalogs",
+      "config-catalog-keys",
+    ]);
     await provider.disconnect();
   });
 
@@ -548,3 +608,40 @@ const STUDIO_KINDS = { table: 2, view: 1, function: 1 };
 const STUDIO_COUNTS = { table: { count: 2 }, view: { count: 1 }, function: { count: 1 } };
 /** spark.app.startTime as overview-app-conf answers it, in epoch milliseconds. */
 const APP_START_MS = 1_791_889_584_013;
+/** every_type's columns as DESCRIBE TABLE answers them (describe-table): the 32 SPARK_SAMPLE_STATEMENTS stores. */
+const EVERY_TYPE_COLUMNS: readonly (readonly [string, string])[] = [
+  ["c_boolean", "boolean"],
+  ["c_tinyint", "tinyint"],
+  ["c_smallint", "smallint"],
+  ["c_int", "int"],
+  ["c_bigint_safe", "bigint"],
+  ["c_bigint_large", "bigint"],
+  ["c_float", "float"],
+  ["c_double", "double"],
+  ["c_double_nan", "double"],
+  ["c_double_inf", "double"],
+  ["c_decimal", "decimal(10,2)"],
+  ["c_decimal_neg", "decimal(4,2)"],
+  ["c_decimal_38", "decimal(38,0)"],
+  ["c_string", "string"],
+  ["c_string_collated", "string collate UTF8_LCASE"],
+  ["c_char", "char(5)"],
+  ["c_varchar", "varchar(10)"],
+  ["c_binary", "binary"],
+  ["c_date", "date"],
+  ["c_date_min", "date"],
+  ["c_timestamp", "timestamp"],
+  ["c_timestamp_ntz", "timestamp_ntz"],
+  ["c_ym_interval", "interval year to month"],
+  ["c_year_interval", "interval year"],
+  ["c_dt_interval", "interval day to second"],
+  ["c_hour_interval", "interval hour"],
+  ["c_array", "array<int>"],
+  ["c_map", "map<string,int>"],
+  ["c_map_nested_key", "map<array<int>,string>"],
+  ["c_struct", "struct<x:int,y:string>"],
+  ["c_variant", "variant"],
+  ["c_null_int", "int"],
+];
+/** wide_struct's one column, its 30 fields whole (describe-table-struct30). */
+const WIDE_STRUCT_TYPE = `struct<${Array.from({ length: 30 }, (_, index) => `f${index + 1}:int`).join(",")}>`;
