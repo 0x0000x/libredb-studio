@@ -409,19 +409,49 @@ function firstMetadataEntry(view: DataView, message: number): number {
 
 /**
  * A copy of a stream whose schema message leaves field `slot` of one table out, as a writer may leave out an optional
- * field: the slot's vtable entry becomes 0. `locate` finds the table from the root table of the schema message.
+ * field. `locate` finds the table from the root table of the schema message. FlatBuffers shares one vtable between
+ * tables of the same shape, so the helper does not edit that vtable: it appends a copy of it with the slot's entry at 0
+ * to the schema message (grown by a multiple of 8, so the next message stays aligned) and points the table at the copy.
  */
 function withoutSlot(
   stream: Uint8Array,
   locate: (view: DataView, message: number) => number,
   slot: number,
 ): Uint8Array {
-  const out = stream.slice();
+  const source = new DataView(stream.buffer, stream.byteOffset, stream.byteLength);
+  const metadataLength = source.getInt32(4, true);
+  const metadataEnd = 8 + metadataLength;
+  const table = locate(source, 8 + source.getUint32(8, true));
+  const vtable = table - source.getInt32(table, true);
+  const vtableSize = source.getUint16(vtable, true);
+  const grown = Math.ceil(vtableSize / 8) * 8;
+  const out = new Uint8Array(stream.byteLength + grown);
+  out.set(stream.subarray(0, metadataEnd), 0);
+  out.set(stream.subarray(vtable, vtable + vtableSize), metadataEnd);
+  out.set(stream.subarray(metadataEnd), metadataEnd + grown);
   const view = new DataView(out.buffer);
-  const table = locate(view, 8 + view.getUint32(8, true));
-  view.setUint16(table - view.getInt32(table, true) + 4 + 2 * slot, 0, true);
+  view.setInt32(4, metadataLength + grown, true);
+  view.setUint16(metadataEnd + 4 + 2 * slot, 0, true);
+  // A table's soffset is the table's position minus its vtable's, so a vtable after the table gives a negative one.
+  view.setInt32(table, table - metadataEnd, true);
   return out;
 }
+
+describe("withoutSlot: the test helper that leaves one field out", () => {
+  test("it leaves the field out of the located table only, though the tables share one vtable", () => {
+    const stream = columnsStream([
+      { name: "a", kind: "utf8", values: ["x"] },
+      { name: "b", kind: "utf8", values: ["y"] },
+    ]);
+    // Field.name is slot 0; the two Utf8 fields are written with one shared vtable.
+    const nameless = withoutSlot(stream, firstField, 0);
+    expect(checkIpcStream(nameless).batches).toBe(1);
+    expect(readIpcColumns(nameless).columns.map((column) => [column.name, column.type])).toStrictEqual([
+      ["null", "utf8"],
+      ["b", "utf8"],
+    ]);
+  });
+});
 
 describe("rowCost: the cost rule of spec 5.6, from offsets, before any value is built", () => {
   test("8 bytes a value plus the UTF-8 length of a string and the byte length of a binary value", () => {

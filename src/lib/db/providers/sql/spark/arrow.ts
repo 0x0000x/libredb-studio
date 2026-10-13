@@ -86,8 +86,8 @@ const INTERVAL_NAMES: Readonly<Record<number, ArrowTypeName>> = {
   [IntervalUnit.MONTH_DAY_NANO]: "interval-month-day-nano",
 };
 
-function unreadable(what: string): never {
-  throw new SparkError("unreadable", SPARK_ERROR_SENTENCES.unreadable(what));
+function unreadable(what: string, cause?: unknown): never {
+  throw new SparkError("unreadable", SPARK_ERROR_SENTENCES.unreadable(what), { cause });
 }
 
 /**
@@ -186,9 +186,10 @@ export function readIpcColumns(bytes: Uint8Array): ArrowColumns {
   let table: Table;
   try {
     table = tableFromIPC(bytes);
-  } catch {
-    // The pre-check passed and apache-arrow still could not read it: the stream is refused, never shown.
-    unreadable("a stream the Arrow reader could not read");
+  } catch (error) {
+    // The pre-check passed and apache-arrow still could not read it: the stream is refused, never shown, and the
+    // reader's own error is kept as the refusal's cause.
+    unreadable("a stream the Arrow reader could not read", error);
   }
   // A stream of no batch reads as one empty batch of the schema's columns, so it answers zero rows.
   const batch = table.batches[0];
