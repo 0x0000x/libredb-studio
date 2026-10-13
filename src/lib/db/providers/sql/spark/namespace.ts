@@ -13,8 +13,11 @@ export const SPARK_CATALOG_PATTERN = /^[^.\p{Cc}]{1,255}$/u;
 /** 1 to 8 parts joined by `.`, each bare as quoteIfNeeded leaves it or backticked with a backtick doubled (spec 3.1). */
 export const SPARK_NAMESPACE_PATTERN =
   /^(?:[A-Za-z_][A-Za-z0-9_]*|`(?:[^`]|``)+`)(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|`(?:[^`]|``)+`)){0,7}$/;
-/** Printable ASCII only, U+0020 to U+007E: the characters grpc-js takes in a non-binary header value (spec 3.1). */
-export const SPARK_TOKEN_PATTERN = /^[\x20-\x7E]*$/;
+/**
+ * Printable ASCII, U+0020 to U+007E, the characters grpc-js takes in a non-binary header value, with no space at
+ * either end, since Spark compares the token exactly (spec 3.1). The empty string matches: an empty Token is no token.
+ */
+export const SPARK_TOKEN_PATTERN = /^(?:[\x21-\x7E](?:[\x20-\x7E]*[\x21-\x7E])?)?$/;
 
 /** A name Spark's own quoteIfNeeded leaves bare (L08-C21). */
 const BARE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;

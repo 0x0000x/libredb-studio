@@ -311,9 +311,9 @@ export const SPARK_FIELD_RULES: Readonly<Partial<Record<ConnectionField, Connect
   },
   password: {
     format: {
-      pattern: /^[\x20-\x7E]*$/,
+      pattern: /^(?:[\x21-\x7E](?:[\x20-\x7E]*[\x21-\x7E])?)?$/,
       sentence:
-        "Token holds a character a gRPC header cannot carry: only printable ASCII is allowed. Nothing was sent.",
+        "Token takes printable ASCII with no space at either end: a gRPC header cannot carry other characters, and Spark compares the token exactly. Nothing was sent.",
     },
   },
   database: {

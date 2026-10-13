@@ -9,8 +9,10 @@
  * TLS to a host that is neither loopback nor tunnelled, with no opt-out (D5b): Spark Connect has no TLS of its own, so
  * a remote server is reached through a TLS proxy or the SSH tunnel.
  *
- * Host, Catalog and Namespace read as blank when they are absent, null, empty or only white space; any other value is
- * checked and used as written, never trimmed, as the dialog checks it. User takes no value at all: anything but an
+ * Host, Catalog and Namespace read as blank when they are absent, null, empty or only white space. Host and Namespace
+ * are otherwise checked and used as written, as the dialog checks them, and the dialog refuses a padded Namespace.
+ * Catalog is trimmed before it is checked: Spark looks the catalog name up literally in SET CATALOG, and the dialog
+ * accepts both spellings. User takes no value at all: anything but an
  * absent, null or empty User is refused with userNotTaken, whatever its type.
  *
  * The parameter is named `config` on purpose: tests/unit/lib/db-ui-config.test.ts finds which addressing fields a
@@ -63,7 +65,7 @@ export const SPARK_FIELD_SENTENCES = Object.freeze({
   hostEmpty:
     "Host is required: the name or address of the Spark Connect server, or of the TLS proxy in front of it. Nothing was sent.",
   tokenCharacters:
-    "Token holds a character a gRPC header cannot carry: only printable ASCII is allowed. Nothing was sent.",
+    "Token takes printable ASCII with no space at either end: a gRPC header cannot carry other characters, and Spark compares the token exactly. Nothing was sent.",
   catalogFormat: "Catalog takes one catalog name without dots, as spark.sql.catalog.<name> names it. Nothing was sent.",
   namespaceFormat:
     "Namespace takes a Spark SQL namespace: parts joined by dots, each a letter or _ followed by letters, digits or _, or written in backticks with a backtick doubled; at most 8 parts. Nothing was sent.",
@@ -103,7 +105,7 @@ export function buildSparkConnectionOptions(
   }
   const token = optionalText(config.password, "password");
   if (token !== undefined && !SPARK_TOKEN_PATTERN.test(token)) throw configError(SPARK_FIELD_SENTENCES.tokenCharacters);
-  const catalog = optionalName(config.database, "database");
+  const catalog = optionalName(config.database, "database")?.trim();
   if (catalog !== undefined && !SPARK_CATALOG_PATTERN.test(catalog)) {
     throw configError(SPARK_FIELD_SENTENCES.catalogFormat);
   }

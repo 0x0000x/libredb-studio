@@ -1858,6 +1858,9 @@ describe("the Apache Spark entry", () => {
       SPARK_FIELD_RULES.password?.format?.sentence,
     );
     expect(connectionFieldRefusal(spark, connection({ password: "s3cr3t-token" }))).toBeUndefined();
+    expect(connectionFieldRefusal(spark, connection({ password: " abc" }))).toBe(
+      "Token takes printable ASCII with no space at either end: a gRPC header cannot carry other characters, and Spark compares the token exactly. Nothing was sent.",
+    );
     expect(connectionFieldRefusal(spark, connection({ database: "spark_catalog" }))).toBeUndefined();
     for (const catalog of ["a.b", "x".repeat(256), "tab\there"]) {
       expect(connectionFieldRefusal(spark, connection({ database: catalog }))).toBe(

@@ -69,8 +69,10 @@ describe("defaults and the target", () => {
     expect(build({ database: "\t", schema: "   " })).toStrictEqual(build());
   });
 
-  test("a Catalog or Namespace that is not blank is checked and kept as written, as the dialog checks it", () => {
-    expect(build({ database: " spark_catalog " }).catalog).toBe(" spark_catalog ");
+  test("a Catalog that is not blank is trimmed, then checked; a Namespace is checked as written, as the dialog checks it", () => {
+    expect(build({ database: " spark_catalog " }).catalog).toBe("spark_catalog");
+    expect(build({ database: "\tmy cat " }).catalog).toBe("my cat");
+    expect(refusal({ database: " a.b " }).message).toBe(SPARK_FIELD_SENTENCES.catalogFormat);
     for (const schema of [" a", "a ", " a.b "]) {
       expect(refusal({ schema }).message).toBe(SPARK_FIELD_SENTENCES.namespaceFormat);
     }
@@ -112,6 +114,15 @@ describe("the token (D5b)", () => {
     expect(refusal({ password: 42 }).message).toContain("password");
   });
 
+  test("a token with a space at either end is refused, the all-space token included; inner spaces are kept", () => {
+    for (const password of [" ", "  ", " abc", "abc "]) {
+      const error = refusal({ host: "127.0.0.1", password });
+      expect(error.message).toBe(SPARK_FIELD_SENTENCES.tokenCharacters);
+    }
+    expect(build({ host: "127.0.0.1", password: "a b" }).token).toBe("a b");
+    expect(build({ host: "127.0.0.1", password: "abc" }).token).toBe("abc");
+  });
+
   test("a token outside printable ASCII is refused with tokenCharacters, and the message never holds it", () => {
     for (const password of ["a\rb", "a\nb", "a\0b", "caf\u00e9", "a\u00a0b", "a\tb"]) {
       const error = refusal({ host: "127.0.0.1", password });
@@ -128,7 +139,7 @@ describe("SPARK_FIELD_SENTENCES", () => {
       hostEmpty:
         "Host is required: the name or address of the Spark Connect server, or of the TLS proxy in front of it. Nothing was sent.",
       tokenCharacters:
-        "Token holds a character a gRPC header cannot carry: only printable ASCII is allowed. Nothing was sent.",
+        "Token takes printable ASCII with no space at either end: a gRPC header cannot carry other characters, and Spark compares the token exactly. Nothing was sent.",
       catalogFormat:
         "Catalog takes one catalog name without dots, as spark.sql.catalog.<name> names it. Nothing was sent.",
       namespaceFormat:
