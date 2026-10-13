@@ -46,8 +46,15 @@ function importLines(path: string): ImportLine[] {
   return lines;
 }
 
-/** The files that import apache-arrow, held exactly: under src/ only arrow.ts, and the test stream writer. */
-const ARROW_IMPORTERS: readonly string[] = ["src/lib/db/providers/sql/spark/arrow.ts", "tests/helpers/spark-ipc.ts"];
+/**
+ * The files that import apache-arrow, held exactly: under src/ only arrow.ts; the test stream writer; and the test
+ * that replaces the reader with a failing one, to reach the catch of readIpcColumns.
+ */
+const ARROW_IMPORTERS: readonly string[] = [
+  "src/lib/db/providers/sql/spark/arrow.ts",
+  "tests/helpers/spark-ipc.ts",
+  "tests/unit/db/spark/arrow-reader-failure.test.ts",
+];
 const SCANNED = /\.(?:ts|tsx|mts|js|mjs)$/;
 
 function filesUnder(dir: string): string[] {

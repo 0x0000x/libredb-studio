@@ -379,28 +379,6 @@ describe("readIpcColumns: refusals", () => {
     );
     expect(refusal(() => readIpcColumns(stream)).category).toBe("unreadable");
   });
-
-  test("a stream the pre-check passes and the Arrow reader cannot read is refused as unreadable, never shown", () => {
-    // The pre-check reads no type table of a Map field, since a Map's layout does not depend on it; apache-arrow
-    // reads its keysSorted flag there, so a Map field without its type table passes the pre-check and apache-arrow
-    // throws on it.
-    const map = columnsStream([
-      {
-        name: "m",
-        kind: "map",
-        offsets: [0, 1],
-        keys: { name: "key", kind: "utf8", values: ["k"] },
-        items: { name: "value", kind: "utf8", values: ["v"] },
-      },
-    ]);
-    const untyped = withoutSlot(map, firstField, 3);
-    expect(checkIpcStream(untyped).batches).toBe(1);
-    const error = refusal(() => readIpcColumns(untyped));
-    expect([error.category, error.message]).toStrictEqual([
-      "unreadable",
-      SPARK_ERROR_SENTENCES.unreadable("a stream the Arrow reader could not read"),
-    ]);
-  });
 });
 
 /** The byte length of a stream's first message (the schema, which has no body), read from its framing. */
