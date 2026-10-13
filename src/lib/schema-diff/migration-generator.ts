@@ -132,6 +132,13 @@ const NO_COLUMN_MODIFICATION: Partial<Record<DatabaseType, { label: string; reas
     reason:
       "Whether a column can be retyped is the connector's answer, not Trino's; run the change in the system the catalog points at.",
   },
+  // Apache Spark: whether a column's type can change is the catalog's and the table format's answer, as Trino's is
+  // the connector's. On Spark 4.1.3 and 4.2.0 a session-catalog parquet column's type change fails with
+  // NOT_SUPPORTED_CHANGE_COLUMN (0A000) while a comment change succeeds, and a DSv2 catalog decides for itself.
+  spark: {
+    label: "Apache Spark",
+    reason: "Whether a column's type can change depends on the catalog and the table format; write the change by hand.",
+  },
   // Measured 2026-08-19: `ALTER TABLE probe_orders ADD COLUMN x INT` and
   // `... MODIFY COLUMN customer TEXT` are refused by both grammars - Elasticsearch
   // 9.1.4 with `parsing_exception`, "mismatched input 'ALTER' expecting {'(',
@@ -353,6 +360,7 @@ const NO_DROP_IF_EXISTS: ReadonlySet<DatabaseType> = new Set<DatabaseType>(["ora
  *
  * `databend` joined on the Oracle reason: Databend has `BEGIN`, `COMMIT` and `ROLLBACK`, but a DDL statement commits
  * the open transaction, so a `BEGIN;` around a migration made of DDL brackets nothing it could roll back.
+ * `spark` joined because no transaction spans two Spark SQL statements (the provider declares `supportsTransactions: false`).
  */
 const NO_TRANSACTION_WRAPPER: ReadonlySet<DatabaseType> = new Set<DatabaseType>([
   "oracle",
@@ -384,6 +392,7 @@ const NO_TRANSACTION_WRAPPER: ReadonlySet<DatabaseType> = new Set<DatabaseType>(
   // On Databend's reason: a DDL statement commits the open transaction, and each SQL API statement runs in its own
   // session, so a `BEGIN;` brackets nothing it could roll back.
   "snowflake",
+  "spark",
   "s3",
   "kubernetes",
   // No table DDL to wrap either (#1635): a broker keeps no schema.
@@ -439,12 +448,14 @@ const NO_PORTABLE_INDEX_DDL: Partial<Record<DatabaseType, string>> = {
     "BigQuery: Cannot generate index DDL. BigQuery has search and vector indexes only; write the index change by hand.",
   snowflake:
     "Snowflake: Cannot generate index DDL. Snowflake has indexes only on hybrid tables; write the index change by hand.",
+  spark: "Apache Spark: Cannot generate index DDL. Spark SQL has no index statements; write the index change by hand.",
 };
 const NO_FOREIGN_KEYS: Partial<Record<DatabaseType, string>> = {
   clickhouse: "ClickHouse",
   trino: "Trino",
   databend: "Databend",
   bigquery: "BigQuery",
+  spark: "Apache Spark",
 };
 
 /**
@@ -457,6 +468,11 @@ const NO_PRIMARY_KEY_CONSTRAINT: Partial<Record<DatabaseType, { label: string; r
   trino: { label: "Trino", reason: "Trino SQL has no primary-key constraint." },
   databend: { label: "Databend", reason: DATABEND_PRIMARY_KEY_REASON },
   bigquery: { label: "BigQuery", reason: "BigQuery accepts a primary key only as PRIMARY KEY (...) NOT ENFORCED." },
+  spark: {
+    label: "Apache Spark",
+    reason:
+      "Spark accepts a primary key only as an informational NOT ENFORCED constraint, in a catalog that implements constraints.",
+  },
 };
 
 // Object names are untrusted metadata. Quoting protects SQL identifiers, but a

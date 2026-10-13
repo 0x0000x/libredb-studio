@@ -2129,3 +2129,52 @@ describe("an Oracle MODIFY states the nullability only when it changes (#1240)",
     expect(sql).toContain(`ALTER TABLE "T" MODIFY ("S" VARCHAR2(20 BYTE) DEFAULT 'abc');`);
   });
 });
+
+/**
+ * Apache Spark (spec 8.2 row 2.12): a column type change, an index, a foreign key and a primary key are each declined
+ * in a comment, because whether a Spark table takes them is the catalog's and the table format's answer, and no
+ * transaction spans two Spark statements.
+ */
+describe("generateMigrationSQL: spark", () => {
+  test("a modified column is declined with the catalog and table-format reason", () => {
+    const sql = generateMigrationSQL(makeModifiedTableDiff(), "spark");
+    expect(sql).toContain('-- Apache Spark: Cannot alter column "name".');
+    expect(sql).toContain(
+      "Whether a column's type can change depends on the catalog and the table format; write the change by hand.",
+    );
+    expect(sql).not.toContain("ALTER COLUMN");
+  });
+
+  test("an added and a dropped index are declined, and no index statement is written", () => {
+    const refusal =
+      "-- Apache Spark: Cannot generate index DDL. Spark SQL has no index statements; write the index change by hand.";
+    const modified = generateMigrationSQL(makeModifiedTableDiff(), "spark");
+    expect(modified.split(refusal).length - 1).toBe(2);
+    expect(modified).not.toContain("CREATE INDEX");
+    expect(modified).not.toContain("DROP INDEX");
+    expect(generateMigrationSQL(makeAddedTableDiff(), "spark")).toContain(refusal);
+  });
+
+  test("an added and a dropped foreign key are declined, and no constraint statement is written", () => {
+    const sql = generateMigrationSQL(makeModifiedTableDiff(), "spark");
+    expect(sql).toContain("-- Apache Spark: Cannot add a foreign key. The engine has no foreign-key constraint.");
+    expect(sql).toContain("-- Apache Spark: Cannot drop a foreign key. The engine has no foreign-key constraint.");
+    expect(sql).not.toContain("DROP CONSTRAINT");
+    expect(sql).not.toContain("FOREIGN KEY");
+  });
+
+  test("an added table's primary key is declined after the statement", () => {
+    const sql = generateMigrationSQL(makeAddedTableDiff(), "spark");
+    expect(sql).toContain(
+      "-- Apache Spark: Cannot declare a primary key. Spark accepts a primary key only as an informational NOT ENFORCED constraint, in a catalog that implements constraints.",
+    );
+    expect(sql).toContain("CREATE TABLE `users` (");
+    expect(sql).not.toContain("PRIMARY KEY (");
+  });
+
+  test("the migration is not wrapped in a transaction", () => {
+    const sql = generateMigrationSQL(makeModifiedTableDiff(), "spark");
+    expect(sql).not.toContain("BEGIN");
+    expect(sql).not.toContain("COMMIT;");
+  });
+});
