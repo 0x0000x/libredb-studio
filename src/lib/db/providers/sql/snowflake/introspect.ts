@@ -63,6 +63,7 @@ export const SNOWFLAKE_INTROSPECT_SENTENCES = Object.freeze({
   treeCap: "Snowflake has more than 50,000 objects of this kind here; Studio shows the first 50,000 by name.",
   silentCap: "Snowflake returns at most 10,000 rows for this listing, so some may be missing.",
   countFloor: "Snowflake returns at most 10,000 objects here, so this is a floor.",
+  pairCap: `Snowflake answered a full 10,000-row column listing for this schema, so Studio read the columns of the first ${INVENTORY_PAIR_LIMIT.toLocaleString("en-US")} objects one at a time`,
   secureView: "Snowflake hides a secure view's definition from roles that do not own it.",
   stalled: "Snowflake answered a page of this listing that did not move past the last, so Studio stopped reading it.",
   noWarehouseRow: (wh: string, role: string) =>
@@ -619,7 +620,7 @@ export async function describeObjects(
   } else {
     if (wanted.length > INVENTORY_PAIR_LIMIT) {
       wanted = wanted.slice(0, INVENTORY_PAIR_LIMIT);
-      reasons.splice(0, reasons.length, SNOWFLAKE_INTROSPECT_SENTENCES.silentCap);
+      reasons.push(SNOWFLAKE_INTROSPECT_SENTENCES.pairCap);
       cutLimit = INVENTORY_PAIR_LIMIT;
     }
     grouped = new Map();

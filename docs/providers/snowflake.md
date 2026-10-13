@@ -421,6 +421,7 @@ Snowflake answers at most 10,000 rows for one `SHOW`:
 
 The tree has no place for a listing's sentence, so it shows the first 50,000 (or 10,000) objects of a kind without one; the object inventory, which the agent and the inventory route read, carries the two listing sentences above.
 
+The object inventory reads a schema's columns with one `SHOW COLUMNS IN SCHEMA`; when that answers a full 10,000 rows it reads them one object at a time instead, for at most the first 1,000 objects: `Snowflake answered a full 10,000-row column listing for this schema, so Studio read the columns of the first 1,000 objects one at a time`.
 Describe reads `SHOW COLUMNS IN TABLE` (or `IN VIEW`) and `SHOW PRIMARY KEYS`; a primary key column is shown as a key with no further mark, although Snowflake does not enforce primary keys on standard tables; indexes exist only on hybrid tables.
 Studio draws no foreign keys, so the ER diagram shows tables without relations.
 A view's source comes from `SHOW VIEWS`; every other kind's from `SELECT GET_DDL(...)`, which needs no running warehouse.
