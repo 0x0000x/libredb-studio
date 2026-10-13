@@ -760,13 +760,19 @@ export class SparkProvider extends SQLBaseProvider {
     };
   }
 
-  /** Every read of the tree and the panels: connected, and every failure mapped once. */
+  /**
+   * Every read of the tree and the panels: connected, and every failure mapped once. A read whose connection's close
+   * began, a disconnect's or a second connect's, ended cancelled, whatever its call met then, so a channel that close
+   * shut is never reported as a server that did not answer.
+   */
   private async surface<T>(read: (connection: SparkConnection) => Promise<T>): Promise<T> {
     const connection = this.requireConnection();
     try {
       return await read(connection);
     } catch (error) {
-      throw toDatabaseError(error);
+      throw toDatabaseError(
+        this.closed.has(connection) ? new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled) : error,
+      );
     }
   }
 

@@ -2890,3 +2890,58 @@ describe("SparkProvider: a disconnect while a statement still runs", () => {
     expect(provider.hasRunsInFlight()).toBe(false);
   });
 });
+
+describe("SparkProvider: a read whose connection closes under it", () => {
+  test.each<[string, (rpc: string, request: object) => boolean, (provider: SparkProvider) => Promise<unknown>]>([
+    ["getHealth's version read", (rpc) => rpc === "AnalyzePlan", (provider) => provider.getHealth()],
+    ["getOverview's version read", (rpc) => rpc === "AnalyzePlan", (provider) => provider.getOverview()],
+    [
+      "getOverview's Config read",
+      (rpc, request) => rpc === "Config" && !setsConfig(request),
+      (provider) => provider.getOverview(),
+    ],
+    [
+      "listContainers' Config read",
+      (rpc, request) => rpc === "Config" && !setsConfig(request),
+      (provider) => provider.listContainers(),
+    ],
+  ])(
+    "%s in flight when a disconnect closes the channel ends cancelled, never as a server that did not answer",
+    async (_label, held, read) => {
+      const shut = gate();
+      let holding = false;
+      const script = scripted({
+        commands: { "SHOW CURRENT NAMESPACE": CURRENT, "SHOW CATALOGS": CATALOGS },
+        // The held call fails as grpc-js fails a call whose channel closed under it.
+        unary: (rpc, request) =>
+          holding && held(rpc, request) ? shut.promise.then(() => Promise.reject(unavailable())) : undefined,
+      });
+      const transport: SparkWireTransport = (options) => {
+        const channel = script.transport(options);
+        return {
+          ...channel,
+          close: () => {
+            channel.close();
+            shut.open();
+          },
+        };
+      };
+      const provider = new SparkProvider(connection(1), {}, { transport });
+      await provider.connect();
+      const metadata = script.calls.find((call) => call.rpc === "Config")?.sessionId as string;
+      holding = true;
+      const at = script.calls.length;
+      const failure = failureOf(read(provider));
+      await eventually(() => script.calls.slice(at).some((call) => held(call.rpc, call.request)));
+      const closedAt = script.calls.length;
+      await provider.disconnect();
+      const refusal = await failure;
+      expect(refusal).toBeInstanceOf(QueryCancelledError);
+      expect((refusal as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+      expect(script.calls.slice(closedAt).map((call) => [call.rpc, call.sessionId])).toStrictEqual([
+        ["ReleaseSession", metadata],
+      ]);
+      expect(provider.isConnected()).toBe(false);
+    },
+  );
+});
