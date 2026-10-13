@@ -1853,10 +1853,12 @@ export function newQueryCallScope(): string {
  * A runtime shape check, the same one `POST /api/db/transaction` uses for the interactive
  * session: the method is optional on `DatabaseProvider` because only a provider that can
  * name the session its statements ran on can answer truthfully (`endOpenQueryTransaction`'s
- * declaration argues why). `postgres`, `sqlite`, `duckdb` and `redis` implement it; on the
- * rest a caller leaves the handle exactly as it found it, because inventing a rollback
- * there would be guessing at another engine's state. Shared by the two routes that end
- * what they opened, so they cannot disagree about who can be asked.
+ * declaration argues why). `postgres`, `sqlite`, `duckdb`, `redis` and `spark` implement
+ * it; on the rest a caller leaves the handle exactly as it found it, because inventing a
+ * rollback there would be guessing at another engine's state. On `spark` it releases the
+ * scope's Spark session and answers `"none"`, since Spark has no transaction across
+ * statements. Shared by the two routes that end what they opened, so they cannot disagree
+ * about who can be asked.
  */
 export function endsOpenQueryTransactions(
   provider: DatabaseProvider,
@@ -1994,12 +1996,14 @@ export interface DatabaseProvider {
    *
    * OPTIONAL, for the reason `queryReadOnly` is: only a provider that can name the session
    * its own `query()` ran on can answer truthfully, and a provider that cannot must say
-   * nothing rather than guess. `postgres`, `sqlite`, `duckdb` and `redis` implement it: the
-   * first three are the engines D71 was measured on, and `redis` was added by D75, which
-   * walked every remaining type-id and wrote the absence down where it could not. A caller
-   * shape-checks for it; there is no default, because a default that answered `"none"` would
-   * certify an absence nobody read. Every type-id that does NOT implement it says which
-   * absence it is in its own `docs/providers/<type-id>.md`.
+   * nothing rather than guess. `postgres`, `sqlite`, `duckdb`, `redis` and `spark` implement
+   * it: the first three are the engines D71 was measured on, and `redis` was added by D75,
+   * which walked every remaining type-id and wrote the absence down where it could not. On
+   * `spark` it releases the scope's Spark session and answers `"none"`, since Spark has no
+   * transaction across statements. A caller shape-checks for it; there is no default,
+   * because a default that answered `"none"` would certify an absence nobody read. Every
+   * type-id that does NOT implement it says which absence it is in its own
+   * `docs/providers/<type-id>.md`.
    *
    * `scope` IS THE WHOLE CONTRACT, and an earlier form of this surface took no argument.
    * It said the method "does NOT touch the interactive transaction session
