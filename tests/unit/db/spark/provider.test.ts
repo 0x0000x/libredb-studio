@@ -235,6 +235,26 @@ function scripted(options: ScriptOptions = {}): Scripted {
   };
 }
 
+/**
+ * Unary answers for a server that sets up the first session at once and answers the Config set of every later one only
+ * once `setup` settles; `first()` names the first session.
+ */
+function laterSetupsHeld(setup: Promise<void>) {
+  let first: string | undefined;
+  return {
+    first: () => first,
+    unary: (rpc: string, request: object): Promise<object> | undefined => {
+      if (rpc !== "Config" || !setsConfig(request)) return undefined;
+      if (first === undefined) {
+        first = sessionOf(request);
+        return undefined;
+      }
+      const answer = { session_id: sessionOf(request), server_side_session_id: "server-1", pairs: [], warnings: [] };
+      return setup.then(() => answer);
+    },
+  };
+}
+
 /** The scripted transport with the channels it opens told apart: `closed()` answers, per open in order, whether it closed. */
 function channelsOf(script: Scripted): { readonly transport: SparkWireTransport; readonly closed: () => boolean[] } {
   const opens: { closed: boolean }[] = [];
@@ -316,6 +336,12 @@ const failureOf = (pending: Promise<unknown>): Promise<unknown> =>
     () => undefined,
     (error: unknown) => error,
   );
+
+/** Settles once `ms` milliseconds of real time have passed, whatever Date.now() answers. */
+const later = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 let fake: SparkFakeServer;
 let port: number;
@@ -844,14 +870,59 @@ describe("SparkProvider: one deadline for a bulk column read", () => {
       await read.end();
     }
   });
+
+  test("a read whose metadata session the server closed is refused unsent at the read's own deadline while the new session's setup goes on", async () => {
+    const timeout = 10_000;
+    const left = 100;
+    const setup = gate();
+    const server = laterSetupsHeld(setup.promise);
+    let now = Date.now();
+    const script = scripted({
+      commands: {
+        "SHOW CURRENT NAMESPACE": CURRENT,
+        [`SHOW VIEWS IN ${DEFAULT}`]: listing("viewName", []),
+        [`SHOW TABLES IN ${DEFAULT}`]: listing("tableName", ["a", "b"]),
+      },
+      unary: server.unary,
+      // The server closed the metadata session once all but `left` ms of the read's time had passed.
+      stream: (sql) => {
+        if (sql !== `DESCRIBE TABLE ${DEFAULT}.\`a\``) return undefined;
+        now = START + timeout - left;
+        return failingStream(new SparkError("session-closed", SPARK_ERROR_SENTENCES.sessionClosed));
+      },
+    });
+    const provider = new SparkProvider(connection(1), { queryTimeout: timeout }, script);
+    await provider.connect();
+    now = START;
+    const clock = spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      const sentAt = script.calls.length;
+      const from = performance.now();
+      const failure = await Promise.race([
+        failureOf(provider.describeObjects(["spark_catalog", "default"], "table")),
+        later(timeout / 4).then(() => "still waiting at a quarter of the timeout"),
+      ]);
+      const waited = performance.now() - from;
+      expect(failure).toBeInstanceOf(QueryError);
+      expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.deadlineBeforeSend(timeout));
+      // Refused once the read's time was up, `left` ms on, not a whole timeout after the new setup began.
+      expect(waited).toBeGreaterThanOrEqual(left / 2);
+      expect(
+        script.calls
+          .slice(sentAt)
+          .filter((call) => call.rpc === "ExecutePlan")
+          .map((call) => statementOf(call.request)),
+      ).toStrictEqual([`SHOW VIEWS IN ${DEFAULT}`, `SHOW TABLES IN ${DEFAULT}`, `DESCRIBE TABLE ${DEFAULT}.\`a\``]);
+    } finally {
+      setup.open();
+      clock.mockRestore();
+      await provider.disconnect();
+    }
+  });
 });
 
 describe("SparkProvider: the metadata statements in flight on one connection", () => {
   const MAX = SPARK_INTROSPECT_IN_FLIGHT_MAX;
-  const later = (ms: number) =>
-    new Promise<void>((resolve) => {
-      setTimeout(resolve, ms);
-    });
   /** Fails as grpc-js fails a call its client cancelled, once the call's signal aborts. */
   const aborted = (call: SparkWireCall) =>
     new Promise<never>((_, reject) => {
@@ -2215,6 +2286,58 @@ describe("SparkProvider: the metadata session after the server closed it", () =>
     const reads = script.calls.slice(start).filter((call) => statementOf(call.request) === "SHOW CURRENT NAMESPACE");
     expect(new Set(reads.map((call) => call.sessionId)).size).toBe(2);
     await provider.disconnect();
+  });
+
+  test("a metadata statement still waiting for the new metadata session's setup at its deadline is refused unsent, and the setup goes on", async () => {
+    const timeout = 200;
+    const setup = gate();
+    const server = laterSetupsHeld(setup.promise);
+    let closed = false;
+    const script = scripted({
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT, "SHOW CATALOGS": CATALOGS },
+      unary: server.unary,
+      stream: (_sql, request) =>
+        closed && sessionOf(request) === server.first()
+          ? failingStream(new SparkError("session-closed", SPARK_ERROR_SENTENCES.sessionClosed))
+          : undefined,
+    });
+    const provider = new SparkProvider(connection(1), { queryTimeout: timeout }, script);
+    await provider.connect();
+    try {
+      closed = true;
+      const sentAt = script.calls.length;
+      const setups = () => script.calls.filter((call) => call.rpc === "Config" && setsConfig(call.request)).length;
+      // One read meets the closed session and waits for the new one's setup; another asks while that is in flight.
+      const met = failureOf(provider.listContainers());
+      await eventually(() => setups() === 2);
+      const after = failureOf(provider.countObjects(["spark_catalog", "default"]));
+      const outcome = await Promise.race([
+        Promise.all([met, after]).then((failures) =>
+          failures.map((failure) => [failure instanceof QueryError, (failure as Error).message]),
+        ),
+        later(timeout * 10).then(() => "still waiting at ten timeouts"),
+      ]);
+      expect(outcome).toStrictEqual([
+        [true, SPARK_ERROR_SENTENCES.deadlineBeforeSend(timeout)],
+        [true, SPARK_ERROR_SENTENCES.deadlineBeforeSend(timeout)],
+      ]);
+      expect(
+        script.calls
+          .slice(sentAt)
+          .filter((call) => call.rpc === "ExecutePlan")
+          .map((call) => statementOf(call.request)),
+      ).toStrictEqual(["SHOW CURRENT NAMESPACE"]);
+      // The setup goes on, and the next read runs on the new session it set up.
+      setup.open();
+      expect(await provider.listContainers()).toStrictEqual([
+        { path: ["spark_catalog"], name: "spark_catalog", level: 0, isSessionDefault: true },
+      ]);
+      expect(setups()).toBe(2);
+      expect(provider.hasRunsInFlight()).toBe(false);
+    } finally {
+      setup.open();
+      await provider.disconnect();
+    }
   });
 
   test("the new metadata session's failed setup reaches getHealth as its mapped sentence, never the channel's own text", async () => {

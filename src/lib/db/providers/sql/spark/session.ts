@@ -95,15 +95,22 @@ export class SparkSessions {
    * with toSparkError before they leave it: any other failure, the channel's own error for a closed session included,
    * propagates unchanged and is never repeated, and the closed session stays the current one. After releaseAll the new
    * session is refused with the cancelled sentence, so a read that met a released session is not repeated.
+   *
+   * The read waits for each session's setup, the first one and the repeat's, through `wait`, which answers the session
+   * or refuses: a refusal fails the read before it is given that session, and the setup goes on for the reads after it.
+   * Without `wait` the read waits as long as the setup takes.
    */
-  async readMetadata<T>(read: (session: SparkSessionHandle) => Promise<T>): Promise<T> {
-    const session = await this.metadata();
+  async readMetadata<T>(
+    read: (session: SparkSessionHandle) => Promise<T>,
+    wait: (setup: Promise<SparkSessionHandle>) => Promise<SparkSessionHandle> = (setup) => setup,
+  ): Promise<T> {
+    const session = await wait(this.metadata());
     try {
       return await read(session);
     } catch (error) {
       if (!closed(error)) throw error;
       if (this.metadataEntry?.handle === session) this.discardMetadata();
-      const fresh = await this.metadata();
+      const fresh = await wait(this.metadata());
       try {
         return await read(fresh);
       } catch (again) {

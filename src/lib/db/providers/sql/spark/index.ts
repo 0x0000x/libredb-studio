@@ -232,6 +232,21 @@ class SparkMetadataSlots {
   }
 }
 
+/**
+ * `waiting` until `deadline`: when the deadline passes first, the statement that waits is refused unsent, with the
+ * sentence of a statement whose timeout passed before Studio could send it, and what it waited for goes on.
+ */
+function beforeDeadline<T>(waiting: Promise<T>, deadline: Date, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const passed = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new SparkError("deadline", SPARK_ERROR_SENTENCES.deadlineBeforeSend(timeoutMs))),
+      deadline.getTime() - Date.now(),
+    );
+  });
+  return Promise.race([waiting, passed]).finally(() => clearTimeout(timer));
+}
+
 /** One opened channel with everything that runs over it. */
 interface SparkConnection {
   readonly options: SparkConnectionOptions;
@@ -675,8 +690,10 @@ export class SparkProvider extends SQLBaseProvider {
 
   /**
    * One statement the provider wrote, in one of the connection's metadata slots, on the metadata session, read again
-   * once on a new one when the server closed it. Its deadline, which its wait for a slot counts against, is the
-   * connection's query timeout from now, unless the read it belongs to passes the read's own.
+   * once on a new one when the server closed it. Its deadline is the connection's query timeout from now, unless the
+   * read it belongs to passes the read's own, and its waits count against it: the wait for a slot, and the wait for the
+   * metadata session's setup, the first one and the repeat's. A statement still waiting when its deadline passes is
+   * refused unsent.
    */
   private metadataSql(
     connection: SparkConnection,
@@ -684,8 +701,9 @@ export class SparkProvider extends SQLBaseProvider {
     deadline: Date = new Date(Date.now() + connection.options.callTimeoutMs),
   ): Promise<SparkStatementResult> {
     return connection.metadataSlots.run(deadline, () =>
-      connection.sessions.readMetadata((session) =>
-        connection.runs.run({ sql, session: async () => session, deadline }),
+      connection.sessions.readMetadata(
+        (session) => connection.runs.run({ sql, session: async () => session, deadline }),
+        (setup) => beforeDeadline(setup, deadline, connection.options.callTimeoutMs),
       ),
     );
   }

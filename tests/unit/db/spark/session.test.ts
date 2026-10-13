@@ -22,7 +22,12 @@ import {
   sqlCommandRequest,
   versionRequest,
 } from "@/lib/db/providers/sql/spark/requests";
-import { type SparkSessionDeps, type SparkSessionPlace, SparkSessions } from "@/lib/db/providers/sql/spark/session";
+import {
+  type SparkSessionDeps,
+  type SparkSessionHandle,
+  type SparkSessionPlace,
+  SparkSessions,
+} from "@/lib/db/providers/sql/spark/session";
 import type { DatabaseConnection } from "@/lib/types";
 import { type SparkFakeAnswer, type SparkFakeServer, startSparkFake } from "../../../helpers/spark-connect-server";
 
@@ -713,6 +718,47 @@ describe("the metadata session after the server closed it (spec 4.5)", () => {
       );
     expect(attempts).toBe(2);
     expect(network).toBe(unreachable);
+    await sessions.releaseAll();
+  });
+
+  test("a read waits for each setup through the wait it is given, its first and its repeat's, and reads no session the wait refuses", async () => {
+    const sessions = new SparkSessions(deps(), {});
+    const first = await sessions.metadata();
+    const waited: string[] = [];
+    const wait = async (setup: Promise<SparkSessionHandle>) => {
+      const handle = await setup;
+      waited.push(handle.sessionId);
+      return handle;
+    };
+    const seen: string[] = [];
+    const read = async (session: SparkSessionRef) => {
+      seen.push(session.sessionId);
+      if (session.sessionId === first.sessionId) throw new SparkError("session-closed", "closed");
+      return session.sessionId;
+    };
+    const fresh = await sessions.readMetadata(read, wait);
+    expect(seen).toStrictEqual([first.sessionId, fresh]);
+    expect(waited).toStrictEqual([first.sessionId, fresh]);
+    // A wait that refuses the first setup fails the read with its refusal, before the read is given a session.
+    const refusal = new SparkError("deadline", "past the deadline");
+    const refused = await sessions.readMetadata(read, () => Promise.reject(refusal)).catch((error: unknown) => error);
+    expect(refused).toBe(refusal);
+    expect(seen).toStrictEqual([first.sessionId, fresh]);
+    // One that refuses the repeat's setup fails the read with its refusal too, after the one read of the closed session.
+    let waits = 0;
+    const closedAgain = async (session: SparkSessionRef) => {
+      seen.push(session.sessionId);
+      throw new SparkError("session-closed", "closed");
+    };
+    const repeat = await sessions
+      .readMetadata(closedAgain, (setup) => {
+        waits += 1;
+        return waits === 1 ? setup : Promise.reject(refusal);
+      })
+      .catch((error: unknown) => error);
+    expect(repeat).toBe(refusal);
+    expect(waits).toBe(2);
+    expect(seen).toStrictEqual([first.sessionId, fresh, fresh]);
     await sessions.releaseAll();
   });
 
