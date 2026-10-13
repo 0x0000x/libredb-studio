@@ -885,8 +885,10 @@ describe("columns and definitions", () => {
 
   const S = "SHOW CREATE TABLE `spark_catalog`.`studio`.`orders`";
 
-  // Spark's texts for the refusals SHOW CREATE TABLE gives an object it holds (error-conditions.json, v4.2.0). Spark
-  // 4.1.3 and 4.2.0 answer a temporary view with EXPECT_PERMANENT_VIEW_NOT_TEMP, before the command's own refusal.
+  // Spark's texts for the refusals SHOW CREATE TABLE gives an object it holds, from error-conditions.json at v4.2.0 as
+  // Spark renders a subclass: the class's message, a space, then the subclass's, each message's lines joined by a line
+  // break. Spark 4.1.3 and 4.2.0 answer a temporary view with EXPECT_PERMANENT_VIEW_NOT_TEMP, before the command's own
+  // refusal.
   test.each<[string, string]>([
     [
       "a temporary view, as Spark 4.1.3 and 4.2.0 answer it",
@@ -894,23 +896,23 @@ describe("columns and definitions", () => {
     ],
     [
       "a temporary view, as the command itself refuses it",
-      "[UNSUPPORTED_SHOW_CREATE_TABLE.ON_TEMPORARY_VIEW] The command is not supported on a temporary view `orders`. SQLSTATE: 0A000",
+      "[UNSUPPORTED_SHOW_CREATE_TABLE.ON_TEMPORARY_VIEW] Unsupported a SHOW CREATE TABLE command. The command is not supported on a temporary view `orders`. SQLSTATE: 0A000",
     ],
     [
       "a metric view",
-      "[UNSUPPORTED_SHOW_CREATE_TABLE.ON_METRIC_VIEW] The command is not supported on a metric view `spark_catalog`.`studio`.`orders`. SQLSTATE: 0A000",
+      "[UNSUPPORTED_SHOW_CREATE_TABLE.ON_METRIC_VIEW] Unsupported a SHOW CREATE TABLE command. The command is not supported on a metric view `spark_catalog`.`studio`.`orders`. SQLSTATE: 0A000",
     ],
     [
       "a transactional Hive table",
-      "[UNSUPPORTED_SHOW_CREATE_TABLE.ON_TRANSACTIONAL_HIVE_TABLE] Failed to execute the command against transactional Hive table `spark_catalog`.`studio`.`orders`. Please use SHOW CREATE TABLE `spark_catalog`.`studio`.`orders` AS SERDE to show Hive DDL instead. SQLSTATE: 0A000",
+      "[UNSUPPORTED_SHOW_CREATE_TABLE.ON_TRANSACTIONAL_HIVE_TABLE] Unsupported a SHOW CREATE TABLE command. Failed to execute the command against transactional Hive table `spark_catalog`.`studio`.`orders`.\nPlease use SHOW CREATE TABLE `spark_catalog`.`studio`.`orders` AS SERDE to show Hive DDL instead. SQLSTATE: 0A000",
     ],
     [
       "a Hive table with a feature the statement cannot print",
-      "[UNSUPPORTED_SHOW_CREATE_TABLE.WITH_UNSUPPORTED_FEATURE] Failed to execute the command against table/view `spark_catalog`.`studio`.`orders` which is created by Hive and uses the following unsupported features\nbucketing SQLSTATE: 0A000",
+      "[UNSUPPORTED_SHOW_CREATE_TABLE.WITH_UNSUPPORTED_FEATURE] Unsupported a SHOW CREATE TABLE command. Failed to execute the command against table/view `spark_catalog`.`studio`.`orders` which is created by Hive and uses the following unsupported features\nbucketing SQLSTATE: 0A000",
     ],
     [
       "a Hive table with a serde configuration the statement cannot print",
-      "[UNSUPPORTED_SHOW_CREATE_TABLE.WITH_UNSUPPORTED_SERDE_CONFIGURATION] Failed to execute the command against the table `spark_catalog`.`studio`.`orders` which is created by Hive and uses the following unsupported serde configuration\nx\nPlease use SHOW CREATE TABLE `spark_catalog`.`studio`.`orders` AS SERDE to show Hive DDL instead. SQLSTATE: 0A000",
+      "[UNSUPPORTED_SHOW_CREATE_TABLE.WITH_UNSUPPORTED_SERDE_CONFIGURATION] Unsupported a SHOW CREATE TABLE command. Failed to execute the command against the table `spark_catalog`.`studio`.`orders` which is created by Hive and uses the following unsupported serde configuration\nx\nPlease use SHOW CREATE TABLE `spark_catalog`.`studio`.`orders` AS SERDE to show Hive DDL instead. SQLSTATE: 0A000",
     ],
   ])("Spark's refusal of %s is the definition's unavailable part, in Spark's text", async (_label, text) => {
     expect(await readObjectSource(stub({ [S]: spark(text) }).deps, path, "table")).toStrictEqual({
