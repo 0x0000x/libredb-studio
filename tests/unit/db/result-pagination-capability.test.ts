@@ -123,6 +123,7 @@ const TYPES = Object.keys(EXPECTED) as DatabaseType[];
  */
 const DECLINED: Readonly<Partial<Record<DatabaseType, string>>> = Object.freeze({
   snowflake: "a page is a full warehouse re-execution, and pages without ORDER BY can repeat or drop rows",
+  spark: "a page would re-run the whole statement on the cluster, and pages without ORDER BY can repeat or drop rows",
 });
 
 /**
