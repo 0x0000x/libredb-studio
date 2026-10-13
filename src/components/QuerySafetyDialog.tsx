@@ -604,14 +604,6 @@ const CONTROL_FLOW_KEYWORDS = new Set([
 ]);
 
 /**
- * Whether ONE statement's own code asks for a confirmation, read under `grammar`.
- *
- * Its own function because the caller below asks the question twice over different
- * text: the whole editor buffer, and then each fragment the multi-statement route
- * will run. Re-deriving the two keyword tests per call site is how the gate and the
- * runner drifted apart in the first place.
- */
-/**
  * Whether a procedural block's code writes, as far as its words can say.
  *
  * Any dangerous keyword in the block's code counts, except two shapes that only look like
@@ -722,11 +714,50 @@ function prefixInCode(text: string, prefix: string, grammar: SqlGrammar): boolea
   return false;
 }
 
-function codeFormInText(text: string, form: ConfirmCodeForm, grammar: SqlGrammar): boolean {
-  return "prefix" in form ? prefixInCode(text, form.prefix, grammar) : sequenceInCode(text, form, grammar);
+/**
+ * Whether the next code after `from`, past whitespace and comments, opens a string literal: a `string` span (a raw
+ * string included) or a run opened by `"`, which Spark reads as a string unless two ANSI settings are both on. A
+ * dollar-quoted run, a backtick name, a `(` or a word does not count.
+ */
+function literalFollows(text: string, from: number, grammar: SqlGrammar): boolean {
+  let i = from;
+  for (let span = readSqlSpan(text, i, grammar); span !== null; span = readSqlSpan(text, i, grammar)) {
+    if (span.kind === "string") return true;
+    if (span.kind === "quoted-identifier") return text[i] === '"';
+    if (span.kind !== "whitespace" && span.kind !== "line-comment" && span.kind !== "block-comment") return false;
+    i = span.end;
+  }
+  return false;
 }
 
-function writesUnderGrammar(text: string, grammar: SqlGrammar): boolean {
+/** Whether a code occurrence of `word` is followed by a string literal (`literalFollows`). */
+function wordThenLiteralInCode(text: string, word: string, grammar: SqlGrammar): boolean {
+  let found = findCodeWord(text, word, 0, grammar);
+  while (found !== null) {
+    if (literalFollows(text, found.end, grammar)) return true;
+    found = findCodeWord(text, word, found.end, grammar);
+  }
+  return false;
+}
+
+function codeFormInText(text: string, form: ConfirmCodeForm, grammar: SqlGrammar): boolean {
+  if ("prefix" in form) return prefixInCode(text, form.prefix, grammar);
+  if ("wordThenLiteral" in form) return wordThenLiteralInCode(text, form.wordThenLiteral, grammar);
+  return sequenceInCode(text, form, grammar);
+}
+
+/**
+ * Whether ONE statement's own code asks for a confirmation, read under `grammar`.
+ *
+ * Its own function because the caller below asks the question twice over different
+ * text: the whole editor buffer, and then each fragment the multi-statement route
+ * will run. Re-deriving the two keyword tests per call site is how the gate and the
+ * runner drifted apart in the first place.
+ *
+ * Exported for the grammar-level tests in `tests/components/QuerySafetyDialog.test.tsx`, which read a row's forms
+ * before any shipped row declares them; `isDangerousQuery` is the gate.
+ */
+export function writesUnderGrammar(text: string, grammar: SqlGrammar): boolean {
   const reading = readOperativeKeyword(text, grammar);
   const keyword = reading?.keyword;
   if (keyword !== undefined && DANGEROUS_KEYWORDS.has(keyword)) return true;

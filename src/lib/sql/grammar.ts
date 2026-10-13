@@ -285,14 +285,17 @@ export interface SqlGrammar {
   readonly confirmForms?: readonly (readonly string[])[];
   /**
    * Forms that ask for a confirmation wherever they appear in a statement's code, strings and comments skipped: a
-   * word sequence, or the start of an identifier (`{ prefix: "SYSTEM$" }` matches `SYSTEM$CLUSTERING_INFORMATION`).
-   * Absent means none.
+   * word sequence, the start of an identifier (`{ prefix: "SYSTEM$" }` matches `SYSTEM$CLUSTERING_INFORMATION`),
+   * or a word whose next code, past whitespace and comments, is a string literal (`{ wordThenLiteral: "USING" }`
+   * matches `TRANSFORM (a) USING 'cat'` and not `JOIN u USING (id)`). Absent means none.
    */
   readonly confirmCodeForms?: readonly ConfirmCodeForm[];
 }
 
-/** A form `SqlGrammar.confirmCodeForms` looks for: a word sequence, or an identifier prefix. */
-export type ConfirmCodeForm = readonly string[] | { readonly prefix: string };
+/**
+ * A form `SqlGrammar.confirmCodeForms` looks for: a word sequence, an identifier prefix, or a word a literal follows.
+ */
+export type ConfirmCodeForm = readonly string[] | { readonly prefix: string } | { readonly wordThenLiteral: string };
 
 /**
  * What a call that names no dialect gets.

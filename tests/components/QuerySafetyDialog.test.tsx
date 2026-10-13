@@ -5,13 +5,14 @@ import "../helpers/mock-navigation";
 import React from "react";
 import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { QuerySafetyDialog, isDangerousQuery } from "@/components/QuerySafetyDialog";
+import { QuerySafetyDialog, isDangerousQuery, writesUnderGrammar } from "@/components/QuerySafetyDialog";
 import { KafkaProvider } from "@/lib/db/providers/stream/kafka/index";
 import { PrometheusProvider } from "@/lib/db/providers/timeseries/prometheus/index";
 import { generateSelectQuery, generateTableQuery } from "@/lib/query-generators";
 import { statementRefusal } from "@/lib/db/destructive-commands";
 import { INFLUXQL_POLICY_SENTENCES } from "@/lib/db/providers/timeseries/influxdb/influxql-policy";
 import type { TypedConfirmationAsk } from "@/lib/db/types";
+import { DEFAULT_SQL_GRAMMAR, type SqlGrammar } from "@/lib/sql/grammar";
 import { installStandInVocabulary, STAND_IN_TYPE } from "../helpers/stand-in-vocabulary";
 import { schemaContextOf } from "@/lib/db/detailed-object";
 import { SAMPLED_MARKER, sampledSchema } from "../fixtures/sampled-schema";
@@ -2379,5 +2380,50 @@ describe("Snowflake's confirmation forms", () => {
 
   test("SQL Server's procedure call still runs unasked", () => {
     expect(isDangerousQuery("EXEC sp_cleanup", "mssql")).toBe(false);
+  });
+});
+
+// The `wordThenLiteral` code form, read before any row declares it: a code word whose next code, past whitespace and
+// comments, is a string literal. Spark's row declares `{ wordThenLiteral: "USING" }` for
+// `TRANSFORM ... USING '<command>'`.
+describe("a confirmCodeForms word followed by a string literal", () => {
+  const FORM: SqlGrammar = {
+    ...DEFAULT_SQL_GRAMMAR,
+    blockComment: "nesting",
+    backslashAlwaysEscapes: true,
+    rawStrings: true,
+    confirmCodeForms: [{ wordThenLiteral: "USING" }],
+  };
+
+  test.each([
+    "SELECT TRANSFORM(a) USING 'cat' FROM t",
+    "SELECT TRANSFORM(a) using 'cat' AS (b) FROM t",
+    'SELECT TRANSFORM(a) USING "cat" FROM t',
+    "SELECT TRANSFORM(a) USING /* c */ r'cat' FROM t",
+    "SELECT TRANSFORM(a) USING -- c\n 'cat' FROM t",
+    "FROM t MAP a USING 'cat'",
+    "FROM t REDUCE a USING 'cat' AS (b)",
+    // A `USING` that no literal follows does not end the reading: a later one still asks.
+    "WITH s AS (SELECT * FROM a JOIN b USING (id)) SELECT TRANSFORM(id) USING 'cat' FROM s",
+  ])("asks for %j", (sql) => {
+    expect(writesUnderGrammar(sql, FORM)).toBe(true);
+  });
+
+  test.each([
+    "SELECT * FROM a JOIN b USING (id)",
+    "CREATE TABLE t (a INT) USING parquet",
+    "CREATE TABLE t (a INT) USING `parquet`",
+    "SELECT TRANSFORM(a) USING $$cat$$ FROM t",
+    "SELECT 1 /* USING 'cat' */",
+    "SELECT 'USING', 'cat'",
+    "SELECT using_col FROM t WHERE x = 'cat'",
+    // A literal inside a comment between the word and its next code is not the literal that follows it.
+    "SELECT * FROM a JOIN b USING /* 'cat' */ (id)",
+  ])("does not ask for %j", (sql) => {
+    expect(writesUnderGrammar(sql, FORM)).toBe(false);
+  });
+
+  test("absent: the same text asks nothing", () => {
+    expect(writesUnderGrammar("SELECT TRANSFORM(a) USING 'cat' FROM t", DEFAULT_SQL_GRAMMAR)).toBe(false);
   });
 });
