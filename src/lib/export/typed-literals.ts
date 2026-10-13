@@ -757,6 +757,77 @@ function snowflakeValue(value: unknown, declared: string, scalar: ScalarLiteral)
 const snowflakeLiteral: TypedWriter = (value, declared, scalar) =>
   declared === undefined || asBytes(value) !== undefined ? undefined : snowflakeValue(value, declared, scalar);
 
+// ---------------------------------------------------------------------------------------
+// Apache Spark
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Spark's typed literals for the texts the Spark provider's decoder writes (spec 5.2, 7.5): a date, a timestamp with
+ * its `+00:00`, a timestamp without a zone and a time, each checked against that text before it is quoted, so a cell
+ * in another form is refused rather than left to Spark's string casts. Strings, booleans, plain numbers and bytes
+ * are the generic writer's (`LITERAL_ESCAPE.spark`, `BINARY_LITERAL.spark`).
+ */
+const SPARK_TEMPORAL: ReadonlyArray<{ readonly declared: RegExp; readonly keyword: string; readonly shape: RegExp }> = [
+  { declared: /^date$/, keyword: "DATE", shape: /^[+-]?\d{4,}-\d{2}-\d{2}$/ },
+  {
+    declared: /^timestamp$/,
+    keyword: "TIMESTAMP_LTZ",
+    shape: /^[+-]?\d{4,}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?\+00:00$/,
+  },
+  {
+    declared: /^timestamp_ntz$/,
+    keyword: "TIMESTAMP_NTZ",
+    shape: /^[+-]?\d{4,}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?$/,
+  },
+  { declared: /^time(\(\d\))?$/, keyword: "TIME", shape: /^\d{2}:\d{2}:\d{2}(\.\d{1,9})?$/ },
+];
+const SPARK_DIGITS_TYPE = /^(bigint|decimal\(\d+,\s*-?\d+\))$/;
+const SPARK_DIGITS = /^-?\d+(\.\d+)?$/;
+const SPARK_ANSI_INTERVAL_TYPE = /^interval (year|month|day|hour|minute|second)( to (month|hour|minute|second))?$/;
+/** The ANSI literal `temporal.ts` renders: a quoted run of digits, signs, spaces, colons and points, then its fields. */
+const SPARK_ANSI_INTERVAL =
+  /^INTERVAL '-?\d[\d :.-]*' (YEAR|MONTH|DAY|HOUR|MINUTE|SECOND)( TO (MONTH|HOUR|MINUTE|SECOND))?$/;
+const SPARK_NESTED_TYPE = /^(array|map|struct)</;
+
+function sparkValue(value: unknown, declared: string, scalar: ScalarLiteral): string | undefined {
+  const type = normalized(declared);
+  for (const temporal of SPARK_TEMPORAL) {
+    if (!temporal.declared.test(type)) continue;
+    if (typeof value !== "string" || !temporal.shape.test(value)) {
+      throw new UnwritableValue(`a ${type} value that is not in the form Studio reads from Spark`);
+    }
+    return `${temporal.keyword} ${quoteLiteral(value, "spark")}`;
+  }
+  if (SPARK_DIGITS_TYPE.test(type)) {
+    if (typeof value !== "string") return undefined;
+    return SPARK_DIGITS.test(value) ? value : scalar(value);
+  }
+  if (type === "interval") throw new UnwritableValue("a calendar interval, which no Spark table column stores");
+  if (SPARK_ANSI_INTERVAL_TYPE.test(type)) {
+    if (typeof value !== "string" || !SPARK_ANSI_INTERVAL.test(value)) {
+      throw new UnwritableValue(`a ${type} value that is not an ANSI interval literal`);
+    }
+    return value;
+  }
+  if (type === "variant") {
+    if (typeof value !== "string") throw new UnwritableValue("a VARIANT value that is not JSON text");
+    return `PARSE_JSON(${quoteLiteral(value, "spark")})`;
+  }
+  if (type.startsWith("geometry") || type.startsWith("geography")) {
+    throw new UnwritableValue(`a ${type} value, which Studio does not write back to Spark in this version`);
+  }
+  if (SPARK_NESTED_TYPE.test(type)) {
+    // A map with a nested key arrives as [key, value] pairs (spec 5.2), which FROM_JSON cannot read as a map.
+    if (type.startsWith("map<") && Array.isArray(value)) throw new UnwritableValue("a map whose keys are not scalars");
+    return `FROM_JSON(${quoteLiteral(jsonText(value), "spark")}, ${quoteLiteral(declared.trim(), "spark")})`;
+  }
+  return undefined;
+}
+
+/** Every declared cell but bytes, which the generic writer spells with `BINARY_LITERAL.spark`. */
+const sparkLiteral: TypedWriter = (value, declared, scalar) =>
+  declared === undefined || asBytes(value) !== undefined ? undefined : sparkValue(value, declared, scalar);
+
 /** The dialects whose INSERT needs a declared type to write some cell; the rest have no row. */
 const TYPED_WRITERS: Partial<Record<DatabaseType, TypedWriter>> = {
   postgres: postgresLiteral,
@@ -767,6 +838,7 @@ const TYPED_WRITERS: Partial<Record<DatabaseType, TypedWriter>> = {
   cassandra: cassandraLiteral,
   databend: databendLiteral,
   snowflake: snowflakeLiteral,
+  spark: sparkLiteral,
 };
 
 /**

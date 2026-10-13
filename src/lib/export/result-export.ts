@@ -201,6 +201,8 @@ const DIALECT_TYPES: Partial<Record<DatabaseType, Partial<Record<InferredKind, s
     // 2005.
     binary: "VARBINARY(MAX)",
   },
+  // Spark SQL has no TEXT, DOUBLE PRECISION or BLOB: its spellings are STRING, DOUBLE and BINARY (spec 7.5).
+  spark: { text: "STRING", numeric: "DOUBLE", binary: "BINARY" },
 };
 
 /**
@@ -1048,7 +1050,8 @@ function oracleZonedTextLiteral(text: string): string | undefined {
  * constants into `BINARY_DOUBLE` and `BINARY_FLOAT`; Databend (M08b, on the pinned image) inserted
  * `'NaN'::FLOAT`, `'inf'::DOUBLE` and `'-inf'::FLOAT` into its `FLOAT` and `DOUBLE` columns and read back NaN,
  * Infinity and -Infinity; Snowflake's trial setup (2026-10-12) created its FLOAT infinities with `'inf'::FLOAT` and
- * `'-inf'::FLOAT`, and `'NaN'::FLOAT` is the same documented form. Every other dialect, which either
+ * `'-inf'::FLOAT`, and `'NaN'::FLOAT` is the same documented form. Spark reads the three words through a CAST to
+ * DOUBLE, its documented special floating-point values. Every other dialect, which either
  * cannot store these values or was not replayed, keeps writing NULL.
  */
 const NON_FINITE_LITERALS: Partial<Record<DatabaseType, Readonly<Record<NonFiniteWord, string>>>> = {
@@ -1058,6 +1061,11 @@ const NON_FINITE_LITERALS: Partial<Record<DatabaseType, Readonly<Record<NonFinit
   oracle: { NaN: "BINARY_DOUBLE_NAN", Infinity: "BINARY_DOUBLE_INFINITY", "-Infinity": "-BINARY_DOUBLE_INFINITY" },
   databend: { NaN: "'NaN'::FLOAT", Infinity: "'inf'::DOUBLE", "-Infinity": "'-inf'::FLOAT" },
   snowflake: { NaN: "'NaN'::FLOAT", Infinity: "'inf'::FLOAT", "-Infinity": "'-inf'::FLOAT" },
+  spark: {
+    NaN: "CAST('NaN' AS DOUBLE)",
+    Infinity: "CAST('Infinity' AS DOUBLE)",
+    "-Infinity": "CAST('-Infinity' AS DOUBLE)",
+  },
 };
 
 function nonFiniteLiteral(word: NonFiniteWord, dialect: DatabaseType | undefined): string {

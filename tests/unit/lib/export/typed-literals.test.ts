@@ -402,3 +402,71 @@ describe("typedLiteral: snowflake (provisional until a replay on an account)", (
     expect(typedLiteral("x", undefined, "snowflake", scalar)).toBeUndefined();
   });
 });
+
+describe("typedLiteral: spark", () => {
+  test("writes dates, timestamps and times as Spark's typed literals", () => {
+    expect(typedLiteral("2026-10-12", "date", "spark", scalar)).toBe("DATE '2026-10-12'");
+    expect(typedLiteral("0001-01-01", "date", "spark", scalar)).toBe("DATE '0001-01-01'");
+    expect(typedLiteral("2026-10-12 13:45:30.123456+00:00", "timestamp", "spark", scalar)).toBe(
+      "TIMESTAMP_LTZ '2026-10-12 13:45:30.123456+00:00'",
+    );
+    expect(typedLiteral("2026-10-12 13:45:30", "timestamp_ntz", "spark", scalar)).toBe(
+      "TIMESTAMP_NTZ '2026-10-12 13:45:30'",
+    );
+    expect(typedLiteral("13:45:30.5", "time(6)", "spark", scalar)).toBe("TIME '13:45:30.5'");
+  });
+
+  test("refuses a temporal cell that is not in the form the decoder writes", () => {
+    expect(() => typedLiteral("12/10/2026", "date", "spark", scalar)).toThrow(UnwritableValue);
+    expect(() => typedLiteral("2026-10-12 13:45:30", "timestamp", "spark", scalar)).toThrow(UnwritableValue);
+    expect(() => typedLiteral("x'; DROP TABLE t; --", "timestamp_ntz", "spark", scalar)).toThrow(UnwritableValue);
+  });
+
+  test("writes decimal and bigint digit text bare, and leaves other numbers to the generic writer", () => {
+    expect(typedLiteral("12345678.91", "decimal(10,2)", "spark", scalar)).toBe("12345678.91");
+    expect(typedLiteral("-0.50", "decimal(3,2)", "spark", scalar)).toBe("-0.50");
+    expect(typedLiteral("10000000000", "decimal(1,-10)", "spark", scalar)).toBe("10000000000");
+    expect(typedLiteral("9007199254740993", "bigint", "spark", scalar)).toBe("9007199254740993");
+    expect(typedLiteral(42, "bigint", "spark", scalar)).toBeUndefined();
+    expect(typedLiteral("1e3", "decimal(10,2)", "spark", scalar)).toBe("<1e3>");
+    expect(typedLiteral(1.5, "double", "spark", scalar)).toBeUndefined();
+  });
+
+  test("writes an ANSI interval as its rendered literal after its shape is checked", () => {
+    expect(typedLiteral("INTERVAL '3-7' YEAR TO MONTH", "interval year to month", "spark", scalar)).toBe(
+      "INTERVAL '3-7' YEAR TO MONTH",
+    );
+    expect(typedLiteral("INTERVAL '-1 02:03:04.567891' DAY TO SECOND", "interval day to second", "spark", scalar)).toBe(
+      "INTERVAL '-1 02:03:04.567891' DAY TO SECOND",
+    );
+    expect(typedLiteral("INTERVAL '26' HOUR", "interval hour", "spark", scalar)).toBe("INTERVAL '26' HOUR");
+    expect(() => typedLiteral("INTERVAL '1' DAY; DROP", "interval day", "spark", scalar)).toThrow(UnwritableValue);
+    expect(() => typedLiteral("3 months 2 days 1 microseconds", "interval", "spark", scalar)).toThrow(UnwritableValue);
+  });
+
+  test("writes VARIANT through PARSE_JSON and nested values through FROM_JSON, every literal escaped", () => {
+    expect(typedLiteral('{"a":"it\'s"}', "variant", "spark", scalar)).toBe(`PARSE_JSON('{"a":"it\\'s"}')`);
+    expect(typedLiteral([1, null, 3], "array<int>", "spark", scalar)).toBe("FROM_JSON('[1,null,3]', 'array<int>')");
+    expect(typedLiteral({ k: "v\\" }, "map<string,string>", "spark", scalar)).toBe(
+      `FROM_JSON('{"k":"v\\\\\\\\"}', 'map<string,string>')`,
+    );
+    expect(typedLiteral({ "it's": 1 }, "struct<`it's`:int>", "spark", scalar)).toBe(
+      "FROM_JSON('{\"it\\'s\":1}', 'struct<`it\\'s`:int>')",
+    );
+  });
+
+  test("refuses a map whose keys are nested, a geospatial cell and a VARIANT that is not text", () => {
+    expect(() => typedLiteral([[[1], "v"]], "map<array<int>,string>", "spark", scalar)).toThrow(UnwritableValue);
+    expect(() => typedLiteral("SRID=4326;POINT (1 2)", "geometry(4326)", "spark", scalar)).toThrow(UnwritableValue);
+    expect(() => typedLiteral("SRID=4326;POINT (1 2)", "geography(4326)", "spark", scalar)).toThrow(UnwritableValue);
+    expect(() => typedLiteral(1, "variant", "spark", scalar)).toThrow(UnwritableValue);
+  });
+
+  test("leaves strings, booleans, bytes and undeclared cells to the generic writer", () => {
+    expect(typedLiteral("x", "string", "spark", scalar)).toBeUndefined();
+    expect(typedLiteral("ab   ", "char(5)", "spark", scalar)).toBeUndefined();
+    expect(typedLiteral(true, "boolean", "spark", scalar)).toBeUndefined();
+    expect(typedLiteral(Buffer.from([1, 2]), "binary", "spark", scalar)).toBeUndefined();
+    expect(typedLiteral("2026-10-12", undefined, "spark", scalar)).toBeUndefined();
+  });
+});
