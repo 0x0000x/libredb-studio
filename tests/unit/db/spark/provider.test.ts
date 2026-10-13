@@ -2679,3 +2679,214 @@ describe("SparkProvider: the metadata session after the server closed it", () =>
     },
   );
 });
+
+describe("SparkProvider: a disconnect while a statement still runs", () => {
+  /** A panel read, and the call by which it meets the metadata session the server closed. */
+  interface ClosedRead {
+    readonly meets: (rpc: string, request: object) => boolean;
+    readonly read: (provider: SparkProvider) => Promise<unknown>;
+  }
+  const VERSION_READ: ClosedRead = { meets: (rpc) => rpc === "AnalyzePlan", read: (provider) => provider.getHealth() };
+  const CONFIG_READ: ClosedRead = {
+    meets: (rpc, request) => rpc === "Config" && !setsConfig(request),
+    read: (provider) => provider.getOverview(),
+  };
+  const PLACE: Partial<DatabaseConnection> = { database: "spark_catalog", schema: "default" };
+
+  /**
+   * A connected provider whose user statement SELECT slow, once sent, runs until it is stopped, and whose Interrupt
+   * answers only once `interrupt` opens. After `holdSetups()` every new session's Config set answers only once `setup`
+   * opens; after `closeMetadata()` the server has closed the metadata session set up at connect, which `meets` names.
+   */
+  async function busy(place: Partial<DatabaseConnection>, meets: ClosedRead["meets"] = () => false) {
+    const setup = gate();
+    const interrupt = gate();
+    let metadata: string | undefined;
+    let closed = false;
+    let holding = false;
+    const script = scripted({
+      commands: {
+        "SHOW CURRENT NAMESPACE": CURRENT,
+        "SET CATALOG 'spark_catalog'": SET_ANSWER,
+        "USE NAMESPACE `default`": SET_ANSWER,
+        "SELECT 1": ONE,
+      },
+      unary: (rpc, request) => {
+        if (rpc === "Interrupt") return interrupt.promise.then(() => ({ interrupted_ids: [] }));
+        if (rpc === "Config" && setsConfig(request)) {
+          metadata ??= sessionOf(request);
+          const answer = {
+            session_id: sessionOf(request),
+            server_side_session_id: "server-1",
+            pairs: [],
+            warnings: [],
+          };
+          return holding ? setup.promise.then(() => answer) : undefined;
+        }
+        // The read meets the closed session in the form the provider's mapping gives it.
+        return closed && sessionOf(request) === metadata && meets(rpc, request)
+          ? Promise.reject(new SparkError("session-closed", SPARK_ERROR_SENTENCES.sessionClosed))
+          : undefined;
+      },
+      stream: (sql, request, call) =>
+        sql === "SELECT slow" ? heldStream(request, call, ONE, gate().promise) : undefined,
+    });
+    const provider = new SparkProvider(connection(1, place), {}, script);
+    await provider.connect();
+    const running = failureOf(provider.query("SELECT slow", undefined, "q-slow", "scope-slow"));
+    await eventually(() => script.calls.some((call) => statementOf(call.request) === "SELECT slow"));
+    return {
+      provider,
+      script,
+      running,
+      setup,
+      interrupt,
+      run: script.calls.find((call) => statementOf(call.request) === "SELECT slow")?.sessionId,
+      setups: () => script.calls.filter((call) => call.rpc === "Config" && setsConfig(call.request)),
+      holdSetups: () => {
+        holding = true;
+      },
+      closeMetadata: () => {
+        closed = true;
+      },
+    };
+  }
+
+  /** Every call from the `at`-th on, as its RPC and the name `names` gives its session. */
+  const namedCalls = (calls: readonly ScriptedCall[], at: number, names: Readonly<Record<string, string>>) =>
+    calls.slice(at).map((call): [string, string] => [call.rpc, names[call.sessionId] ?? call.sessionId]);
+
+  test.each<[string, string, ClosedRead, Partial<DatabaseConnection>, [string, string][]]>([
+    [
+      "getHealth's version read",
+      "no Catalog or Namespace",
+      VERSION_READ,
+      {},
+      [
+        ["Interrupt", "run"],
+        ["ReleaseSession", "run"],
+        ["ReleaseSession", "fresh"],
+      ],
+    ],
+    [
+      "getHealth's version read",
+      "a Catalog and a Namespace",
+      VERSION_READ,
+      PLACE,
+      [
+        ["Interrupt", "run"],
+        ["ReleaseSession", "fresh"],
+        ["ReleaseSession", "run"],
+      ],
+    ],
+    [
+      "getOverview's Config read",
+      "no Catalog or Namespace",
+      CONFIG_READ,
+      {},
+      [
+        ["Interrupt", "run"],
+        ["ReleaseSession", "run"],
+        ["ReleaseSession", "fresh"],
+      ],
+    ],
+    [
+      "getOverview's Config read",
+      "a Catalog and a Namespace",
+      CONFIG_READ,
+      PLACE,
+      [
+        ["Interrupt", "run"],
+        ["ReleaseSession", "fresh"],
+        ["ReleaseSession", "run"],
+      ],
+    ],
+  ])(
+    "%s waiting for a new metadata session's setup is refused as cancelled once a disconnect began, while the running statement's Interrupt is still unanswered, with %s; only the Interrupt and the releases follow",
+    async (_label, _placeLabel, { meets, read }, place, after) => {
+      const world = await busy(place, meets);
+      world.holdSetups();
+      world.closeMetadata();
+      const before = world.setups().length;
+      const failure = failureOf(read(world.provider));
+      await eventually(() => world.setups().length === before + 1);
+      const fresh = world.setups().at(-1)?.sessionId as string;
+      const at = world.script.calls.length;
+      const closing = world.provider.disconnect();
+      await eventually(() => world.script.calls.slice(at).some((call) => call.rpc === "Interrupt"));
+      world.setup.open();
+      // Refused while the disconnect still waits for the Interrupt.
+      const refusal = await failure;
+      expect(refusal).toBeInstanceOf(QueryCancelledError);
+      expect((refusal as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+      world.interrupt.open();
+      await closing;
+      expect(namedCalls(world.script.calls, at, { [world.run as string]: "run", [fresh]: "fresh" })).toStrictEqual(
+        after,
+      );
+      expect(await world.running).toBeInstanceOf(QueryCancelledError);
+      expect(world.provider.isConnected()).toBe(false);
+      expect(world.provider.hasRunsInFlight()).toBe(false);
+      expect(world.script.closed()).toBe(1);
+    },
+  );
+
+  test("a statement of another scope whose session's setup answers once a disconnect began sends no further setup step while the running statement's Interrupt is still unanswered", async () => {
+    const world = await busy(PLACE);
+    world.holdSetups();
+    const metadata = world.setups()[0]?.sessionId as string;
+    const other = failureOf(world.provider.query("SELECT 1", undefined, "q-other", "scope-other"));
+    await eventually(() => world.setups().length === 3);
+    const scope = world.setups()[2]?.sessionId as string;
+    const at = world.script.calls.length;
+    const closing = world.provider.disconnect();
+    await eventually(() => world.script.calls.slice(at).some((call) => call.rpc === "Interrupt"));
+    world.setup.open();
+    const refusal = await other;
+    expect(refusal).toBeInstanceOf(QueryCancelledError);
+    expect((refusal as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+    world.interrupt.open();
+    await closing;
+    expect(
+      namedCalls(world.script.calls, at, { [world.run as string]: "run", [scope]: "scope", [metadata]: "metadata" }),
+    ).toStrictEqual([
+      ["Interrupt", "run"],
+      ["ReleaseSession", "scope"],
+      ["ReleaseSession", "metadata"],
+      ["ReleaseSession", "run"],
+    ]);
+    expect(await world.running).toBeInstanceOf(QueryCancelledError);
+    expect(world.provider.hasRunsInFlight()).toBe(false);
+  });
+
+  test("a tree read whose listing answers as a disconnect begins sends no Config read after it and is refused as cancelled", async () => {
+    let closing: Promise<void> | undefined;
+    const script = scripted({
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT },
+      // The disconnect begins as SHOW CATALOGS answers, before the read goes on to its Config read.
+      stream: (sql, request) => {
+        if (sql !== "SHOW CATALOGS") return undefined;
+        const answers = streamOf([commandAnswer(request, CATALOGS)]);
+        return {
+          ...answers,
+          read: () => {
+            closing ??= provider.disconnect();
+            return answers.read();
+          },
+        };
+      },
+    });
+    const provider = new SparkProvider(connection(1), {}, script);
+    await provider.connect();
+    const at = script.calls.length;
+    const failure = await failureOf(provider.listContainers());
+    await closing;
+    expect(failure).toBeInstanceOf(QueryCancelledError);
+    expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+    // The Interrupt stops SHOW CATALOGS, which the disconnect found still open; the release is the metadata session's.
+    expect(
+      script.calls.slice(at).map((call) => (call.rpc === "ExecutePlan" ? statementOf(call.request) : call.rpc)),
+    ).toStrictEqual(["SHOW CURRENT NAMESPACE", "SHOW CATALOGS", "Interrupt", "ReleaseSession"]);
+    expect(provider.hasRunsInFlight()).toBe(false);
+  });
+});

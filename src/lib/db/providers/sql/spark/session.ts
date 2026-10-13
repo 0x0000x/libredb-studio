@@ -7,10 +7,11 @@
  * session, SPARK_METADATA_SESSION_CONF in the same call), SET CATALOG as a string literal, USE NAMESPACE with every part
  * quoted. Every answer's server-side id is observed, so every later request of the session carries it and a restarted
  * server answers SESSION_CHANGED instead of opening a session without the setup. A release that fails changes nothing:
- * the deps log it with no server text and Spark drops the session after its idle timeout. After releaseAll the registry
- * is closed: a session asked for later is refused with the cancelled sentence, so no session is set up that no release
- * would reach, a setup in flight sends no further step, and a metadata read whose session's setup answers then sends
- * nothing. This module imports neither the channel nor execute.ts; index.ts builds its deps.
+ * the deps log it with no server text and Spark drops the session after its idle timeout. Once close or releaseAll
+ * began, the registry is closed: a session asked for later is refused with the cancelled sentence, so no session is set
+ * up that no release would reach, a setup in flight sends no further step, and a metadata read sends nothing, its
+ * session's setup still in flight or not. This module imports neither the channel nor execute.ts; index.ts builds its
+ * deps.
  */
 import { quoteLiteral } from "@/lib/sql/values";
 import { SPARK_METADATA_SESSION_CONF, SPARK_SESSION_CONF } from "./constants";
@@ -94,13 +95,13 @@ export class SparkSessions {
    * A provider-written read on the metadata session, repeated once on a new one when the server closed the session.
    * The repeat reads only a SparkError's category (session-closed or session-changed), so `read` maps its own failures
    * with toSparkError before they leave it: any other failure, the channel's own error for a closed session included,
-   * propagates unchanged and is never repeated, and the closed session stays the current one. After releaseAll the new
-   * session is refused with the cancelled sentence, so a read that met a released session is not repeated.
+   * propagates unchanged and is never repeated, and the closed session stays the current one. Once the registry closed,
+   * the new session is refused with the cancelled sentence, so a read that met a released session is not repeated.
    *
    * The read waits for each session's setup, the first one and the repeat's, through `wait`, which answers the session
    * or refuses: a refusal fails the read before it is given that session, and the setup goes on for the reads after it.
-   * Without `wait` the read waits as long as the setup takes. A session that comes once releaseAll began belongs to a
-   * connection being closed: the read is refused with the cancelled sentence and is never given it. `wait` and `read`
+   * Without `wait` the read waits as long as the setup takes. A session that comes once the registry closed belongs to
+   * a connection being closed: the read is refused with the cancelled sentence and is never given it. `wait` and `read`
    * are each told whether they serve the repeat, which comes only after the server answered the first read, so a
    * refusal there can say what was sent.
    */
@@ -171,6 +172,14 @@ export class SparkSessions {
     }
   }
 
+  /**
+   * Closes the registry at once and sends nothing: from here on no setup sends a further step and no metadata read is
+   * given a session. The sessions stay open until releaseAll releases them.
+   */
+  close(): void {
+    this.released = true;
+  }
+
   /** Closes the registry and releases every session, a setup still in flight included once it settles. */
   async releaseAll(): Promise<void> {
     this.released = true;
@@ -191,16 +200,16 @@ export class SparkSessions {
   }
 
   /**
-   * Once releaseAll began, whatever the registry is asked for belongs to a connection being disconnected: it is refused
-   * with the cancelled sentence, and nothing more reaches the server for it.
+   * Once the registry closed, whatever it is asked for belongs to a connection being disconnected: it is refused with
+   * the cancelled sentence, and nothing more reaches the server for it.
    */
   private assertNotReleased(): void {
     if (this.released) throw new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled);
   }
 
   /**
-   * Asked for once releaseAll began, nothing is sent. A setup still in flight then sends no further step: it fails as
-   * cancelled before the next one, and a failed setup releases its own session.
+   * Asked for once the registry closed, nothing is sent. A setup still in flight then sends no further step: it fails
+   * as cancelled before the next one, and a failed setup releases its own session.
    */
   private async create(kind: SparkSessionHandle["kind"]): Promise<SparkSessionHandle> {
     this.assertNotReleased();

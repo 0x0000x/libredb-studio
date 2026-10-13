@@ -7,8 +7,8 @@
  * closed it, for each of the three INVALID_HANDLE classes (spec 10.8), and discarded once when two reads meet it
  * together; a metadata setup discarded in flight released once it settles; the repeat only for a failure the read
  * mapped to a SparkError, never for the channel's own error; a setup in flight when releaseAll begins sending no
- * further step, and a metadata read whose setup answers then sending nothing; the wait and the read told whether they
- * serve the repeat.
+ * further step, and a metadata read whose setup answers then sending nothing; close doing the same at once, sending
+ * nothing itself and leaving the releases to releaseAll; the wait and the read told whether they serve the repeat.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
@@ -654,6 +654,48 @@ describe("a release that begins while a setup is in flight", () => {
     ]);
     expect(sessions.openCount()).toBe(0);
   });
+
+  test.each<[string, SparkSessionPlace, readonly string[]]>([
+    ["a catalog and a namespace", PLACE, ["Config set", "ReleaseSession"]],
+    ["no catalog or namespace", {}, ["Config set"]],
+  ])(
+    "close, with %s, sends nothing itself, refuses the next step of a setup in flight and every read from then on, and leaves the releases to releaseAll",
+    async (_label, place, closed) => {
+      const step = heldStep("Config set");
+      const sessions = new SparkSessions(step.deps, place);
+      const seen: string[] = [];
+      const read = () =>
+        sessions.readMetadata(configRead(seen)).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+      const waiting = read();
+      await step.reached;
+      sessions.close();
+      step.open();
+      expect(refusalOf(await waiting)).toStrictEqual(cancelled);
+      const session = fake.log.entries[0]?.sessionId;
+      expect(received()).toStrictEqual(closed.map((name) => [session, name]));
+      // A read or a scope asked for once the registry closed is refused before anything is sent, a set-up session too.
+      expect(refusalOf(await read())).toStrictEqual(cancelled);
+      expect(
+        refusalOf(
+          await sessions.forScope("late").then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
+        ),
+      ).toStrictEqual(cancelled);
+      expect(seen).toStrictEqual([]);
+      expect(received()).toStrictEqual(closed.map((name) => [session, name]));
+      await sessions.releaseAll();
+      expect(received()).toStrictEqual([
+        [session, "Config set"],
+        [session, "ReleaseSession"],
+      ]);
+      expect(sessions.openCount()).toBe(0);
+    },
+  );
 });
 
 describe("the metadata session after the server closed it (spec 4.5)", () => {

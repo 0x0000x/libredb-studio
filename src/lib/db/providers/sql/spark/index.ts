@@ -556,9 +556,10 @@ export class SparkProvider extends SQLBaseProvider {
   }
 
   /**
-   * Refuses the metadata statements still waiting for a slot, stops every run, releases every session under the control
-   * deadline, then closes the channel; once per connection. The refusal comes first, so no slot a stopped run gives
-   * back starts a statement on a connection that is closing.
+   * Refuses the metadata statements still waiting for a slot and closes the session registry, both at once, then stops
+   * every run, releases every session under the control deadline, and closes the channel; once per connection. The
+   * refusals come first, so no slot a stopped run gives back starts a statement, and no session setup or metadata read
+   * sends anything while the runs are being stopped.
    */
   private async close(connection: SparkConnection): Promise<void> {
     if (this.closed.has(connection)) return;
@@ -566,6 +567,7 @@ export class SparkProvider extends SQLBaseProvider {
     this.closing.add(connection);
     this.releasing += 1;
     connection.metadataSlots.close();
+    connection.sessions.close();
     try {
       await connection.runs.cancelAll();
       await connection.sessions.releaseAll();
