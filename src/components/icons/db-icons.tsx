@@ -881,8 +881,12 @@ export const OpcuaIcon: React.FC<IconProps> = ({ className, ...props }) => (
   </svg>
 );
 
-// A stage DAG drawn for Studio, never the Apache Spark logo: one rounded node on the left joined by two strokes to two
-// nodes on the right, on the house 24-unit grid at stroke weight 1.5.
+/**
+ * A mark drawn for Studio, never the Apache Spark logo or any vendor's asset.
+ *
+ * A job runs as a DAG of stages, so the mark is a fork-join diamond: one stage, two parallel stages, one stage,
+ * four rounded boxes joined by four straight strokes.
+ */
 export const SparkIcon: React.FC<IconProps> = ({ className, ...props }) => (
   <svg
     viewBox="0 0 24 24"
@@ -894,10 +898,13 @@ export const SparkIcon: React.FC<IconProps> = ({ className, ...props }) => (
     className={className}
     {...props}
   >
-    <path d="M4 9h3a1.5 1.5 0 0 1 1.5 1.5v3A1.5 1.5 0 0 1 7 15H4a1.5 1.5 0 0 1-1.5-1.5v-3A1.5 1.5 0 0 1 4 9z" />
-    <path d="M17 3h3a1.5 1.5 0 0 1 1.5 1.5v3A1.5 1.5 0 0 1 20 9h-3a1.5 1.5 0 0 1-1.5-1.5v-3A1.5 1.5 0 0 1 17 3z" />
-    <path d="M17 15h3a1.5 1.5 0 0 1 1.5 1.5v3A1.5 1.5 0 0 1 20 21h-3a1.5 1.5 0 0 1-1.5-1.5v-3A1.5 1.5 0 0 1 17 15z" />
-    <path d="M8.5 12H11a2 2 0 0 0 2-2V8a2 2 0 0 1 2-2h.5" />
-    <path d="M8.5 12H11a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h.5" />
+    <rect x="2" y="10" width="4" height="4" rx="1" />
+    <rect x="10" y="2.5" width="4" height="4" rx="1" />
+    <rect x="10" y="17.5" width="4" height="4" rx="1" />
+    <rect x="18" y="10" width="4" height="4" rx="1" />
+    <path d="M6 10.13 9.87 6.5" />
+    <path d="M6 13.87 9.87 17.5" />
+    <path d="M14.13 6.5 18 10.13" />
+    <path d="M14.13 17.5 18 13.87" />
   </svg>
 );
