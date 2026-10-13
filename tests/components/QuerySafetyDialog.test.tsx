@@ -2494,3 +2494,87 @@ describe("a confirmConfigKeys key set or reset", () => {
     },
   );
 });
+
+// Spark's row: the forms that replace or overwrite data, load code, start a process, call a Java method, run text the
+// gate cannot read, drop partitions, rebind a catalog or switch variable substitution back on (spec 7.3).
+describe("Apache Spark's confirmation forms", () => {
+  test.each([
+    "CREATE OR REPLACE TABLE t AS SELECT 1",
+    "CREATE OR REPLACE TEMPORARY VIEW v AS SELECT 1",
+    "REPLACE TABLE t (a INT) USING parquet",
+    "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE",
+    "LOAD DATA INPATH '/data/x.csv' OVERWRITE INTO TABLE t",
+    "CALL lake.system.rewrite_data_files('db.t')",
+    "EXECUTE IMMEDIATE 'SELECT 1'",
+    "ADD JAR '/opt/lib/udf.jar'",
+    "ADD ARCHIVES '/opt/lib/a.zip'",
+    "INSERT OVERWRITE TABLE t SELECT 1",
+    "FROM s INSERT INTO u SELECT a INSERT OVERWRITE TABLE t SELECT a",
+    "INSERT INTO t REPLACE WHERE a = 1 SELECT 1",
+    "INSERT INTO t REPLACE USING (a) SELECT 1",
+    "CREATE FUNCTION f AS 'com.example.F' USING JAR '/opt/lib/udf.jar'",
+    "CREATE TEMPORARY FUNCTION f AS 'com.example.F' USING FILE '/opt/lib/f.py'",
+    "CREATE FUNCTION f AS 'com.example.F' USING ARCHIVE '/opt/lib/a.zip'",
+    "MSCK REPAIR TABLE t DROP PARTITIONS",
+    "REPAIR TABLE t SYNC PARTITIONS",
+    "SELECT TRANSFORM(a) USING 'cat' AS (b) FROM t",
+    'SELECT TRANSFORM(a) USING "cat" FROM t',
+    "SELECT TRANSFORM(a) USING /* c */ r'cat' FROM t",
+    "SELECT reflect('java.util.UUID', 'randomUUID')",
+    "SELECT java_method('java.util.UUID', 'randomUUID')",
+    "SET spark.sql.variable.substitute=true",
+    "SET spark.sql.defaultCatalog=lake",
+    "SET spark.sql.catalog.lake=org.apache.iceberg.spark.SparkCatalog",
+    "RESET",
+  ])("asks for %j", (sql) => {
+    expect(isDangerousQuery(sql, "spark")).toBe(true);
+  });
+
+  test("a CTE-led DELETE asks with a raw string or a hint in its CTE list, and so does a later statement", () => {
+    expect(isDangerousQuery("WITH x AS (SELECT r'C:\\' AS a) DELETE FROM t", "spark")).toBe(true);
+    expect(isDangerousQuery("WITH x AS (SELECT /*+ REPARTITION(2) */ a FROM u) DELETE FROM t", "spark")).toBe(true);
+    expect(isDangerousQuery("SELECT 1; SET spark.sql.variable.substitute=true", "spark")).toBe(true);
+    // A comment that holds `/*+` ends at its first `*/`, so the DROP after it is code.
+    expect(isDangerousQuery("SELECT 1 /* x /*+ */ ; DROP TABLE t; -- */", "spark")).toBe(true);
+    expect(isDangerousQuery("BEGIN SELECT r'\\'; DROP TABLE t; SELECT '\\''; END", "spark")).toBe(true);
+  });
+
+  test("a CTE-led DELETE after a `--` comment a backslash continues asks, as Spark reads it", () => {
+    // Spark reads `WITH c AS (SELECT 1 ) DELETE FROM u`: the backslash carries the comment over `) SELECT 1 --`.
+    expect(isDangerousQuery("WITH c AS (SELECT 1 -- note \\\n) SELECT 1 --\n) DELETE FROM u", "spark")).toBe(true);
+  });
+
+  test("a CTE-led INSERT OVERWRITE on the line after a lone carriage return asks, as Spark reads it", () => {
+    // Spark ends the `--` comment at the carriage return and reads `WITH c AS (SELECT 1) INSERT OVERWRITE TABLE u
+    // SELECT 1`; a comment read on to the line feed leaves `WITH c AS (SELECT 1) SELECT 1`, which does not ask.
+    expect(isDangerousQuery("WITH c AS (SELECT 1) -- note\rINSERT OVERWRITE TABLE u\nSELECT 1", "spark")).toBe(true);
+  });
+
+  test("a CTE-led DELETE after a hint closed right before `*` asks: `*/*` is the hint's closer and a `*`", () => {
+    expect(isDangerousQuery("WITH c AS (SELECT /*+ H */* FROM t) DELETE FROM u -- */", "spark")).toBe(true);
+  });
+
+  test.each([
+    "SELECT transform(arr, x -> x + 1) FROM t",
+    "SELECT map(1, 2)",
+    "SELECT reflection FROM t",
+    "SELECT * FROM a JOIN b USING (id)",
+    "CREATE TABLE t (a INT) USING parquet",
+    "SET spark.sql.shuffle.partitions=8",
+    "SET TIME ZONE 'UTC'",
+    "SELECT /*+ MERGE(t) */ * FROM t JOIN u ON t.id = u.id",
+    "SELECT r'C:\\' AS a",
+    "INSERT INTO t VALUES (1)",
+    "USE NAMESPACE studio",
+    "SET CATALOG 'lake'",
+    "CACHE TABLE t",
+  ])("does not ask for %j", (sql) => {
+    expect(isDangerousQuery(sql, "spark")).toBe(false);
+  });
+
+  test.each(["postgres", "databend", "snowflake"] as const)("%s keeps its verdicts", (type) => {
+    expect(isDangerousQuery("SELECT reflect('a', 'b')", type)).toBe(false);
+    expect(isDangerousQuery("SET spark.sql.variable.substitute=true", type)).toBe(false);
+    expect(isDangerousQuery("SELECT TRANSFORM(a) USING 'cat' FROM t", type)).toBe(false);
+  });
+});

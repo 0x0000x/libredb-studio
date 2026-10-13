@@ -622,13 +622,13 @@ describe("backslashAlwaysEscapes", () => {
     expect(DEFAULT_SQL_GRAMMAR.backslashAlwaysEscapes).toBe(false);
   });
 
-  test.each(["databend", "bigquery", "snowflake"] as const)("%s declares true", (type) => {
+  test.each(["databend", "bigquery", "snowflake", "spark"] as const)("%s declares true", (type) => {
     expect(resolveSqlGrammar(type).backslashAlwaysEscapes).toBe(true);
   });
 
   test.each(
     (Object.keys(GRAMMAR_COVERAGE) as DatabaseType[]).filter(
-      (type) => type !== "databend" && type !== "bigquery" && type !== "snowflake",
+      (type) => type !== "databend" && type !== "bigquery" && type !== "snowflake" && type !== "spark",
     ),
   )("%s declares false", (type) => {
     expect(resolveSqlGrammar(type).backslashAlwaysEscapes).toBe(false);
@@ -658,17 +658,30 @@ describe("dollarTags and doubleQuoteBackslashEscapes", () => {
   );
 });
 
-// Two forms only Spark's lexer has, each absent (false) on every other row: raw strings (`rawStrings`) and optimizer
-// hints lexed as code (`hintsAreCode`).
+// Four facts only Spark's lexer has, each absent (false) on every other row: raw strings (`rawStrings`), optimizer
+// hints lexed as code (`hintsAreCode`), a `--` comment a backslash continues (`lineCommentBackslashContinues`) and one
+// a lone carriage return ends (`lineCommentEndsAtCarriageReturn`).
 describe("rawStrings and hintsAreCode", () => {
   test("the compatibility default declares neither", () => {
     expect(DEFAULT_SQL_GRAMMAR.rawStrings).toBeUndefined();
     expect(DEFAULT_SQL_GRAMMAR.hintsAreCode).toBeUndefined();
   });
 
-  test.each(Object.keys(GRAMMAR_COVERAGE) as DatabaseType[])("%s declares neither", (type) => {
-    expect(resolveSqlGrammar(type).rawStrings).toBeUndefined();
-    expect(resolveSqlGrammar(type).hintsAreCode).toBeUndefined();
+  test.each((Object.keys(GRAMMAR_COVERAGE) as DatabaseType[]).filter((type) => type !== "spark"))(
+    "%s declares none of the four",
+    (type) => {
+      expect(resolveSqlGrammar(type).rawStrings).toBeUndefined();
+      expect(resolveSqlGrammar(type).hintsAreCode).toBeUndefined();
+      expect(resolveSqlGrammar(type).lineCommentBackslashContinues).toBeUndefined();
+      expect(resolveSqlGrammar(type).lineCommentEndsAtCarriageReturn).toBeUndefined();
+    },
+  );
+
+  test("spark declares all four", () => {
+    expect(resolveSqlGrammar("spark").rawStrings).toBe(true);
+    expect(resolveSqlGrammar("spark").hintsAreCode).toBe(true);
+    expect(resolveSqlGrammar("spark").lineCommentBackslashContinues).toBe(true);
+    expect(resolveSqlGrammar("spark").lineCommentEndsAtCarriageReturn).toBe(true);
   });
 });
 
