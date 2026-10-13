@@ -4,11 +4,12 @@
  * Among the files this guard holds (GRPC_SEAM_HOLDINGS.spark.held: the provider directory, its generator, its unit
  * tests, helpers and live harnesses, which tests/unit/db/etcd/seam-guard.test.ts hands over), each import list below is
  * held exactly, so a stray importer fails by name and a named file that stops importing fails too: who imports
- * @grpc/grpc-js, who imports @grpc/proto-loader, who imports the generated descriptor, who names its file, and who
- * imports the generator. Two isolation rules hold over the repository: no Spark file imports a module under
- * src/lib/db/providers/ outside its directory but the base class ../sql-base, and no file under src/ outside the
- * directory but the factory and the connection-string parser imports a Spark module. Every rule is proven both ways:
- * the real sources pass it and a planted file fails it by name.
+ * @grpc/grpc-js, who imports @grpc/proto-loader, who imports the generated descriptor, who names its file, who
+ * imports the generator, and which provider files import the shared transport under src/lib/db/grpc/ (the registry
+ * row's transportImporters, which the shared guard's G5 holds too). Two isolation rules hold over the repository: no
+ * Spark file imports a module under src/lib/db/providers/ outside its directory but the base class ../sql-base, and no
+ * file under src/ outside the directory but the factory and the connection-string parser imports a Spark module.
+ * Every rule is proven both ways: the real sources pass it and a planted file fails it by name.
  *
  * The pure modules (PURE_MODULES) import no I/O, no logger and no transport, and write nothing to the console
  * (spec 4.1); that rule is proven both ways too.
@@ -38,6 +39,8 @@ const PROTO_LOADER_IMPORTERS: readonly string[] = [DESCRIPTOR, GENERATOR, DESCRI
 const DESCRIPTOR_IMPORTERS: readonly string[] = [];
 const DESCRIPTOR_READERS: readonly string[] = [GENERATOR, DESCRIPTOR_TEST, THIS_FILE];
 const GENERATOR_IMPORTERS: readonly string[] = [DESCRIPTOR_TEST, HARNESS];
+/** The provider files that import src/lib/db/grpc/, type-only imports included, as the shared guard's G5 counts them. T5.7 adds grpc-client.ts. */
+const TRANSPORT_IMPORTERS: readonly string[] = [`${SPARK}/connection-options.ts`];
 /** The only files under src/ outside the provider directory that may import a Spark module (spec 8.10). */
 const OUTSIDE_IMPORTERS_ALLOWED: readonly string[] = ["src/lib/db/factory.ts", "src/lib/connection-string-parser.ts"];
 /** The one module under src/lib/db/providers/ outside the directory a Spark file may import (spec 8.10). */
@@ -108,6 +111,12 @@ const importsDescriptor = (file: RepositoryFile) =>
   moduleNames(file.sf).some((specifier) => /(?:^|\/)proto\/descriptor(?:\.ts)?$/.test(specifier));
 const importsGenerator = (file: RepositoryFile) =>
   moduleNames(file.sf).some((specifier) => specifier.endsWith("generate-spark-descriptor.mjs"));
+const importsTransport = (file: RepositoryFile) =>
+  inSpark(file.path) &&
+  moduleNames(file.sf).some((specifier) => {
+    const target = reached(specifier, file.path);
+    return target !== undefined && (target === "src/lib/db/grpc" || target.startsWith("src/lib/db/grpc/"));
+  });
 
 /** A string, other than a module name, whose last path segment is `descriptor.ts`. */
 function namesDescriptorFile(file: RepositoryFile): boolean {
@@ -133,12 +142,23 @@ interface Rule {
   readonly holds: (file: RepositoryFile) => boolean;
 }
 
+const inSpark = (path: string) => path === SPARK || path.startsWith(`${SPARK}/`);
+
+/** The repository path a module name reaches from the file at `from`, or undefined for a package. */
+function reached(specifier: string, from: string): string | undefined {
+  if (specifier.startsWith("@/")) return `src/${specifier.slice(2)}`;
+  if (specifier.startsWith("./") || specifier.startsWith("../"))
+    return posix.normalize(posix.join(posix.dirname(from), specifier));
+  return undefined;
+}
+
 const RULES: readonly Rule[] = [
   { name: "@grpc/grpc-js importers", named: GRPC_IMPORTERS, holds: importsPackage("@grpc/grpc-js") },
   { name: "@grpc/proto-loader importers", named: PROTO_LOADER_IMPORTERS, holds: importsPackage("@grpc/proto-loader") },
   { name: "descriptor importers", named: DESCRIPTOR_IMPORTERS, holds: importsDescriptor },
   { name: "descriptor readers", named: DESCRIPTOR_READERS, holds: namesDescriptorFile },
   { name: "generator importers", named: GENERATOR_IMPORTERS, holds: importsGenerator },
+  { name: "transport importers", named: TRANSPORT_IMPORTERS, holds: importsTransport },
 ];
 
 function findings(rule: Rule, files: readonly RepositoryFile[]): string[] {
@@ -154,16 +174,6 @@ function findings(rule: Rule, files: readonly RepositoryFile[]): string[] {
           : `${rule.name}: ${path} is named and missing`,
       ),
   ];
-}
-
-const inSpark = (path: string) => path === SPARK || path.startsWith(`${SPARK}/`);
-
-/** The repository path a module name reaches from the file at `from`, or undefined for a package. */
-function reached(specifier: string, from: string): string | undefined {
-  if (specifier.startsWith("@/")) return `src/${specifier.slice(2)}`;
-  if (specifier.startsWith("./") || specifier.startsWith("../"))
-    return posix.normalize(posix.join(posix.dirname(from), specifier));
-  return undefined;
 }
 
 function providerImportFindings(files: readonly RepositoryFile[]): string[] {
@@ -253,6 +263,7 @@ describe("the import lists hold, among the files this guard holds (spec 10.2)", 
       "tests/unit/db/spark/stray.test.ts",
       'import { loadSparkDescriptor } from "../../../../scripts/generate-spark-descriptor.mjs";\n',
     ],
+    ["transport importers", `${SPARK}/namespace.ts`, 'import type { GrpcTlsOptions } from "@/lib/db/grpc/tls";\n'],
   ] as const)("%s: a planted %s fails by name", (name, path, text) => {
     const rule = RULES.find((candidate) => candidate.name === name) as Rule;
     expect(findings(rule, replaced(HELD, path, text))).toEqual([`${name}: ${path} is not named`]);

@@ -66,6 +66,12 @@ import {
   SNOWFLAKE_FIELD_SENTENCES,
   snowflakeHostHint,
 } from "@/lib/db/providers/sql/snowflake/account-host";
+import { SPARK_FIELD_SENTENCES } from "@/lib/db/providers/sql/spark/connection-options";
+import {
+  SPARK_CATALOG_PATTERN,
+  SPARK_NAMESPACE_PATTERN,
+  SPARK_TOKEN_PATTERN,
+} from "@/lib/db/providers/sql/spark/namespace";
 import { CREDENTIAL_WARNINGS } from "@/lib/db/credential-warnings";
 import { declareHostUri } from "../../helpers/synthetic-host-uri";
 import { providerDirectoryFiles } from "../../helpers/provider-directory-map";
@@ -1865,6 +1871,24 @@ describe("the Apache Spark entry", () => {
       expect(connectionFieldRefusal(spark, connection({ schema: namespace }))).toBe(
         SPARK_FIELD_RULES.schema?.format?.sentence,
       );
+    }
+  });
+
+  test("SPARK_FIELD_RULES holds copies of the provider's patterns and sentences, since the dialog cannot import the provider", () => {
+    expect(Object.keys(SPARK_FIELD_RULES)).toStrictEqual(["host", "password", "database", "schema"]);
+    expect(SPARK_FIELD_RULES.host).toStrictEqual({ required: SPARK_FIELD_SENTENCES.hostEmpty });
+    const copies = [
+      ["password", SPARK_TOKEN_PATTERN, SPARK_FIELD_SENTENCES.tokenCharacters],
+      ["database", SPARK_CATALOG_PATTERN, SPARK_FIELD_SENTENCES.catalogFormat],
+      ["schema", SPARK_NAMESPACE_PATTERN, SPARK_FIELD_SENTENCES.namespaceFormat],
+    ] as const;
+    for (const [field, pattern, sentence] of copies) {
+      // Only a format: a blank Token, Catalog or Namespace is none on the provider's side, so no copy may require it.
+      expect(Object.keys(SPARK_FIELD_RULES[field] ?? {})).toStrictEqual(["format"]);
+      const rule = SPARK_FIELD_RULES[field]?.format;
+      expect(rule?.pattern.source).toBe(pattern.source);
+      expect(rule?.pattern.flags).toBe(pattern.flags);
+      expect(rule?.sentence).toBe(sentence);
     }
   });
 });

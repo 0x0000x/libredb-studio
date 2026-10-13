@@ -67,7 +67,7 @@ export const GRPC_SEAM_HOLDINGS: Readonly<Record<string, GrpcSeamHolding>> = {
       /^tests\/helpers\/spark-/,
       /^tests\/live\/spark-/,
     ],
-    transportImporters: [],
+    transportImporters: ["src/lib/db/providers/sql/spark/connection-options.ts"],
     providerDirectory: "src/lib/db/providers/sql/spark",
   },
 };

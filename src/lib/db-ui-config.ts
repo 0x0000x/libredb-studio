@@ -311,8 +311,9 @@ export const SPARK_FIELD_RULES: Readonly<Partial<Record<ConnectionField, Connect
   },
   password: {
     format: {
-      pattern: /^[^\r\n\0]*$/,
-      sentence: "Token holds a line break or a NUL character, which a gRPC header cannot carry. Nothing was sent.",
+      pattern: /^[\x20-\x7E]*$/,
+      sentence:
+        "Token holds a character a gRPC header cannot carry: only printable ASCII is allowed. Nothing was sent.",
     },
   },
   database: {

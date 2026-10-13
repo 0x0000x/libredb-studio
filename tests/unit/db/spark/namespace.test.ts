@@ -202,10 +202,17 @@ describe("the field patterns the dialog copies", () => {
       expect(SPARK_CATALOG_PATTERN.test(refused)).toBe(false);
   });
 
-  test("the token pattern refuses CR, LF and NUL only", () => {
+  test("the token pattern takes printable ASCII only, the characters grpc-js takes in a non-binary header value", () => {
     expect(SPARK_TOKEN_PATTERN.test("")).toBe(true);
     expect(SPARK_TOKEN_PATTERN.test("a b-c/d=")).toBe(true);
-    for (const refused of ["a\rb", "a\nb", "a\0b"]) expect(SPARK_TOKEN_PATTERN.test(refused)).toBe(false);
+    // U+0020 to U+007E, each on its own and all together.
+    const printable = Array.from({ length: 0x7f - 0x20 }, (_, index) => String.fromCharCode(0x20 + index)).join("");
+    expect(printable.length).toBe(95);
+    expect(SPARK_TOKEN_PATTERN.test(printable)).toBe(true);
+    for (const char of printable) expect(SPARK_TOKEN_PATTERN.test(char)).toBe(true);
+    // Both ends of the range, then a line break, a NUL, a non-ASCII letter, a no-break space and a tab.
+    for (const refused of ["a\u001fb", "a\u007fb", "a\rb", "a\nb", "a\0b", "caf\u00e9", "a\u00a0b", "a\tb"])
+      expect(SPARK_TOKEN_PATTERN.test(refused)).toBe(false);
   });
 
   test("each pattern is spelled exactly as PLAN-00 gives it", () => {
@@ -215,7 +222,7 @@ describe("the field patterns the dialog copies", () => {
       "^(?:[A-Za-z_][A-Za-z0-9_]*|`(?:[^`]|``)+`)(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|`(?:[^`]|``)+`)){0,7}$",
     );
     expect(SPARK_NAMESPACE_PATTERN.flags).toBe("");
-    expect(SPARK_TOKEN_PATTERN.source).toBe("^[^\\r\\n\\0]*$");
+    expect(SPARK_TOKEN_PATTERN.source).toBe("^[\\x20-\\x7E]*$");
     expect(SPARK_TOKEN_PATTERN.flags).toBe("");
   });
 });
