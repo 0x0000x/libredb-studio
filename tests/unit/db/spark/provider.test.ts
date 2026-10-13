@@ -875,7 +875,7 @@ describe("SparkProvider: one deadline for a bulk column read", () => {
     }
   });
 
-  test("a read whose metadata session the server closed is refused unsent at the read's own deadline while the new session's setup goes on", async () => {
+  test("a read whose metadata session the server closed under a sent statement is refused at the read's own deadline as a lost metadata session, while the new session's setup goes on", async () => {
     const timeout = 10_000;
     const left = 100;
     const setup = gate();
@@ -908,7 +908,8 @@ describe("SparkProvider: one deadline for a bulk column read", () => {
       ]);
       const waited = performance.now() - from;
       expect(failure).toBeInstanceOf(QueryError);
-      expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.deadlineBeforeSend(timeout));
+      // DESCRIBE TABLE a was sent once, so the refusal never says that it was not sent.
+      expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.metadataSessionLost);
       // Refused once the read's time was up, `left` ms on, not a whole timeout after the new setup began.
       expect(waited).toBeGreaterThanOrEqual(left / 2);
       expect(
@@ -2342,7 +2343,7 @@ describe("SparkProvider: the metadata session after the server closed it", () =>
     await provider.disconnect();
   });
 
-  test("a metadata statement still waiting for the new metadata session's setup at its deadline is refused unsent, and the setup goes on", async () => {
+  test("a metadata statement still waiting for the new metadata session's setup at its deadline is refused, as unsent only when it was never sent, and the setup goes on", async () => {
     const timeout = 200;
     const setup = gate();
     const server = laterSetupsHeld(setup.promise);
@@ -2371,8 +2372,9 @@ describe("SparkProvider: the metadata session after the server closed it", () =>
         ),
         later(timeout * 10).then(() => "still waiting at ten timeouts"),
       ]);
+      // The read that met the closed session had sent its statement there; the one that asked later had sent nothing.
       expect(outcome).toStrictEqual([
-        [true, SPARK_ERROR_SENTENCES.deadlineBeforeSend(timeout)],
+        [true, SPARK_ERROR_SENTENCES.metadataSessionLost],
         [true, SPARK_ERROR_SENTENCES.deadlineBeforeSend(timeout)],
       ]);
       expect(
@@ -2390,6 +2392,54 @@ describe("SparkProvider: the metadata session after the server closed it", () =>
       expect(provider.hasRunsInFlight()).toBe(false);
     } finally {
       setup.open();
+      await provider.disconnect();
+    }
+  });
+
+  test("a metadata statement whose time is up once the new metadata session is set up is refused as a lost metadata session, and is not sent again", async () => {
+    const timeout = 10_000;
+    const setup = gate();
+    const server = laterSetupsHeld(setup.promise);
+    let closed = false;
+    let now = Date.now();
+    const script = scripted({
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT },
+      unary: server.unary,
+      // Only statements meet the closed session, so the overview's version and Config reads answer on it.
+      stream: (_sql, request) =>
+        closed && sessionOf(request) === server.first()
+          ? failingStream(new SparkError("session-closed", SPARK_ERROR_SENTENCES.sessionClosed))
+          : undefined,
+    });
+    const provider = new SparkProvider(connection(1), { queryTimeout: timeout }, script);
+    await provider.connect();
+    const clock = spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      closed = true;
+      const sentAt = script.calls.length;
+      const setups = () => script.calls.filter((call) => call.rpc === "Config" && setsConfig(call.request));
+      const overview = failureOf(provider.getOverview());
+      await eventually(() => setups().length === 2);
+      // The statement's time is up when the new session's setup answers, before its wait's own timer refuses it.
+      now += timeout;
+      setup.open();
+      const failure = await overview;
+      expect(failure).toBeInstanceOf(QueryError);
+      expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.metadataSessionLost);
+      expect(
+        script.calls
+          .slice(sentAt)
+          .map((call) =>
+            call.rpc === "ExecutePlan"
+              ? statementOf(call.request)
+              : call.rpc === "Config"
+                ? `Config ${setsConfig(call.request) ? "set" : "read"}`
+                : call.rpc,
+          ),
+      ).toStrictEqual(["AnalyzePlan", "Config read", "SHOW CURRENT NAMESPACE", "Config set"]);
+    } finally {
+      setup.open();
+      clock.mockRestore();
       await provider.disconnect();
     }
   });

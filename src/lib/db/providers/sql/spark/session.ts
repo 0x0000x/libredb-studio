@@ -100,23 +100,25 @@ export class SparkSessions {
    * The read waits for each session's setup, the first one and the repeat's, through `wait`, which answers the session
    * or refuses: a refusal fails the read before it is given that session, and the setup goes on for the reads after it.
    * Without `wait` the read waits as long as the setup takes. A session that comes once releaseAll began belongs to a
-   * connection being closed: the read is refused with the cancelled sentence and is never given it.
+   * connection being closed: the read is refused with the cancelled sentence and is never given it. `wait` and `read`
+   * are each told whether they serve the repeat, which comes only after the server answered the first read, so a
+   * refusal there can say what was sent.
    */
   async readMetadata<T>(
-    read: (session: SparkSessionHandle) => Promise<T>,
-    wait: (setup: Promise<SparkSessionHandle>) => Promise<SparkSessionHandle> = (setup) => setup,
+    read: (session: SparkSessionHandle, repeat: boolean) => Promise<T>,
+    wait: (setup: Promise<SparkSessionHandle>, repeat: boolean) => Promise<SparkSessionHandle> = (setup) => setup,
   ): Promise<T> {
-    const session = await wait(this.metadata());
+    const session = await wait(this.metadata(), false);
     this.assertNotReleased();
     try {
-      return await read(session);
+      return await read(session, false);
     } catch (error) {
       if (!closed(error)) throw error;
       if (this.metadataEntry?.handle === session) this.discardMetadata();
-      const fresh = await wait(this.metadata());
+      const fresh = await wait(this.metadata(), true);
       this.assertNotReleased();
       try {
-        return await read(fresh);
+        return await read(fresh, true);
       } catch (again) {
         if (closed(again)) {
           throw new SparkError("session-closed", SPARK_ERROR_SENTENCES.metadataSessionLost, { cause: again });

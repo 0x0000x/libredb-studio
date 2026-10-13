@@ -125,6 +125,11 @@ export class SparkRuns {
     queryId?: string;
     session: () => Promise<SparkSessionHandle>;
     deadline: Date;
+    /**
+     * The sentence of a deadline that passes before the first ExecutePlan, the not-sent sentence unless given. A caller
+     * that already sent the statement once, on a session the server closed, gives one that does not say it was not sent.
+     */
+    deadlineBeforeSend?: (timeoutMs: number) => string;
   }): Promise<SparkStatementResult> {
     // A run that starts once cancelAll began is refused as cancelled before it asks for its session, so nothing is sent
     // for it, and it is never registered.
@@ -138,7 +143,7 @@ export class SparkRuns {
       // The setup is the scope's one memoized promise, so it carries no run signal.
       const session = await input.session();
       run.session = session;
-      this.assertMaySend(run, input.deadline, SPARK_ERROR_SENTENCES.deadlineBeforeSend);
+      this.assertMaySend(run, input.deadline, input.deadlineBeforeSend ?? SPARK_ERROR_SENTENCES.deadlineBeforeSend);
       release = this.deps.heartbeat.hold(session);
       const call: SparkWireCall = {
         metadata: this.deps.metadata,
@@ -314,8 +319,9 @@ export class SparkRuns {
 
   /**
    * Before each ExecutePlan: a run marked cancelled ends cancelled, and one whose deadline has passed ends at it with
-   * `sentence`, either way without sending it. Before the first step nothing has reached Spark, so its sentence says
-   * the statement was not sent; between the steps the run's Interrupt follows, as the deadline sentence says.
+   * `sentence`, either way without sending it. Before the first step nothing of the run has reached Spark, so its
+   * sentence says the statement was not sent, unless the caller sent it once before and gave another; between the steps
+   * the run's Interrupt follows, as the deadline sentence says.
    */
   private assertMaySend(run: Run, deadline: Date, sentence: (timeoutMs: number) => string): void {
     if (run.cancelled) throw cancelledError();

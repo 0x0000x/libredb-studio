@@ -233,16 +233,13 @@ class SparkMetadataSlots {
 }
 
 /**
- * `waiting` until `deadline`: when the deadline passes first, the statement that waits is refused unsent, with the
- * sentence of a statement whose timeout passed before Studio could send it, and what it waited for goes on.
+ * `waiting` until `deadline`: when the deadline passes first, the statement that waits is refused with `sentence`, and
+ * what it waited for goes on.
  */
-function beforeDeadline<T>(waiting: Promise<T>, deadline: Date, timeoutMs: number): Promise<T> {
+function beforeDeadline<T>(waiting: Promise<T>, deadline: Date, sentence: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const passed = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new SparkError("deadline", SPARK_ERROR_SENTENCES.deadlineBeforeSend(timeoutMs))),
-      deadline.getTime() - Date.now(),
-    );
+    timer = setTimeout(() => reject(new SparkError("deadline", sentence)), deadline.getTime() - Date.now());
   });
   return Promise.race([waiting, passed]).finally(() => clearTimeout(timer));
 }
@@ -698,18 +695,23 @@ export class SparkProvider extends SQLBaseProvider {
    * One statement the provider wrote, in one of the connection's metadata slots, on the metadata session, read again
    * once on a new one when the server closed it. Its deadline is the connection's query timeout from now, unless the
    * read it belongs to passes the read's own, and its waits count against it: the wait for a slot, and the wait for the
-   * metadata session's setup, the first one and the repeat's. A statement still waiting when its deadline passes is
-   * refused unsent.
+   * metadata session's setup, the first one and the repeat's. A statement whose deadline passes before it is sent is
+   * refused with the not-sent sentence. The repeat comes only after the statement was sent on the session the server
+   * closed, so a repeat whose deadline passes before it is sent again, waiting for the new session's setup or at its
+   * send, is refused with the sentence of a lost metadata session instead.
    */
   private metadataSql(
     connection: SparkConnection,
     sql: string,
     deadline: Date = new Date(Date.now() + connection.options.callTimeoutMs),
   ): Promise<SparkStatementResult> {
+    const beforeSend = (repeat: boolean) =>
+      repeat ? () => SPARK_ERROR_SENTENCES.metadataSessionLost : SPARK_ERROR_SENTENCES.deadlineBeforeSend;
     return connection.metadataSlots.run(deadline, () =>
       connection.sessions.readMetadata(
-        (session) => connection.runs.run({ sql, session: async () => session, deadline }),
-        (setup) => beforeDeadline(setup, deadline, connection.options.callTimeoutMs),
+        (session, repeat) =>
+          connection.runs.run({ sql, session: async () => session, deadline, deadlineBeforeSend: beforeSend(repeat) }),
+        (setup, repeat) => beforeDeadline(setup, deadline, beforeSend(repeat)(connection.options.callTimeoutMs)),
       ),
     );
   }

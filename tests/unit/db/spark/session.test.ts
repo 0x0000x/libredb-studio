@@ -6,7 +6,9 @@
  * registry closed after releaseAll, so nothing is set up again; the metadata session repeated once after the server
  * closed it, for each of the three INVALID_HANDLE classes (spec 10.8), and discarded once when two reads meet it
  * together; a metadata setup discarded in flight released once it settles; the repeat only for a failure the read
- * mapped to a SparkError, never for the channel's own error.
+ * mapped to a SparkError, never for the channel's own error; a setup in flight when releaseAll begins sending no
+ * further step, and a metadata read whose setup answers then sending nothing; the wait and the read told whether they
+ * serve the repeat.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
@@ -874,6 +876,32 @@ describe("the metadata session after the server closed it (spec 4.5)", () => {
     expect(repeat).toBe(refusal);
     expect(waits).toBe(2);
     expect(seen).toStrictEqual([first.sessionId, fresh, fresh]);
+    await sessions.releaseAll();
+  });
+
+  test("the wait and the read are each told whether they serve the repeat, which follows a read of the closed session", async () => {
+    const sessions = new SparkSessions(deps(), {});
+    const first = await sessions.metadata();
+    const told: [string, string, boolean][] = [];
+    const value = await sessions.readMetadata(
+      async (session, repeat) => {
+        told.push(["read", session === first ? "first" : "fresh", repeat]);
+        if (session === first) throw new SparkError("session-closed", "closed");
+        return "fresh";
+      },
+      async (setup, repeat) => {
+        const session = await setup;
+        told.push(["wait", session === first ? "first" : "fresh", repeat]);
+        return session;
+      },
+    );
+    expect(value).toBe("fresh");
+    expect(told).toStrictEqual([
+      ["wait", "first", false],
+      ["read", "first", false],
+      ["wait", "fresh", true],
+      ["read", "fresh", true],
+    ]);
     await sessions.releaseAll();
   });
 

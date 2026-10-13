@@ -3,8 +3,8 @@
  * connection's metadata and the 32 MiB stream bound, with every response's server-side id observed on the run's
  * session; the inline answer, an empty one included, and every column under a unique name as an own property; the
  * deadline as a QueryError after an Interrupt that reaches the fake after the deadline passed, one that passes while
- * the session is in setup ending the run as not sent, and one that passes between the steps sending the second step
- * nothing; Stop before and after the first ExecutePlan, which aborts the run's stream without waiting for the
+ * the session is in setup ending the run as not sent, or with the sentence its caller gave, and one that passes
+ * between the steps sending the second step nothing; Stop before and after the first ExecutePlan, which aborts the run's stream without waiting for the
  * Interrupt's answer while the Interrupt still leaves first on the shared connection under Node, and answers within
  * one control window of the Stop; Stop on a run already refused at its deadline, which answers from that outcome;
  * cancelAll, which stops every run as Stop does and refuses, before it asks for its session, every run that starts
@@ -706,6 +706,32 @@ describe("the deadline and Stop", () => {
     expect(error.category).toBe("deadline");
     expect(error.message).toBe(SPARK_ERROR_SENTENCES.deadlineBeforeSend(5_000));
     expect(toDatabaseError(error)).toBeInstanceOf(QueryError);
+    expect(plans()).toHaveLength(0);
+    expect(interrupts()).toHaveLength(0);
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
+  test("a run given its caller's sentence for a deadline that passes before its first ExecutePlan ends with that sentence, sending nothing", async () => {
+    const { sessions, runs } = world();
+    const gate = Promise.withResolvers<void>();
+    const deadline = soon(50);
+    const running = runs.run({
+      sql: "CREATE TABLE x",
+      session: async () => {
+        await gate.promise;
+        return sessions.forScope("ds");
+      },
+      deadline,
+      deadlineBeforeSend: (timeoutMs) => `sent once before, ${timeoutMs} ms`,
+    });
+    await waitFor(() => Date.now() >= deadline.getTime());
+    gate.resolve();
+    const error = await failure(running);
+    expect({ category: error.category, message: error.message }).toStrictEqual({
+      category: "deadline",
+      message: "sent once before, 5000 ms",
+    });
     expect(plans()).toHaveLength(0);
     expect(interrupts()).toHaveLength(0);
     expect(runs.runsInFlight()).toBe(0);
