@@ -1,0 +1,669 @@
+/**
+ * One run over the fake Spark Connect server (spec 4.6, 4.8, 4.10): the two steps; the inline answer, an empty one
+ * included, and every column under a unique name as an own property; the deadline as a QueryError after an Interrupt
+ * that reaches the fake after the deadline passed; Stop before and after the first ExecutePlan; a Spark error with one
+ * FetchErrorDetails before the statement session's release, and a fetch that fails leaving the ErrorInfo message as it
+ * is; every exit before Spark ended the stream, each refusal of a result among them, sending one Interrupt by the run's
+ * tag, none when Spark ended it (a Spark error, a closed or changed session, a session released under the run), and an
+ * Interrupt that fails changing nothing; the heartbeat; no reattach option; and Review Focus R1 (a SET changes only its
+ * own scope) and R2 (concurrent scopes share no session, tag or Interrupt).
+ */
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
+import { buildSparkConnectionOptions } from "@/lib/db/providers/sql/spark/connection-options";
+import { SPARK_SESSION_CONF } from "@/lib/db/providers/sql/spark/constants";
+import { SPARK_ERROR_SENTENCES, SparkError } from "@/lib/db/providers/sql/spark/errors";
+import { SparkRuns } from "@/lib/db/providers/sql/spark/execute";
+import { grpcWireTransport, type SparkWireChannel } from "@/lib/db/providers/sql/spark/grpc-client";
+import { SparkHeartbeat } from "@/lib/db/providers/sql/spark/heartbeat";
+import {
+  configGetOptionRequest,
+  configSetRequest,
+  relationRequest,
+  releaseSessionRequest,
+} from "@/lib/db/providers/sql/spark/requests";
+import { type SparkSessionDeps, SparkSessions } from "@/lib/db/providers/sql/spark/session";
+import type { DatabaseConnection } from "@/lib/types";
+import { captureBytes, readSparkCapture } from "../../../helpers/spark-captures";
+import { type SparkFakeAnswer, type SparkFakeServer, startSparkFake } from "../../../helpers/spark-connect-server";
+import { columnsStream, int64Batch, largeUtf8Stream, stringBatch } from "../../../helpers/spark-ipc";
+
+const MiB = 1_048_576;
+const LIMITS = { maxReceivedBytes: 33_554_432 };
+const ID_SCHEMA = { struct: { fields: [{ name: "id", data_type: { long: {} }, nullable: true }] } };
+const V_SCHEMA = { struct: { fields: [{ name: "v", data_type: { string: {} }, nullable: true }] } };
+const VARIANT_SCHEMA = { struct: { fields: [{ name: "v", data_type: { variant: {} }, nullable: true }] } };
+const BAD_TEXT = "[TABLE_OR_VIEW_NOT_FOUND] The table or view `t` cannot be found.";
+const statements: Record<string, SparkFakeAnswer> = {
+  "SELECT id FROM t": { kind: "relation", schema: ID_SCHEMA, ipc: [int64Batch(0, 3)] },
+  "SHOW TABLES": { kind: "command", ipc: stringBatch(2, 3) },
+  "CREATE TABLE x": { kind: "command", ipc: new Uint8Array(0) },
+  "SELECT names": {
+    kind: "command",
+    ipc: columnsStream([
+      { name: "__proto__", kind: "int64", values: [BigInt(1)] },
+      { name: "a", kind: "int64", values: [BigInt(2)] },
+      { name: "a", kind: "int64", values: [BigInt(3)] },
+    ]),
+  },
+  // The DataType declares a bigint id; the batch holds a string v.
+  DISAGREE: { kind: "relation", schema: ID_SCHEMA, ipc: [stringBatch(1, 3)] },
+  // A VARIANT whose value holds no byte, not even its header.
+  "BAD CELL": {
+    kind: "relation",
+    schema: VARIANT_SCHEMA,
+    ipc: [
+      columnsStream([
+        {
+          name: "v",
+          kind: "struct",
+          length: 1,
+          children: [
+            { name: "value", kind: "binary", values: [new Uint8Array(0)] },
+            {
+              name: "metadata",
+              kind: "binary",
+              values: [Uint8Array.of(0x01, 0x00, 0x00)],
+              metadata: { variant: "true" },
+            },
+          ],
+        },
+      ]),
+    ],
+  },
+  SLOW: { kind: "silent" },
+  PROGRESS: { kind: "progress-only" },
+  BAD: {
+    kind: "error",
+    code: 13,
+    message: BAD_TEXT,
+    errorInfo: { errorClass: "TABLE_OR_VIEW_NOT_FOUND", sqlState: "42P01", errorId: "err-bad-1" },
+    fetch: {
+      root_error_idx: 0,
+      errors: [
+        { error_type_hierarchy: [], message: "root", stack_trace: [], cause_idx: 1 },
+        { error_type_hierarchy: [], message: "Permission denied", stack_trace: [] },
+      ],
+    },
+  },
+  DROPPED: { kind: "status", code: 14, message: "upstream reset" },
+  PING: { kind: "status", code: 8, message: "Bandwidth exhausted or memory limit exceeded" },
+  RESET: { kind: "reset" },
+  HUGE: { kind: "oversized", bytes: 17 * MiB, path: "relation" },
+  GAP: { kind: "relation", schema: V_SCHEMA, ipc: [stringBatch(1, 5 * MiB)], corrupt: "gap" },
+  LARGE: { kind: "relation", schema: V_SCHEMA, ipc: [largeUtf8Stream()] },
+};
+let fake: SparkFakeServer;
+let channel: SparkWireChannel;
+let port = 0;
+const control = () => ({ metadata: {}, deadline: new Date(Date.now() + 5_000), signal: new AbortController().signal });
+const soon = (ms = 5_000) => new Date(Date.now() + ms);
+const interrupts = () => fake.log.entries.filter((entry) => entry.rpc === "Interrupt");
+const plans = () =>
+  fake.log.entries.filter((entry) => entry.rpc === "ExecutePlan" && entry.tags[0]?.startsWith("libredb-studio-"));
+const tagOf = (entry: { request: object }) => (entry.request as { operation_tag?: string }).operation_tag;
+/** A heartbeat's Config get_option, which arrives every 50 ms while a run holds its session. */
+const isBeat = (entry: { rpc: string; request: object }) =>
+  entry.rpc === "Config" && JSON.stringify(entry.request).includes("spark.sql.ansi.enabled");
+
+function settle<T>(promise: Promise<T>): Promise<{ readonly value?: T; readonly error?: SparkError }> {
+  return promise.then(
+    (value) => ({ value }),
+    (error: unknown) => ({ error: error as SparkError }),
+  );
+}
+async function failure(promise: Promise<unknown>): Promise<SparkError> {
+  const outcome = await settle(promise);
+  if (outcome.error === undefined) throw new Error("the run answered, though this test expects it to fail");
+  expect(outcome.error).toBeInstanceOf(SparkError);
+  return outcome.error;
+}
+async function waitFor(condition: () => boolean): Promise<void> {
+  for (let waited = 0; !condition(); waited += 10) {
+    if (waited > 1_000) throw new Error("the condition did not hold within one second");
+    // oxlint-disable-next-line no-await-in-loop -- the condition is polled once per turn.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+/** The fake's channel, except that each RPC of `refused` fails before it is sent; `asked` records each refused call. */
+function refusing(refused: readonly string[]): { readonly wire: SparkWireChannel; readonly asked: string[] } {
+  const asked: string[] = [];
+  const wire: SparkWireChannel = {
+    unary: (rpc, request, call) => {
+      if (!refused.includes(rpc)) return channel.unary(rpc, request, call);
+      asked.push(rpc);
+      return Promise.reject(new Error(`${rpc} refused by the test`));
+    },
+    executePlan: (request, call, limits) => channel.executePlan(request, call, limits),
+    close: () => undefined,
+  };
+  return { wire, asked };
+}
+
+/** The fake's channel, with every ExecutePlan response's schema taken away, as a server that sends none would answer. */
+function schemaless(): SparkWireChannel {
+  return {
+    unary: (rpc, request, call) => channel.unary(rpc, request, call),
+    executePlan: (request, call, limits) => {
+      const stream = channel.executePlan(request, call, limits);
+      return {
+        read: async () => {
+          const response = await stream.read();
+          return response === undefined ? undefined : { ...response, schema: null };
+        },
+        get receivedBytes() {
+          return stream.receivedBytes;
+        },
+        get truncated() {
+          return stream.truncated;
+        },
+        cancel: () => stream.cancel(),
+      };
+    },
+    close: () => undefined,
+  };
+}
+
+/** The fake's channel, with each FetchErrorDetails held until the test opens it; `fetching` settles once one waits. */
+function heldFetch(): { readonly wire: SparkWireChannel; readonly fetching: Promise<void>; readonly open: () => void } {
+  let open: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let waiting: () => void = () => undefined;
+  const fetching = new Promise<void>((resolve) => {
+    waiting = resolve;
+  });
+  const wire: SparkWireChannel = {
+    unary: async (rpc, request, call) => {
+      if (rpc === "FetchErrorDetails") {
+        waiting();
+        await gate;
+      }
+      return channel.unary(rpc, request, call);
+    },
+    executePlan: (request, call, limits) => channel.executePlan(request, call, limits),
+    close: () => undefined,
+  };
+  return { wire, fetching, open };
+}
+
+function world(wire: SparkWireChannel = channel) {
+  const deps: SparkSessionDeps = {
+    configSet: async (session, pairs) =>
+      (
+        (await channel.unary("Config", configSetRequest(session, pairs), control())) as {
+          server_side_session_id: string;
+        }
+      ).server_side_session_id,
+    runSetup: async () => {
+      throw new Error("these tests set no catalog and no namespace");
+    },
+    release: async (session) => {
+      await channel.unary("ReleaseSession", releaseSessionRequest(session), control());
+    },
+  };
+  const sessions = new SparkSessions(deps, {});
+  // Every beat's answer is kept, so a test can await a beat already in flight when the run released the heartbeat:
+  // the release stops later ticks but cannot wait for that one (review of T5.8, finding 4; T5.8's own test does this).
+  const beatAnswers: Promise<unknown>[] = [];
+  const heartbeat = new SparkHeartbeat(async (session) => {
+    const answer = channel.unary("Config", configGetOptionRequest(session, ["spark.sql.ansi.enabled"]), control());
+    beatAnswers.push(answer);
+    await answer;
+  }, 50);
+  const runs = new SparkRuns({
+    channel: () => wire,
+    metadata: {},
+    heartbeat,
+    sessions,
+    errorConnection: { host: "127.0.0.1", port, secretForms: [] },
+    timeoutMs: 5_000,
+  });
+  return { sessions, runs, beatAnswers };
+}
+
+beforeAll(async () => {
+  fake = await startSparkFake({ statements, progressEveryMs: 50, reattachWindowMs: 300 });
+  port = Number(fake.target.slice(fake.target.lastIndexOf(":") + 1));
+  channel = grpcWireTransport(
+    buildSparkConnectionOptions(
+      { id: "c", name: "c", type: "spark", host: "127.0.0.1", port } as unknown as DatabaseConnection,
+      { queryTimeout: 5_000 },
+    ),
+  );
+});
+afterAll(() => {
+  channel.close();
+  fake.close();
+});
+beforeEach(() => fake.log.clear());
+
+describe("the two steps (spec 4.6)", () => {
+  test("a query: its lazy relation, then its batches; one tag, two operations, 4 MiB chunks, no reattach option", async () => {
+    const { sessions, runs } = world();
+    const result = await runs.run({
+      sql: "SELECT id FROM t",
+      session: () => sessions.forScope("s1"),
+      deadline: soon(),
+    });
+    expect(result).toStrictEqual({
+      fields: ["id"],
+      rows: [{ id: 0 }, { id: 1 }, { id: 2 }],
+      columnTypes: { id: "bigint" },
+      cut: null,
+    });
+    const [first, second] = plans();
+    expect(plans()).toHaveLength(2);
+    expect(first?.tags).toStrictEqual(second?.tags ?? []);
+    expect(first?.operationId).not.toBe(second?.operationId);
+    for (const entry of plans()) {
+      expect(entry.reattachOptions).toBeUndefined();
+      expect(JSON.stringify(entry.requestOptions)).toContain("4194304");
+    }
+    expect(interrupts()).toHaveLength(0);
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
+  test("a command answers inline in one ExecutePlan", async () => {
+    const { sessions, runs } = world();
+    const result = await runs.run({ sql: "SHOW TABLES", session: () => sessions.forScope("s2"), deadline: soon() });
+    expect(result.rows).toHaveLength(2);
+    expect(plans()).toHaveLength(1);
+    await sessions.releaseAll();
+  });
+
+  test("an inline answer with no data is an empty result, whole and uninterrupted", async () => {
+    const { sessions, runs } = world();
+    const result = await runs.run({ sql: "CREATE TABLE x", session: () => sessions.forScope("s4"), deadline: soon() });
+    expect(result).toStrictEqual({ fields: [], rows: [], columnTypes: {}, cut: null });
+    expect(plans()).toHaveLength(1);
+    expect(interrupts()).toHaveLength(0);
+    await sessions.releaseAll();
+  });
+
+  test("each column is keyed under a unique name as an own property, __proto__ and a repeated name included", async () => {
+    const { sessions, runs } = world();
+    const result = await runs.run({ sql: "SELECT names", session: () => sessions.forScope("s5"), deadline: soon() });
+    expect(result.fields).toStrictEqual(["__proto__", "a", "a (2)"]);
+    expect(result.rows).toHaveLength(1);
+    expect(Object.getPrototypeOf(result.rows[0])).toBe(Object.prototype);
+    expect(Object.entries(result.rows[0] ?? {})).toStrictEqual([
+      ["__proto__", 1],
+      ["a", 2],
+      ["a (2)", 3],
+    ]);
+    expect(Object.getPrototypeOf(result.columnTypes)).toBe(Object.prototype);
+    expect(Object.entries(result.columnTypes)).toStrictEqual([
+      ["__proto__", "bigint"],
+      ["a", "bigint"],
+      ["a (2)", "bigint"],
+    ]);
+    await sessions.releaseAll();
+  });
+
+  test("the run observes the server-side id on its session", async () => {
+    const { sessions, runs } = world();
+    const session = await sessions.forScope("s3");
+    await runs.run({ sql: "SHOW TABLES", session: async () => session, deadline: soon() });
+    expect(
+      (plans()[0]?.request as { client_observed_server_side_session_id?: string } | undefined)
+        ?.client_observed_server_side_session_id,
+    ).toBe(session.serverSideSessionId);
+    await sessions.releaseAll();
+  });
+});
+
+describe("the deadline and Stop (spec 4.8)", () => {
+  test("the deadline is a QueryError sentence after one Interrupt that reaches the fake after it passed", async () => {
+    const { sessions, runs } = world();
+    const deadline = soon(200);
+    const error = await failure(runs.run({ sql: "SLOW", session: () => sessions.forScope("d"), deadline }));
+    expect(error.category).toBe("deadline");
+    expect(error.message).toBe(SPARK_ERROR_SENTENCES.deadline(5_000));
+    expect(interrupts()).toHaveLength(1);
+    expect(interrupts()[0]?.at ?? 0).toBeGreaterThanOrEqual(deadline.getTime());
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    await sessions.releaseAll();
+  });
+
+  test("an Interrupt that fails changes nothing: the deadline still stands and the run ends", async () => {
+    const { wire, asked } = refusing(["Interrupt"]);
+    const { sessions, runs } = world(wire);
+    const error = await failure(runs.run({ sql: "SLOW", session: () => sessions.forScope("di"), deadline: soon(200) }));
+    expect(error.category).toBe("deadline");
+    expect(error.message).toBe(SPARK_ERROR_SENTENCES.deadline(5_000));
+    expect(asked).toStrictEqual(["Interrupt"]);
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
+  test("Stop answers true, sends one Interrupt by the run's tag and ends the run cancelled; then false", async () => {
+    const { sessions, runs } = world();
+    const running = settle(
+      runs.run({ sql: "SLOW", queryId: "q1", session: () => sessions.forScope("c"), deadline: soon() }),
+    );
+    await waitFor(() => plans().length === 2);
+    expect(await runs.cancel("q1")).toBe(true);
+    expect((await running).error?.category).toBe("cancelled");
+    expect(interrupts()).toHaveLength(1);
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    expect(await runs.cancel("q1")).toBe(false);
+    expect(await runs.cancel("unknown")).toBe(false);
+    await sessions.releaseAll();
+  });
+
+  test("Stop whose Interrupt fails still ends the run cancelled and answers true", async () => {
+    const { wire, asked } = refusing(["Interrupt"]);
+    const { sessions, runs } = world(wire);
+    const running = settle(
+      runs.run({ sql: "SLOW", queryId: "q3", session: () => sessions.forScope("ci"), deadline: soon() }),
+    );
+    await waitFor(() => plans().length === 2);
+    expect(await runs.cancel("q3")).toBe(true);
+    expect((await running).error?.category).toBe("cancelled");
+    expect(asked).toStrictEqual(["Interrupt"]);
+    await sessions.releaseAll();
+  });
+
+  test("Stop while the session is still in setup answers true at once and sends no ExecutePlan and no Interrupt", async () => {
+    const { sessions, runs } = world();
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const running = settle(
+      runs.run({
+        sql: "SELECT id FROM t",
+        queryId: "q2",
+        session: async () => {
+          await gate;
+          return sessions.forScope("g");
+        },
+        deadline: soon(),
+      }),
+    );
+    expect(await runs.cancel("q2")).toBe(true);
+    open();
+    expect((await running).error?.category).toBe("cancelled");
+    expect(plans()).toHaveLength(0);
+    expect(interrupts()).toHaveLength(0);
+    await sessions.releaseAll();
+  });
+
+  test("cancelAll stops every run, and runsInFlight counts them", async () => {
+    const { sessions, runs } = world();
+    const one = settle(runs.run({ sql: "SLOW", session: () => sessions.forScope("x1"), deadline: soon() }));
+    const two = settle(
+      runs.run({ sql: "SLOW", queryId: "x2", session: () => sessions.forScope("x2"), deadline: soon() }),
+    );
+    await waitFor(() => plans().length === 4);
+    expect(runs.runsInFlight()).toBe(2);
+    await runs.cancelAll();
+    expect((await one).error?.category).toBe("cancelled");
+    expect((await two).error?.category).toBe("cancelled");
+    expect(interrupts()).toHaveLength(2);
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+});
+
+describe("errors (spec 4.10)", () => {
+  test("a Spark error: one FetchErrorDetails before the statement session's release, its cause shown, no Interrupt", async () => {
+    const { sessions, runs } = world();
+    const error = await failure(
+      runs.run({ sql: "BAD", session: () => sessions.forScope(undefined), deadline: soon() }),
+    );
+    expect(error.category).toBe("spark");
+    expect(error.message).toContain("\nCause: Permission denied");
+    // A beat that a slow machine lets in between holds nothing about the order, so the beats are left out.
+    expect(
+      fake.log.entries
+        .filter((entry) => !isBeat(entry))
+        .map((entry) => entry.rpc)
+        .slice(-3),
+    ).toStrictEqual(["ExecutePlan", "FetchErrorDetails", "ReleaseSession"]);
+    expect(interrupts()).toHaveLength(0);
+  });
+
+  test("a Stop that comes while a Spark error is decoded leaves that error, and answers false", async () => {
+    const { wire, fetching, open } = heldFetch();
+    const { sessions, runs } = world(wire);
+    const running = settle(
+      runs.run({ sql: "BAD", queryId: "qe", session: () => sessions.forScope("e1"), deadline: soon() }),
+    );
+    await fetching;
+    const stopping = runs.cancel("qe");
+    open();
+    expect(await stopping).toBe(false);
+    const error = (await running).error;
+    expect(error?.category).toBe("spark");
+    expect(error?.message).toContain("\nCause: Permission denied");
+    // The Stop's own Interrupt, the run's at most one; Spark had ended the operation, so the run sent none of its own.
+    expect(interrupts()).toHaveLength(1);
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
+  test("a relation answer without its schema is refused as unreadable after one Interrupt by the run's tag", async () => {
+    const { sessions, runs } = world(schemaless());
+    const error = await failure(
+      runs.run({ sql: "SELECT id FROM t", session: () => sessions.forScope("ns"), deadline: soon() }),
+    );
+    expect(error.category).toBe("unreadable");
+    expect(error.message).toBe(SPARK_ERROR_SENTENCES.unreadable("the result had no schema"));
+    expect(interrupts()).toHaveLength(1);
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    await sessions.releaseAll();
+  });
+
+  test("a FetchErrorDetails that fails leaves the ErrorInfo message as it is", async () => {
+    const { wire, asked } = refusing(["FetchErrorDetails"]);
+    const { sessions, runs } = world(wire);
+    const error = await failure(
+      runs.run({ sql: "BAD", session: () => sessions.forScope(undefined), deadline: soon() }),
+    );
+    expect(error.category).toBe("spark");
+    expect(error.message).toBe(BAD_TEXT);
+    expect(asked).toStrictEqual(["FetchErrorDetails"]);
+    expect(interrupts()).toHaveLength(0);
+  });
+
+  test("a session released under a run not marked cancelled ends it with Spark's own text, and no Interrupt", async () => {
+    const { sessions, runs } = world();
+    const running = settle(runs.run({ sql: "SLOW", session: () => sessions.forScope("rel"), deadline: soon() }));
+    await waitFor(() => plans().length === 2);
+    await sessions.endScope("rel");
+    const error = (await running).error;
+    expect(error?.category).toBe("spark");
+    expect(error?.message).toContain("[INVALID_CURSOR.DISCONNECTED]");
+    expect(interrupts()).toHaveLength(0);
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
+  test.each([
+    ["closed", "session-closed", (sessions: SparkSessions) => sessions.endScope("closed")],
+    ["restarted", "session-changed", () => fake.restart()],
+  ] as const)("a session the server %s ends the run as %s, with no Interrupt", async (scope, category, end) => {
+    const { sessions, runs } = world();
+    const session = await sessions.forScope(scope);
+    await end(sessions);
+    const error = await failure(runs.run({ sql: "SELECT id FROM t", session: async () => session, deadline: soon() }));
+    expect(error.category).toBe(category);
+    expect(plans()).toHaveLength(1);
+    expect(interrupts()).toHaveLength(0);
+    await sessions.releaseAll();
+  });
+
+  test.each([
+    ["DROPPED", "stream-failed", SPARK_ERROR_SENTENCES.streamFailed("upstream reset")],
+    ["PING", "ping-goaway", SPARK_ERROR_SENTENCES.pingGoaway],
+    ["HUGE", "receive-cap", SPARK_ERROR_SENTENCES.receiveCapRelation],
+    ["LARGE", "unreadable", SPARK_ERROR_SENTENCES.largeVarTypes],
+  ] as const)("%s ends as %s after one Interrupt by the run's tag", async (sql, category, sentence) => {
+    const { sessions, runs } = world();
+    const error = await failure(runs.run({ sql, session: () => sessions.forScope(sql), deadline: soon() }));
+    expect(error.category).toBe(category);
+    expect(error.message).toBe(sentence);
+    expect(interrupts()).toHaveLength(1);
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    await sessions.releaseAll();
+  });
+
+  test.each([
+    ["DISAGREE", SPARK_ERROR_SENTENCES.unreadable("a result whose schema and batches name different columns")],
+    ["BAD CELL", SPARK_ERROR_SENTENCES.cellUnreadable("variant", "v")],
+  ] as const)("%s: the result is refused as unreadable after one Interrupt by the run's tag", async (sql, sentence) => {
+    const { sessions, runs } = world();
+    const error = await failure(runs.run({ sql, session: () => sessions.forScope(sql), deadline: soon() }));
+    expect(error.category).toBe("unreadable");
+    expect(error.message).toBe(sentence);
+    expect(interrupts()).toHaveLength(1);
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    await sessions.releaseAll();
+  });
+
+  test("a chunk gap is refused as unreadable, and a reset connection fails the run; each after one Interrupt", async () => {
+    const { sessions, runs } = world();
+    expect(
+      (await failure(runs.run({ sql: "GAP", session: () => sessions.forScope("gap"), deadline: soon() }))).category,
+    ).toBe("unreadable");
+    expect(interrupts()).toHaveLength(1);
+    fake.log.clear();
+    const reset = await failure(
+      runs.run({ sql: "RESET", session: () => sessions.forScope("reset"), deadline: soon(3_000) }),
+    );
+    expect(["connection-dropped", "stream-failed"]).toContain(reset.category);
+    await waitFor(() => interrupts().length === 1);
+    await sessions.releaseAll();
+  });
+});
+
+describe("the heartbeat and the reattach window (spec 4.6, 4.7)", () => {
+  test("beats arrive on the run's session while it runs, and stop when it ends", async () => {
+    const { sessions, runs, beatAnswers } = world();
+    await failure(runs.run({ sql: "SLOW", session: () => sessions.forScope("hb"), deadline: soon(320) }));
+    // A beat sent by the last tick may still be on its way; await every beat's answer before counting.
+    await Promise.allSettled(beatAnswers);
+    const session = plans()[0]?.sessionId;
+    const beats = () => fake.log.entries.filter((entry) => isBeat(entry) && entry.sessionId === session);
+    expect(beats().length).toBeGreaterThanOrEqual(3);
+    const settled = beats().length;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(beats().length).toBe(settled);
+    await sessions.releaseAll();
+  });
+
+  test("a control call that asks for reattachment ends at the 300 ms window while the run, which asks for none, outlives it", async () => {
+    const { sessions, runs } = world();
+    const running = settle(
+      runs.run({ sql: "PROGRESS", queryId: "p", session: () => sessions.forScope("p"), deadline: soon() }),
+    );
+    await waitFor(() => plans().length === 2);
+    const probe = channel.executePlan(
+      {
+        ...relationRequest(
+          { sessionId: randomUUID() },
+          { sql: { query: "PROGRESS" } },
+          { operationId: randomUUID(), tag: "probe" },
+        ),
+        request_options: [{ reattach_options: { reattachable: true } }],
+      },
+      control(),
+      LIMITS,
+    );
+    const started = Date.now();
+    // oxlint-disable-next-line no-await-in-loop -- the probe's responses are read one after another to its end.
+    for (let response = await probe.read(); response !== undefined; response = await probe.read()) void response;
+    expect(Date.now() - started).toBeGreaterThanOrEqual(250);
+    expect(runs.runsInFlight()).toBe(1);
+    expect(await runs.cancel("p")).toBe(true);
+    await running;
+    for (const entry of plans()) expect(entry.reattachOptions).toBeUndefined();
+    await sessions.releaseAll();
+  });
+});
+
+describe("Review Focus R1 and R2", () => {
+  const zstd = () => {
+    const capture = readSparkCapture("4.2.0", "compressed-zstd");
+    if (capture.outcome !== "pass") throw new Error("compressed-zstd is an error capture");
+    const batch = (capture.payload as readonly { readonly arrow_batch?: { readonly data: unknown } | null }[]).find(
+      (response) => response.arrow_batch,
+    );
+    return captureBytes(batch?.arrow_batch?.data);
+  };
+
+  test.each([
+    [
+      "SET spark.sql.execution.arrow.useLargeVarTypes=true",
+      () => ({ kind: "relation", schema: V_SCHEMA, ipc: [largeUtf8Stream()] }) as SparkFakeAnswer,
+      SPARK_ERROR_SENTENCES.largeVarTypes,
+    ],
+    [
+      "SET spark.sql.execution.arrow.compression.codec=zstd",
+      () => ({ kind: "relation", schema: V_SCHEMA, ipc: [zstd()] }) as SparkFakeAnswer,
+      SPARK_ERROR_SENTENCES.compressed("zstd"),
+    ],
+    [
+      "SET spark.connect.session.resultChunking.maxChunkSize=0",
+      () => ({ kind: "oversized", bytes: 17 * MiB, path: "relation" }) as SparkFakeAnswer,
+      SPARK_ERROR_SENTENCES.receiveCapRelation,
+    ],
+  ] as const)("R1: a SET in one scope changes only that scope's later results (%s)", async (set, refused, sentence) => {
+    // The fake answers by text and keeps no session state: the SET is answered as Spark's inline echo, and the test
+    // switches the SELECT's answer between the scopes, so what is proven is the provider's side: the refusal, its one
+    // Interrupt, and the next scope's fresh session setup.
+    statements[set] = { kind: "command", ipc: stringBatch(1, 4) };
+    statements["SELECT v FROM t"] = refused();
+    const { sessions, runs } = world();
+    await runs.run({ sql: set, session: () => sessions.forScope("A"), deadline: soon() });
+    const sessionA = (await sessions.forScope("A")).sessionId;
+    const error = await failure(
+      runs.run({ sql: "SELECT v FROM t", session: () => sessions.forScope("A"), deadline: soon() }),
+    );
+    expect(error.message).toBe(sentence);
+    expect(interrupts().filter((entry) => entry.sessionId === sessionA)).toHaveLength(1);
+    await sessions.endScope("A");
+    statements["SELECT v FROM t"] = { kind: "relation", schema: V_SCHEMA, ipc: [stringBatch(2, 3)] };
+    const whole = await runs.run({ sql: "SELECT v FROM t", session: () => sessions.forScope("B"), deadline: soon() });
+    expect(whole.rows).toHaveLength(2);
+    expect(whole.cut).toBeNull();
+    const sessionB = (await sessions.forScope("B")).sessionId;
+    expect(sessionB).not.toBe(sessionA);
+    const setup = fake.log.entries.find((entry) => entry.rpc === "Config" && entry.sessionId === sessionB);
+    const pairs = (setup?.request as { operation: { set: { pairs: { key: string; value: string }[] } } } | undefined)
+      ?.operation.set.pairs;
+    expect(pairs?.map((pair) => [pair.key, pair.value])).toStrictEqual(
+      SPARK_SESSION_CONF.map(([key, value]) => [key, value]),
+    );
+    await sessions.releaseAll();
+  });
+
+  test("R2: concurrent scopes share no session, tag or Interrupt, and ending one scope leaves the other run reading", async () => {
+    const { sessions, runs } = world();
+    const a = settle(
+      runs.run({ sql: "SLOW", queryId: "qa", session: () => sessions.forScope("A2"), deadline: soon() }),
+    );
+    const b = settle(
+      runs.run({ sql: "SLOW", queryId: "qb", session: () => sessions.forScope("B2"), deadline: soon() }),
+    );
+    await waitFor(() => plans().length === 4);
+    expect(new Set(plans().map((entry) => entry.sessionId)).size).toBe(2);
+    expect(new Set(plans().map((entry) => entry.tags[0])).size).toBe(2);
+    const sessionA = (await sessions.forScope("A2")).sessionId;
+    expect(await runs.cancel("qa")).toBe(true);
+    expect((await a).error?.category).toBe("cancelled");
+    expect(interrupts()).toHaveLength(1);
+    expect(interrupts()[0]?.sessionId).toBe(sessionA);
+    await sessions.endScope("A2");
+    expect(runs.runsInFlight()).toBe(1);
+    expect(await runs.cancel("qb")).toBe(true);
+    expect((await b).error?.category).toBe("cancelled");
+    expect(new Set(interrupts().map((entry) => tagOf(entry))).size).toBe(2);
+    await sessions.releaseAll();
+  });
+});
