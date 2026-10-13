@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 /**
@@ -15,7 +15,7 @@ const SPARK = "src/lib/db/providers/sql/spark";
 /** Files whose every import is `import type`. */
 const TYPE_ONLY: readonly string[] = [`${SPARK}/sc-uri.ts`];
 /** Files that import no I/O, no logger and no transport. */
-const PURE: readonly string[] = [`${SPARK}/sc-uri.ts`];
+const PURE: readonly string[] = [`${SPARK}/sc-uri.ts`, `${SPARK}/ipc-guard.ts`];
 const FORBIDDEN: readonly RegExp[] = [
   /^(?:node:)?(?:fs|fs\/promises|net|tls|http|https|http2|dgram|dns|child_process|worker_threads)$/,
   /^@grpc\//,
@@ -46,6 +46,16 @@ function importLines(path: string): ImportLine[] {
   return lines;
 }
 
+/** The files that import apache-arrow, held exactly: under src/ only arrow.ts (T6.2 adds it), and the test stream writer. */
+const ARROW_IMPORTERS: readonly string[] = ["tests/helpers/spark-ipc.ts"];
+const SCANNED = /\.(?:ts|tsx|mts|js|mjs)$/;
+
+function filesUnder(dir: string): string[] {
+  return (readdirSync(join(ROOT, dir), { recursive: true }) as string[])
+    .filter((path) => SCANNED.test(path) && !path.split(/[\\/]/).includes("node_modules"))
+    .map((path) => `${dir}/${path.split("\\").join("/")}`);
+}
+
 describe("lane C's Spark seam guard", () => {
   test("the reader finds imports, so an empty answer below is not a reader that reads nothing", () => {
     const parser = importLines("src/lib/connection-string-parser.ts").map((line) => line.specifier);
@@ -71,5 +81,16 @@ describe("lane C's Spark seam guard", () => {
         );
       expect({ file, refused }).toEqual({ file, refused: [] });
     }
+  });
+
+  test("only the listed files import apache-arrow (spec 4.1, 8.7 row 7.2)", () => {
+    const found = ["src", "tests", "scripts", "e2e"]
+      .flatMap(filesUnder)
+      .filter((file) =>
+        importLines(file).some(
+          (line) => line.specifier === "apache-arrow" || line.specifier.startsWith("apache-arrow/"),
+        ),
+      );
+    expect(found.sort()).toStrictEqual([...ARROW_IMPORTERS].sort());
   });
 });
