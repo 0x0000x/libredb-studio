@@ -1474,6 +1474,9 @@ export interface ProviderCapabilities {
    *
    * `quoteObjectPath` reads that segment as parts joined by dots, each bare or quoted with the character
    * `identifierQuoting` declares (that character doubled inside), so a declaration needs `identifierQuoting` beside it.
+   * That reading applies only when a segment follows the schema level, so the last segment is always the object's own
+   * name, and a container path passed alone keeps its schema segment as one name. Editor completion writes and matches
+   * a qualified name by the same reading (`containerSpellingOf`).
    * Apache Spark declares it: a namespace of a catalog such as Iceberg's can hold several parts, and the tree shows it
    * as Spark spells it.
    */

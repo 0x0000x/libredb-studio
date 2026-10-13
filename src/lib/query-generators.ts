@@ -15,7 +15,6 @@ import { metricSelector } from "@/lib/db/providers/timeseries/prometheus/promql"
 import { milvusSelectQuery, milvusTableQuery } from "@/lib/db/providers/vector/milvus/generators";
 import { qdrantSelectQuery, qdrantTableQuery } from "@/lib/db/providers/vector/qdrant/generators";
 import {
-  type ContainerLevelSpec,
   type ObjectReadRange,
   offersCountQuery,
   type PreviewTimeWindow,
@@ -162,7 +161,7 @@ export function quoteIdentifier(
 }
 
 /** The quote character of each declared quoting, which an engine-spelled segment is read with. */
-const DECLARED_QUOTE_CHARACTER: Record<NonNullable<ProviderCapabilities["identifierQuoting"]>, string> = {
+const DECLARED_QUOTE_CHARACTER: Record<NonNullable<ProviderCapabilities["identifierQuoting"]>, '"' | "`"> = {
   double: '"',
   "double-always": '"',
   backtick: "`",
@@ -204,21 +203,26 @@ function readSpelledParts(text: string, quote: string): string[] | undefined {
 /** The index of the segment `containerNameSpelling: "engine"` covers: the schema level's, when a segment follows it. */
 function spelledSegmentIndex(path: readonly string[], capabilities: ProviderCapabilities): number {
   if (capabilities.containerNameSpelling !== "engine") return -1;
-  const levels: readonly ContainerLevelSpec[] = capabilities.containerLevels ?? [];
-  const index = levels.findIndex((level) => level.id === "schema");
+  const index = declaredLevels(capabilities).findIndex((level) => level.id === "schema");
   return index !== -1 && index < path.length - 1 ? index : -1;
 }
 
+/** The character an engine-spelled segment is read with: the declared quoting's, which the declaration needs beside it. */
+function spelledQuote(capabilities: ProviderCapabilities): '"' | "`" {
+  const declared = capabilities.identifierQuoting;
+  if (declared === undefined) {
+    throw new RangeError('containerNameSpelling "engine" needs a declared identifierQuoting to read the spelling with');
+  }
+  return DECLARED_QUOTE_CHARACTER[declared];
+}
+
+/** Quote an engine-spelled segment part by part, or as one name where it does not read as a spelling. */
 function quoteSpelledSegment(
   segment: string,
   capabilities: ProviderCapabilities,
   options: { always?: boolean },
 ): string {
-  const declared = capabilities.identifierQuoting;
-  if (declared === undefined) {
-    throw new RangeError('containerNameSpelling "engine" needs a declared identifierQuoting to read the spelling with');
-  }
-  const parts = readSpelledParts(segment, DECLARED_QUOTE_CHARACTER[declared]);
+  const parts = readSpelledParts(segment, spelledQuote(capabilities));
   if (parts === undefined) return quoteIdentifier(segment, capabilities, options);
   return parts.map((part) => quoteIdentifier(part, capabilities, options)).join(".");
 }
@@ -239,7 +243,11 @@ function quoteSpelledSegment(
  *
  * Where the engine declares `containerNameSpelling: "engine"`, the schema-level segment is
  * its own spelling of a multi-part name and is quoted part by part; a segment that does not
- * read as such a spelling is quoted as one name.
+ * read as such a spelling is quoted as one name. That reading applies only when a segment
+ * follows the schema level, so the last segment is always the object's own name, and a
+ * container path passed here alone keeps its schema segment as one name: Spark's
+ * `["lake", "a.b"]` is `` `lake`.`a.b` ``, and a name appended to that text does not address
+ * the namespace `a`.`b`.
  *
  * Full qualification is emitted unconditionally, including inside the session default
  * container. `demo.orders`, `[libredb_objects].[app].[customers]` and `APP.APP_CUSTOMERS`
@@ -273,6 +281,37 @@ export function quoteObjectPath(
         : quoteIdentifier(segment, capabilities, options),
     )
     .join(".");
+}
+
+/**
+ * How editor completion writes and reads a qualified name on an engine that declares
+ * `containerNameSpelling: "engine"`: there not every dot separates two segments, because the
+ * spelled segment holds one name or several. Spark's namespace `a.b` is the names `a` and `b`,
+ * and its namespace `` `x.y` `` the one name `x.y`.
+ */
+export interface ContainerSpelling {
+  /** The character a part is quoted with, doubled inside: the declared quoting's. */
+  quote: '"' | "`";
+  /** An object's address as the engine writes it: `quoteObjectPath`. */
+  quotePath: (path: readonly string[]) => string;
+  /** The names each segment of an object's address holds: one, or the parts `quoteObjectPath` quotes it by. */
+  pathNames: (path: readonly string[]) => string[][];
+}
+
+/** The engine's `ContainerSpelling`, or `undefined` where it does not declare `containerNameSpelling`. */
+export function containerSpellingOf(capabilities: ProviderCapabilities): ContainerSpelling | undefined {
+  if (capabilities.containerNameSpelling !== "engine") return undefined;
+  const quote = spelledQuote(capabilities);
+  return {
+    quote,
+    quotePath: (path) => quoteObjectPath(path, capabilities),
+    pathNames: (path) => {
+      const spelled = spelledSegmentIndex(path, capabilities);
+      return path.map((segment, index) =>
+        index === spelled ? (readSpelledParts(segment, quote) ?? [segment]) : [segment],
+      );
+    },
+  };
 }
 
 /**

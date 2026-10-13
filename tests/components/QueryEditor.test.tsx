@@ -3424,6 +3424,32 @@ describe("QueryEditor completion addresses (#1397)", () => {
     mockUseMonacoReturn = null;
   });
 
+  test("an engine that spells its container names gives completion that spelling, and no other engine does", () => {
+    mockUseMonacoReturn = { Range: class {} };
+    mockRegisterSQLCompletionProvider.mockClear();
+    type Capabilities = Parameters<typeof QueryEditor>[0]["capabilities"];
+    const spark = {
+      queryLanguage: "sql",
+      identifierQuoting: "backtick-always",
+      containerNameSpelling: "engine",
+      containerLevels: [
+        { id: "catalog", label: "Catalog", labelPlural: "Catalogs" },
+        { id: "schema", label: "Namespace", labelPlural: "Namespaces" },
+      ],
+    } as unknown as Capabilities;
+    const calls = mockRegisterSQLCompletionProvider.mock.calls as unknown as [unknown, SchemaCompletionCache][];
+    const spelled = render(React.createElement(QueryEditor, createDefaultProps({ capabilities: spark })));
+    const spelling = calls[calls.length - 1][1].containerSpelling!;
+    expect(spelling.quotePath(["lake", "a.b", "t"])).toBe("`lake`.`a`.`b`.`t`");
+    expect(spelling.pathNames(["lake", "a.b", "t"])).toStrictEqual([["lake"], ["a", "b"], ["t"]]);
+    spelled.unmount();
+    const mysql = { queryLanguage: "sql", defaultPort: 3306 } as unknown as Capabilities;
+    const plain = render(React.createElement(QueryEditor, createDefaultProps({ capabilities: mysql })));
+    expect(calls[calls.length - 1][1].containerSpelling).toBeUndefined();
+    plain.unmount();
+    mockUseMonacoReturn = null;
+  });
+
   test("with no reported default container nothing qualifies", () => {
     expect(registeredTables({ schemaContext: schema }).map((item) => item.qualify)).toEqual([false, false, undefined]);
   });

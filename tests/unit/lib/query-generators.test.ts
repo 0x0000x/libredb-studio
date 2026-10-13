@@ -900,6 +900,52 @@ describe('containerNameSpelling "engine"', () => {
       "SELECT COUNT(*) AS row_count\nFROM `lake`.`a`.`b`.`t`;",
     );
   });
+
+  // A conditional quoting, where `always` changes the output, so a part that lost the option would show.
+  const conditional = makeCaps({
+    identifierQuoting: "backtick",
+    containerNameSpelling: "engine",
+    containerLevels: LEVELS,
+  });
+
+  test("options.always reaches every spelled part", () => {
+    expect(quoteObjectPath(["lake", "a.b", "t"], conditional, { always: true })).toBe("`lake`.`a`.`b`.`t`");
+    expect(quoteObjectPath(["lake", "a.b", "t"], conditional)).toBe("lake.a.b.t");
+  });
+
+  test("a quoted part followed by a bare one is two names, the quoted one keeping its dot", () => {
+    expect(quoteObjectPath(["lake", "`x.y`.c", "t"], conditional, { always: true })).toBe("`lake`.`x.y`.`c`.`t`");
+    expect(quoteObjectPath(["lake", "`x.y`.c", "t"], conditional)).toBe("lake.`x.y`.c.t");
+  });
+
+  test("completion writes an address as quoteObjectPath does and reads the names each segment holds", () => {
+    const spelling = generators.containerSpellingOf(spelled)!;
+    expect(spelling.quote).toBe("`");
+    expect(spelling.quotePath(["lake", "a.b", "t"])).toBe("`lake`.`a`.`b`.`t`");
+    expect(spelling.pathNames(["lake", "a.b", "t"])).toStrictEqual([["lake"], ["a", "b"], ["t"]]);
+    expect(spelling.pathNames(["lake", "`x.y`.c", "t"])).toStrictEqual([["lake"], ["x.y", "c"], ["t"]]);
+    // A segment that does not read as a spelling is one name, as quoteObjectPath quotes it.
+    expect(spelling.pathNames(["lake", "a b", "t"])).toStrictEqual([["lake"], ["a b"], ["t"]]);
+    // Read only where a segment follows the schema level, as quoteObjectPath reads it.
+    expect(spelling.pathNames(["lake", "a.b"])).toStrictEqual([["lake"], ["a.b"]]);
+  });
+
+  test("completion reads a double-quoting engine's spelling with its own quote character", () => {
+    const double = makeCaps({
+      identifierQuoting: "double-always",
+      containerNameSpelling: "engine",
+      containerLevels: LEVELS,
+    });
+    expect(generators.containerSpellingOf(double)!.quote).toBe('"');
+  });
+
+  test("an engine without the declaration gives completion no spelling, and one without a quote is refused", () => {
+    expect(
+      generators.containerSpellingOf(makeCaps({ identifierQuoting: "backtick-always", containerLevels: LEVELS })),
+    ).toBeUndefined();
+    const noQuote = makeCaps({ containerNameSpelling: "engine", containerLevels: LEVELS });
+    expect(() => generators.containerSpellingOf(noQuote)).toThrow(RangeError);
+  });
 });
 
 // ============================================================================
@@ -2388,11 +2434,14 @@ describe("PromQL Generate Query (#1085)", () => {
  * manager's `runRowAction`, which only a row menu item reaches, and the menu offers one only for a kind
  * the provider names in `rowActions`; Prometheus declares none (its capability object is pinned in
  * tests/unit/db/prometheus/provider.test.ts), and the function raises for a dialect with no `rowAction`.
+ * `containerSpellingOf` answers nothing for an engine that does not declare `containerNameSpelling`, and a
+ * PromQL connection declares none (the second test below), so completion reads no spelled name there.
  * An export added later has no classification, so this list fails until somebody writes one for it.
  */
 describe("the module's exports, for a PromQL connection (#1085)", () => {
   test("every export is one this file has classified", () => {
     expect(Object.keys(generators).sort()).toEqual([
+      "containerSpellingOf",
       "escapeGlob",
       "generateCountQuery",
       "generateRowActionQuery",
@@ -2405,6 +2454,10 @@ describe("the module's exports, for a PromQL connection (#1085)", () => {
       "quoteObjectPath",
       "shouldRefreshSchema",
     ]);
+  });
+
+  test("a PromQL connection gives completion no container spelling", () => {
+    expect(generators.containerSpellingOf(promqlCaps)).toBeUndefined();
   });
 });
 

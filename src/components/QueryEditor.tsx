@@ -40,7 +40,7 @@ import { toast } from "sonner";
 import { splitCursorTargets } from "@/lib/sql/statement-splitter";
 import { resolveSqlGrammar } from "@/lib/sql/grammar";
 import type { DatabaseType } from "@/lib/types";
-import { quoteIdentifier } from "@/lib/query-generators";
+import { containerSpellingOf, quoteIdentifier } from "@/lib/query-generators";
 
 // Serve Monaco from our own origin rather than @monaco-editor/react's jsdelivr default.
 // Runs at module load so it is in place before the first <Editor> mounts.
@@ -381,7 +381,12 @@ export const QueryEditor = forwardRef<QueryEditorRef, QueryEditorProps>(
         allColumns,
         ...(capabilities === undefined
           ? {}
-          : { quoteSegment: (segment: string) => quoteIdentifier(segment, capabilities) }),
+          : {
+              quoteSegment: (segment: string) => quoteIdentifier(segment, capabilities),
+              // Only an engine that spells a container segment itself has one; every other engine
+              // keeps writing a qualified name segment by segment.
+              containerSpelling: containerSpellingOf(capabilities),
+            }),
       };
     }, [parsedSchema, defaultContainer, capabilities]);
 
