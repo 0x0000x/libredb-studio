@@ -1,10 +1,11 @@
 /**
- * One run of one statement (spec 4.6 to 4.8, 4.10): the run registers before any network call, takes its session,
- * sends the statement as a command and, for a query, its lazy relation as a second ExecutePlan with the same tag, and
- * decodes the answer under the statement budgets. Every exit before Spark ended the stream, a cut or a refused result
- * among them, sends one Interrupt by the run's tag under its own control deadline, because cancelling a gRPC call or
- * reaching its deadline leaves the job running on Spark. A Spark error is decoded with one FetchErrorDetails on the
- * run's own session before a statement session is released. The heartbeat holds the session for the whole run.
+ * One run of one statement: the run registers before any network call, takes its session, sends the statement as a
+ * command and, for a query, its lazy relation as a second ExecutePlan with the same tag, and decodes the answer under
+ * the statement budgets. A run marked cancelled, or whose deadline has passed, sends no further ExecutePlan. Every exit
+ * before Spark ended the stream, a cut or a refused result among them, sends one Interrupt by the run's tag under its
+ * own control deadline, because cancelling a gRPC call or reaching its deadline leaves the job running on Spark. A
+ * Spark error is decoded with one FetchErrorDetails on the run's own session before a statement session is released.
+ * The heartbeat holds the session for the whole run.
  */
 import { keyRowsByPosition } from "@/lib/db/utils/positional-rows";
 import { MAX_UNLIMITED_ROWS } from "@/lib/db/utils/query-limiter";
@@ -58,10 +59,13 @@ export interface SparkRunDeps {
   readonly timeoutMs: number;
 }
 
-/** The statement budgets of spec 5.6: rows from the limiter's unlimited bound, decoded cost from 16 MiB. */
+/** The statement budgets: rows from the limiter's unlimited bound, decoded cost from 16 MiB. */
 const BUDGET: SparkBudget = { rows: MAX_UNLIMITED_ROWS, bytes: SPARK_RESULT_BYTE_BUDGET };
 const LIMITS = { maxReceivedBytes: SPARK_STREAM_MAX_RECEIVED_BYTES };
-/** Categories whose operation Spark ended itself, or that never reached Spark, so no Interrupt follows (spec 4.8). */
+/**
+ * Categories whose operation Spark ended itself, or that never reached Spark, so no Interrupt follows; a changed
+ * server-side id that the run itself found on a stream Spark had not ended is the one exception (`openStreamRefused`).
+ */
 const SPARK_ENDED: ReadonlySet<SparkErrorCategory> = new Set([
   "unsent",
   "spark",
@@ -80,18 +84,29 @@ interface Run {
   cancelled: boolean;
   executing: boolean;
   interrupted: boolean;
+  /** The run refused a response of a stream Spark had not ended, so its operation may still be running. */
+  openStreamRefused: boolean;
   session: SparkSessionHandle | undefined;
 }
 
 const unreadable = (what: string) => new SparkError("unreadable", SPARK_ERROR_SENTENCES.unreadable(what));
 /**
- * The end of a run marked cancelled, whatever its stream answered (spec 4.10, the cancelled row): that answer is kept as
- * the cause, and the run's own cancelled refusal, raised before an ExecutePlan, stands as it is.
+ * The end of a run marked cancelled, whatever its stream answered: that answer is kept as the cause, and the run's own
+ * cancelled refusal, raised before an ExecutePlan, stands as it is.
  */
 const cancelledError = (cause?: unknown) =>
   cause instanceof SparkError && cause.category === "cancelled"
     ? cause
     : new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled, cause === undefined ? undefined : { cause });
+/**
+ * One turn of the event loop, by which a call handed to the channel has written its request. grpc-js opens a call's
+ * HTTP/2 stream only after promises settle, so under Node a reset of another stream submitted in the same turn is
+ * written first (measured with grpc-js 1.14.5 under Node 24.14.0; Bun 1.4.2 writes the call first either way).
+ */
+const nextTurn = () =>
+  new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
 
 export class SparkRuns {
   private readonly byQuery = new Map<string, Run>();
@@ -111,10 +126,10 @@ export class SparkRuns {
     let outcome: "cancelled" | "done" = "done";
     let release: (() => void) | undefined;
     try {
-      // The setup is the scope's one memoized promise, so it carries no run signal (spec 4.6 step 4).
+      // The setup is the scope's one memoized promise, so it carries no run signal.
       const session = await input.session();
       run.session = session;
-      if (run.cancelled) throw cancelledError();
+      this.assertMaySend(run, input.deadline);
       release = this.deps.heartbeat.hold(session);
       const call: SparkWireCall = {
         metadata: this.deps.metadata,
@@ -125,6 +140,7 @@ export class SparkRuns {
       const first = this.observed(
         this.deps.channel().executePlan(sqlCommandRequest(session, input.sql, run), call, LIMITS),
         session,
+        run,
       );
       const { relation } = await readCommandAnswer(first);
       const inline = inlineData(relation);
@@ -133,7 +149,7 @@ export class SparkRuns {
         interrupt = result.cut !== null;
         return result;
       }
-      if (run.cancelled) throw cancelledError();
+      this.assertMaySend(run, input.deadline);
       phase = "relation";
       const second = this.observed(
         this.deps
@@ -144,6 +160,7 @@ export class SparkRuns {
             LIMITS,
           ),
         session,
+        run,
       );
       const answer = await readRelationAnswer(second, BUDGET);
       const result = decodeRelation(answer, input.sql);
@@ -153,7 +170,7 @@ export class SparkRuns {
       // Read once, as the failure arrives: a Stop that comes while a failure is decoded does not replace it.
       const failure = run.cancelled ? cancelledError(error) : await this.decode(error, run, phase);
       outcome = failure.category === "cancelled" ? "cancelled" : "done";
-      interrupt = run.executing && !SPARK_ENDED.has(failure.category);
+      interrupt = run.executing && (run.openStreamRefused || !SPARK_ENDED.has(failure.category));
       throw failure;
     } finally {
       release?.();
@@ -166,24 +183,32 @@ export class SparkRuns {
   }
 
   /**
-   * Stop (spec 4.8): false for an unknown or finished run. A run that has sent no ExecutePlan is marked, which is all
-   * it needs, and answers true at once; any other is sent its Interrupt, has its signal aborted, and answers true once
-   * it settled as cancelled within the control deadline.
+   * Stop: false for an unknown or finished run. A run that has sent no ExecutePlan is marked, which is all it needs,
+   * and answers true at once. Any other is sent its Interrupt, and its signal is aborted one turn later without
+   * waiting for the Interrupt's answer, so the Interrupt still leaves ahead of the stream's reset on the shared
+   * connection. Stop then waits for the Interrupt's answer and for the run to settle, within SPARK_CONTROL_DEADLINE_MS
+   * of the Stop, and answers true when the run settled as cancelled by then.
    */
   async cancel(queryId: string): Promise<boolean> {
     const run = this.byQuery.get(queryId);
     if (run === undefined) return false;
     run.cancelled = true;
     if (!run.executing) return true;
-    await this.interrupt(run);
-    run.controller.abort();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<"timeout">((resolve) => {
-      timer = setTimeout(() => resolve("timeout"), SPARK_CONTROL_DEADLINE_MS);
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, SPARK_CONTROL_DEADLINE_MS);
     });
-    const settled = await Promise.race([run.settled, timeout]);
+    let outcome: "cancelled" | "done" | undefined;
+    const settled = run.settled.then((value) => {
+      outcome = value;
+    });
+    // interrupt() never rejects, so an Interrupt that fails after the abort leaves nothing unhandled.
+    const interrupted = this.interrupt(run);
+    await nextTurn();
+    run.controller.abort();
+    await Promise.race([Promise.all([interrupted, settled]), timeout]);
     clearTimeout(timer);
-    return settled === "cancelled";
+    return outcome === "cancelled";
   }
 
   /** Stop for every run, without waiting for any to settle. */
@@ -217,6 +242,7 @@ export class SparkRuns {
       cancelled: false,
       executing: false,
       interrupted: false,
+      openStreamRefused: false,
       session: undefined,
     };
     if (queryId !== undefined) this.byQuery.set(queryId, run);
@@ -229,7 +255,7 @@ export class SparkRuns {
     for (const [queryId, registered] of this.byQuery) if (registered === run) this.byQuery.delete(queryId);
   }
 
-  /** A control call's own deadline and a signal no run aborts (spec 4.3). */
+  /** A control call's own deadline and a signal no run aborts. */
   private control(): SparkWireCall {
     return {
       metadata: this.deps.metadata,
@@ -238,7 +264,10 @@ export class SparkRuns {
     };
   }
 
-  /** At most one Interrupt per run; one that fails changes nothing, since the run's own outcome stands (spec 4.8). */
+  /**
+   * At most one Interrupt per run; one that fails changes nothing, since the run's own outcome stands, and the returned
+   * promise never rejects.
+   */
   private async interrupt(run: Run): Promise<void> {
     if (run.interrupted || run.session === undefined) return;
     run.interrupted = true;
@@ -249,14 +278,35 @@ export class SparkRuns {
     }
   }
 
-  /** Every response's server-side id is observed on the run's session. */
-  private observed(stream: SparkPlanStream, session: SparkSessionHandle): SparkPlanStream {
+  /**
+   * Before each ExecutePlan: a run marked cancelled ends cancelled, and one whose deadline has passed ends at it,
+   * either way without sending it.
+   */
+  private assertMaySend(run: Run, deadline: Date): void {
+    if (run.cancelled) throw cancelledError();
+    if (Date.now() >= deadline.getTime()) {
+      throw new SparkError("deadline", SPARK_ERROR_SENTENCES.deadline(this.deps.timeoutMs));
+    }
+  }
+
+  /**
+   * Every response's server-side id is observed on the run's session. A changed id refuses a response of a stream
+   * Spark has not ended, so the run is marked to send its Interrupt before the refusal leaves.
+   */
+  private observed(stream: SparkPlanStream, session: SparkSessionHandle, run: Run): SparkPlanStream {
     const sessions = this.deps.sessions;
     return {
       async read() {
         const response = await stream.read();
         const id = (response as { server_side_session_id?: unknown } | undefined)?.server_side_session_id;
-        if (typeof id === "string") sessions.observe(session, id);
+        if (typeof id === "string") {
+          try {
+            sessions.observe(session, id);
+          } catch (error) {
+            run.openStreamRefused = true;
+            throw error;
+          }
+        }
         return response;
       },
       get receivedBytes() {
@@ -280,7 +330,7 @@ export class SparkRuns {
     });
   }
 
-  /** One FetchErrorDetails for the error's errorId on the run's session (spec 4.10 step 2); a failed fetch adds nothing. */
+  /** One FetchErrorDetails for the error's errorId on the run's session; a failed fetch adds nothing. */
   private async fetchDetails(error: unknown, run: Run): Promise<SparkErrorDetails | undefined> {
     const raw = (error as { metadata?: { get?: (key: string) => unknown[] } } | null)?.metadata?.get?.(
       "grpc-status-details-bin",
@@ -329,7 +379,7 @@ function decodeRelation(
 
 /**
  * The result: fields made unique, each row keyed by them as own properties (`__proto__` included), Spark's spellings
- * as column types, and the cut, `bytes` when the decoded budget ended the kept rows early (spec 5.1, 5.2, 3.6).
+ * as column types, and the cut, `bytes` when the decoded budget ended the kept rows early.
  */
 function rowsOf(
   columns: readonly SparkColumn[],
@@ -348,7 +398,7 @@ function rowsOf(
 }
 
 /**
- * The kept rows' values, in order, under the decoded budget (spec 5.2, 5.6): each row is charged its rowCost, with its
+ * The kept rows' values, in order, under the decoded budget: each row is charged its rowCost, with its
  * batch's overhead on its first row as keepRows charges it, and then the text its VARIANT cells write, which keepRows
  * does not count. A row whose cost passes what the texts before it left, or whose VARIANT text would pass what is left
  * after its cost, ends the values before it (`over`), as keepRows ends the rows before one that passes the budget.

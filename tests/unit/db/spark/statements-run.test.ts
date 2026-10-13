@@ -1,20 +1,27 @@
 /**
- * One run over the fake Spark Connect server (spec 4.6, 4.8, 4.10): the two steps; the inline answer, an empty one
- * included, and every column under a unique name as an own property; the deadline as a QueryError after an Interrupt
- * that reaches the fake after the deadline passed; Stop before and after the first ExecutePlan; a Spark error with one
- * FetchErrorDetails before the statement session's release, and a fetch that fails leaving the ErrorInfo message as it
- * is; every exit before Spark ended the stream, each refusal of a result among them, sending one Interrupt by the run's
- * tag, none when Spark ended it (a Spark error, a closed or changed session, a session released under the run), and an
- * Interrupt that fails changing nothing; the heartbeat; no reattach option; and Review Focus R1 (a SET changes only its
- * own scope) and R2 (concurrent scopes share no session, tag or Interrupt).
+ * One run over the fake Spark Connect server: the two steps, each carrying the run's deadline, its one signal, the
+ * connection's metadata and the 32 MiB stream bound, with every response's server-side id observed on the run's
+ * session; the inline answer, an empty one included, and every column under a unique name as an own property; the
+ * deadline as a QueryError after an Interrupt that reaches the fake after the deadline passed, and a deadline already
+ * passed before a step sending that step nothing; Stop before and after the first ExecutePlan, which aborts the run's
+ * stream without waiting for the Interrupt's answer while the Interrupt still leaves first on the shared connection
+ * under Node; a Spark error with one FetchErrorDetails before the statement session's release, and a fetch that fails
+ * leaving the ErrorInfo message as it is; every exit before Spark ended the stream, each refusal of a result and a
+ * server-side id that changed on an open stream among them, sending one Interrupt by the run's tag, none when Spark
+ * ended it (a Spark error, a closed or changed session, a session released under the run), and an Interrupt that fails
+ * changing nothing; the heartbeat; no reattach option; a SET that changes only its own scope; and concurrent scopes
+ * that share no session, heartbeat hold, tag or Interrupt.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { buildSparkConnectionOptions } from "@/lib/db/providers/sql/spark/connection-options";
 import { SPARK_SESSION_CONF } from "@/lib/db/providers/sql/spark/constants";
 import { SPARK_ERROR_SENTENCES, SparkError } from "@/lib/db/providers/sql/spark/errors";
 import { SparkRuns } from "@/lib/db/providers/sql/spark/execute";
-import { grpcWireTransport, type SparkWireChannel } from "@/lib/db/providers/sql/spark/grpc-client";
+import { grpcWireTransport, type SparkWireCall, type SparkWireChannel } from "@/lib/db/providers/sql/spark/grpc-client";
 import { SparkHeartbeat } from "@/lib/db/providers/sql/spark/heartbeat";
 import {
   configGetOptionRequest,
@@ -22,7 +29,7 @@ import {
   relationRequest,
   releaseSessionRequest,
 } from "@/lib/db/providers/sql/spark/requests";
-import { type SparkSessionDeps, SparkSessions } from "@/lib/db/providers/sql/spark/session";
+import { type SparkSessionDeps, type SparkSessionHandle, SparkSessions } from "@/lib/db/providers/sql/spark/session";
 import type { DatabaseConnection } from "@/lib/types";
 import { captureBytes, readSparkCapture } from "../../../helpers/spark-captures";
 import { type SparkFakeAnswer, type SparkFakeServer, startSparkFake } from "../../../helpers/spark-connect-server";
@@ -30,6 +37,7 @@ import { columnsStream, int64Batch, largeUtf8Stream, stringBatch } from "../../.
 
 const MiB = 1_048_576;
 const LIMITS = { maxReceivedBytes: 33_554_432 };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ID_SCHEMA = { struct: { fields: [{ name: "id", data_type: { long: {} }, nullable: true }] } };
 const V_SCHEMA = { struct: { fields: [{ name: "v", data_type: { string: {} }, nullable: true }] } };
 const VARIANT_SCHEMA = { struct: { fields: [{ name: "v", data_type: { variant: {} }, nullable: true }] } };
@@ -90,6 +98,7 @@ const statements: Record<string, SparkFakeAnswer> = {
   PING: { kind: "status", code: 8, message: "Bandwidth exhausted or memory limit exceeded" },
   RESET: { kind: "reset" },
   HUGE: { kind: "oversized", bytes: 17 * MiB, path: "relation" },
+  "HUGE COMMAND": { kind: "oversized", bytes: 17 * MiB, path: "command" },
   GAP: { kind: "relation", schema: V_SCHEMA, ipc: [stringBatch(1, 5 * MiB)], corrupt: "gap" },
   LARGE: { kind: "relation", schema: V_SCHEMA, ipc: [largeUtf8Stream()] },
 };
@@ -102,6 +111,8 @@ const interrupts = () => fake.log.entries.filter((entry) => entry.rpc === "Inter
 const plans = () =>
   fake.log.entries.filter((entry) => entry.rpc === "ExecutePlan" && entry.tags[0]?.startsWith("libredb-studio-"));
 const tagOf = (entry: { request: object }) => (entry.request as { operation_tag?: string }).operation_tag;
+const observedId = (entry: { request: object }) =>
+  (entry.request as { client_observed_server_side_session_id?: string }).client_observed_server_side_session_id;
 /** A heartbeat's Config get_option, which arrives every 50 ms while a run holds its session. */
 const isBeat = (entry: { rpc: string; request: object }) =>
   entry.rpc === "Config" && JSON.stringify(entry.request).includes("spark.sql.ansi.enabled");
@@ -189,7 +200,227 @@ function heldFetch(): { readonly wire: SparkWireChannel; readonly fetching: Prom
   return { wire, fetching, open };
 }
 
-function world(wire: SparkWireChannel = channel) {
+/** The fake's channel, recording the call and the limits each ExecutePlan is opened with. */
+function recording(): {
+  readonly wire: SparkWireChannel;
+  readonly opened: { readonly call: SparkWireCall; readonly limits: object }[];
+} {
+  const opened: { readonly call: SparkWireCall; readonly limits: object }[] = [];
+  const wire: SparkWireChannel = {
+    unary: (rpc, request, call) => channel.unary(rpc, request, call),
+    executePlan: (request, call, limits) => {
+      opened.push({ call, limits });
+      return channel.executePlan(request, call, limits);
+    },
+    close: () => undefined,
+  };
+  return { wire, opened };
+}
+
+/**
+ * The fake's channel, with each ExecutePlan stream's reads passed through the function `change` makes for its request,
+ * which sees each response in turn, the end (undefined) included.
+ */
+function readThrough(
+  change: (request: object) => (response: object | undefined) => Promise<object | undefined>,
+): SparkWireChannel {
+  return {
+    unary: (rpc, request, call) => channel.unary(rpc, request, call),
+    executePlan: (request, call, limits) => {
+      const stream = channel.executePlan(request, call, limits);
+      const changed = change(request);
+      return {
+        read: async () => changed(await stream.read()),
+        get receivedBytes() {
+          return stream.receivedBytes;
+        },
+        get truncated() {
+          return stream.truncated;
+        },
+        cancel: () => stream.cancel(),
+      };
+    },
+    close: () => undefined,
+  };
+}
+
+/** Each ExecutePlan's end handed over only once `time` has passed, so a deadline can pass between the two steps. */
+const endAfter = (time: Date) =>
+  readThrough(() => async (response) => {
+    if (response === undefined) await new Promise((resolve) => setTimeout(resolve, time.getTime() - Date.now() + 5));
+    return response;
+  });
+
+/**
+ * Every relation-step response after the first given a new server-side id, as a server that never checks the observed
+ * id would answer once it restarted under an open stream.
+ */
+const rewritingIds = () =>
+  readThrough((request) => {
+    const relationStep = "root" in (request as { plan: object }).plan;
+    let read = 0;
+    return async (response) => {
+      read += 1;
+      return relationStep && read > 1 && response !== undefined
+        ? { ...response, server_side_session_id: randomUUID() }
+        : response;
+    };
+  });
+
+/**
+ * The fake's channel, with each Interrupt held before it is sent until the test lets it go or fails it; `order` records
+ * the Interrupt when the run hands it over and the abort of the run's signal.
+ */
+function heldInterrupt(): {
+  readonly wire: SparkWireChannel;
+  readonly order: string[];
+  readonly letGo: (how: "send" | "fail") => void;
+} {
+  let letGo: (how: "send" | "fail") => void = () => undefined;
+  const gate = new Promise<"send" | "fail">((resolve) => {
+    letGo = resolve;
+  });
+  const order: string[] = [];
+  const watched = new Set<AbortSignal>();
+  const wire: SparkWireChannel = {
+    unary: async (rpc, request, call) => {
+      if (rpc !== "Interrupt") return channel.unary(rpc, request, call);
+      order.push("Interrupt");
+      if ((await gate) === "fail") throw new Error("Interrupt failed by the test");
+      return channel.unary(rpc, request, call);
+    },
+    executePlan: (request, call, limits) => {
+      if (!watched.has(call.signal)) {
+        watched.add(call.signal);
+        call.signal.addEventListener("abort", () => order.push("abort"), { once: true });
+      }
+      return channel.executePlan(request, call, limits);
+    },
+    close: () => undefined,
+  };
+  return { wire, order, letGo: (how) => letGo(how) };
+}
+
+const SPARK_SOURCE = join(import.meta.dir, "../../../../src/lib/db/providers/sql/spark");
+const FAKE_SERVER = join(import.meta.dir, "../../../helpers/spark-connect-server.ts");
+const NODE_STOPS = 5;
+
+/**
+ * A Node program that Stops `stops` silent runs over the fake, through a relay that reads the frames the client
+ * writes, and prints for each Stop its answer, the run's category and which left the client first: the Interrupt's
+ * last frame or the reset of the run's stream.
+ */
+function stopChild(stops: number): string {
+  const spark = (file: string) => JSON.stringify(join(SPARK_SOURCE, file));
+  return `import net from "node:net";
+import { buildSparkConnectionOptions } from ${spark("connection-options.ts")};
+import { SparkRuns } from ${spark("execute.ts")};
+import { grpcWireTransport } from ${spark("grpc-client.ts")};
+import { SparkHeartbeat } from ${spark("heartbeat.ts")};
+import { configSetRequest, releaseSessionRequest } from ${spark("requests.ts")};
+import { SparkSessions } from ${spark("session.ts")};
+import { startSparkFake } from ${JSON.stringify(FAKE_SERVER)};
+
+const DATA = 0;
+const HEADERS = 1;
+const RST_STREAM = 3;
+const END_STREAM = 1;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const fake = await startSparkFake({ statements: { SLOW: { kind: "silent" } } });
+const fakePort = Number(fake.target.slice(fake.target.lastIndexOf(":") + 1));
+// Each frame the client writes, as [type, flags, stream], in the order it leaves the client.
+const frames = [];
+const relay = net.createServer((client) => {
+  const upstream = net.connect(fakePort, "127.0.0.1");
+  let pending = Buffer.alloc(0);
+  let preface = 24;
+  client.on("data", (chunk) => {
+    upstream.write(chunk);
+    pending = Buffer.concat([pending, chunk]);
+    const skipped = Math.min(preface, pending.length);
+    pending = pending.subarray(skipped);
+    preface -= skipped;
+    while (pending.length >= 9 && pending.length >= 9 + pending.readUIntBE(0, 3)) {
+      frames.push([pending[3], pending[4], pending.readUInt32BE(5) & 0x7fffffff]);
+      pending = pending.subarray(9 + pending.readUIntBE(0, 3));
+    }
+  });
+  upstream.on("data", (chunk) => client.write(chunk));
+  client.on("error", () => client.destroy());
+  upstream.on("error", () => upstream.destroy());
+  client.on("close", () => upstream.destroy());
+  upstream.on("close", () => client.destroy());
+});
+await new Promise((resolve) => relay.listen(0, "127.0.0.1", resolve));
+const port = relay.address().port;
+const channel = grpcWireTransport(
+  buildSparkConnectionOptions({ id: "c", name: "c", type: "spark", host: "127.0.0.1", port }, { queryTimeout: 5000 }),
+);
+const control = () => ({ metadata: {}, deadline: new Date(Date.now() + 5000), signal: new AbortController().signal });
+const sessions = new SparkSessions(
+  {
+    configSet: async (session, pairs) =>
+      (await channel.unary("Config", configSetRequest(session, pairs), control())).server_side_session_id,
+    runSetup: async () => "",
+    release: async (session) => {
+      await channel.unary("ReleaseSession", releaseSessionRequest(session), control());
+    },
+  },
+  {},
+);
+const runs = new SparkRuns({
+  channel: () => channel,
+  metadata: {},
+  heartbeat: new SparkHeartbeat(async () => undefined),
+  sessions,
+  errorConnection: { host: "127.0.0.1", port, secretForms: [] },
+  timeoutMs: 5000,
+});
+const stops = [];
+for (let index = 0; index < ${stops}; index += 1) {
+  fake.log.clear();
+  const running = runs
+    .run({
+      sql: "SLOW",
+      queryId: "q" + index,
+      session: () => sessions.forScope("s" + index),
+      deadline: new Date(Date.now() + 5000),
+    })
+    .then(() => "answered", (error) => error.category);
+  for (let waited = 0; fake.log.entries.filter((entry) => entry.rpc === "ExecutePlan").length < 2; waited += 2) {
+    if (waited > 2000) throw new Error("the run did not open its second step");
+    await sleep(2);
+  }
+  // The second step's stream is the last one the client opened, and the Interrupt opens the next.
+  const step = Math.max(...frames.filter(([type]) => type === HEADERS).map(([, , stream]) => stream));
+  const mark = frames.length;
+  const answered = await runs.cancel("q" + index);
+  const category = await running;
+  const found = () => {
+    const later = frames.slice(mark);
+    return {
+      reset: later.findIndex(([type, , stream]) => type === RST_STREAM && stream === step),
+      interrupt: later.findIndex(
+        ([type, flags, stream]) => type === DATA && stream > step && (flags & END_STREAM) !== 0,
+      ),
+    };
+  };
+  for (let waited = 0; (found().reset === -1 || found().interrupt === -1) && waited < 1000; waited += 5) {
+    await sleep(5);
+  }
+  const { reset, interrupt } = found();
+  const first = reset === -1 || interrupt === -1 ? "missing" : interrupt < reset ? "Interrupt" : "reset";
+  stops.push({ answered, category, first });
+}
+await sessions.releaseAll();
+channel.close();
+relay.close();
+fake.close();
+process.stdout.write(JSON.stringify({ version: process.version, stops }) + "\\n", () => process.exit(0));
+`;
+}
+
+function world(wire: SparkWireChannel = channel, metadata: Readonly<Record<string, string>> = {}) {
   const deps: SparkSessionDeps = {
     configSet: async (session, pairs) =>
       (
@@ -205,8 +436,8 @@ function world(wire: SparkWireChannel = channel) {
     },
   };
   const sessions = new SparkSessions(deps, {});
-  // Every beat's answer is kept, so a test can await a beat already in flight when the run released the heartbeat:
-  // the release stops later ticks but cannot wait for that one (review of T5.8, finding 4; T5.8's own test does this).
+  // Every beat's answer is kept, so a test can await a beat already in flight when the run released the heartbeat,
+  // since the release stops later ticks but cannot wait for that one.
   const beatAnswers: Promise<unknown>[] = [];
   const heartbeat = new SparkHeartbeat(async (session) => {
     const answer = channel.unary("Config", configGetOptionRequest(session, ["spark.sql.ansi.enabled"]), control());
@@ -215,7 +446,7 @@ function world(wire: SparkWireChannel = channel) {
   }, 50);
   const runs = new SparkRuns({
     channel: () => wire,
-    metadata: {},
+    metadata,
     heartbeat,
     sessions,
     errorConnection: { host: "127.0.0.1", port, secretForms: [] },
@@ -240,7 +471,7 @@ afterAll(() => {
 });
 beforeEach(() => fake.log.clear());
 
-describe("the two steps (spec 4.6)", () => {
+describe("the two steps", () => {
   test("a query: its lazy relation, then its batches; one tag, two operations, 4 MiB chunks, no reattach option", async () => {
     const { sessions, runs } = world();
     const result = await runs.run({
@@ -264,6 +495,36 @@ describe("the two steps (spec 4.6)", () => {
     }
     expect(interrupts()).toHaveLength(0);
     expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
+  test("both steps carry the run's deadline, its one signal and the 32 MiB stream bound", async () => {
+    const { wire, opened } = recording();
+    const { sessions, runs } = world(wire);
+    const deadline = soon();
+    await runs.run({ sql: "SELECT id FROM t", session: () => sessions.forScope("s6"), deadline });
+    expect(opened.map((entry) => entry.limits)).toStrictEqual([LIMITS, LIMITS]);
+    for (const entry of opened) expect(entry.call.deadline.getTime()).toBe(deadline.getTime());
+    const [first, second] = opened;
+    expect(second?.call.signal).toBe(first?.call.signal);
+    // The run's own signal, which its end aborts.
+    expect(first?.call.signal.aborted).toBe(true);
+    await sessions.releaseAll();
+  });
+
+  test("every ExecutePlan, Interrupt and FetchErrorDetails the run sends carries the connection's metadata", async () => {
+    const { sessions, runs } = world(channel, { authorization: "Bearer t" });
+    await failure(runs.run({ sql: "BAD", session: () => sessions.forScope("m1"), deadline: soon() }));
+    await failure(runs.run({ sql: "SLOW", session: () => sessions.forScope("m2"), deadline: soon(150) }));
+    const sent = fake.log.entries.filter((entry) =>
+      ["ExecutePlan", "Interrupt", "FetchErrorDetails"].includes(entry.rpc),
+    );
+    expect([...new Set(sent.map((entry) => entry.rpc))].sort()).toStrictEqual([
+      "ExecutePlan",
+      "FetchErrorDetails",
+      "Interrupt",
+    ]);
+    for (const entry of sent) expect(entry.metadata.authorization).toBe("Bearer t");
     await sessions.releaseAll();
   });
 
@@ -304,19 +565,19 @@ describe("the two steps (spec 4.6)", () => {
     await sessions.releaseAll();
   });
 
-  test("the run observes the server-side id on its session", async () => {
-    const { sessions, runs } = world();
-    const session = await sessions.forScope("s3");
-    await runs.run({ sql: "SHOW TABLES", session: async () => session, deadline: soon() });
-    expect(
-      (plans()[0]?.request as { client_observed_server_side_session_id?: string } | undefined)
-        ?.client_observed_server_side_session_id,
-    ).toBe(session.serverSideSessionId);
-    await sessions.releaseAll();
+  test("the run records the server-side id of its first answer on a session that had none, and the second step sends it", async () => {
+    const { runs } = world();
+    // Not set up through the registry, so only the run's own observe can record the fake's id.
+    const session: SparkSessionHandle = { sessionId: randomUUID(), kind: "request" };
+    const result = await runs.run({ sql: "SELECT id FROM t", session: async () => session, deadline: soon() });
+    expect(result.rows).toHaveLength(3);
+    expect(session.serverSideSessionId).toMatch(UUID);
+    expect(plans().map(observedId)).toStrictEqual([undefined, session.serverSideSessionId]);
+    await channel.unary("ReleaseSession", releaseSessionRequest(session), control());
   });
 });
 
-describe("the deadline and Stop (spec 4.8)", () => {
+describe("the deadline and Stop", () => {
   test("the deadline is a QueryError sentence after one Interrupt that reaches the fake after it passed", async () => {
     const { sessions, runs } = world();
     const deadline = soon(200);
@@ -325,6 +586,33 @@ describe("the deadline and Stop (spec 4.8)", () => {
     expect(error.message).toBe(SPARK_ERROR_SENTENCES.deadline(5_000));
     expect(interrupts()).toHaveLength(1);
     expect(interrupts()[0]?.at ?? 0).toBeGreaterThanOrEqual(deadline.getTime());
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    await sessions.releaseAll();
+  });
+
+  test("a deadline already passed when the session is ready sends no ExecutePlan and no Interrupt", async () => {
+    const { sessions, runs } = world();
+    const error = await failure(
+      runs.run({ sql: "CREATE TABLE x", session: () => sessions.forScope("dp"), deadline: new Date(Date.now() - 1) }),
+    );
+    expect(error.category).toBe("deadline");
+    expect(error.message).toBe(SPARK_ERROR_SENTENCES.deadline(5_000));
+    expect(plans()).toHaveLength(0);
+    expect(interrupts()).toHaveLength(0);
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
+  test("a deadline that passes between the two steps sends no second ExecutePlan, then one Interrupt by the run's tag", async () => {
+    const deadline = soon(100);
+    const { sessions, runs } = world(endAfter(deadline));
+    const error = await failure(
+      runs.run({ sql: "SELECT id FROM t", session: () => sessions.forScope("db"), deadline }),
+    );
+    expect(error.category).toBe("deadline");
+    expect(error.message).toBe(SPARK_ERROR_SENTENCES.deadline(5_000));
+    expect(plans()).toHaveLength(1);
+    expect(interrupts()).toHaveLength(1);
     expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
     await sessions.releaseAll();
   });
@@ -353,6 +641,64 @@ describe("the deadline and Stop (spec 4.8)", () => {
     expect(await runs.cancel("q1")).toBe(false);
     expect(await runs.cancel("unknown")).toBe(false);
     await sessions.releaseAll();
+  });
+
+  test("Stop aborts the run's stream without waiting for the Interrupt's answer, and answers once the Interrupt did", async () => {
+    const held = heldInterrupt();
+    const { sessions, runs } = world(held.wire);
+    let ended = false;
+    const running = settle(
+      runs.run({ sql: "SLOW", queryId: "qh", session: () => sessions.forScope("h"), deadline: soon() }),
+    ).finally(() => {
+      ended = true;
+    });
+    await waitFor(() => plans().length === 2);
+    let answered: boolean | undefined;
+    const stopping = runs.cancel("qh").then((value) => {
+      answered = value;
+      return value;
+    });
+    // The run ends while its Interrupt is held: the abort did not wait for the Interrupt's answer.
+    await waitFor(() => ended);
+    expect((await running).error?.category).toBe("cancelled");
+    expect(held.order).toStrictEqual(["Interrupt", "abort"]);
+    expect(answered).toBeUndefined();
+    held.letGo("send");
+    expect(await stopping).toBe(true);
+    expect(interrupts()).toHaveLength(1);
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    await sessions.releaseAll();
+  });
+
+  test("an Interrupt that fails after the abort changes nothing: Stop answers true and no rejection goes unhandled", async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", record);
+    try {
+      const held = heldInterrupt();
+      const { sessions, runs } = world(held.wire);
+      let ended = false;
+      const running = settle(
+        runs.run({ sql: "SLOW", queryId: "qf", session: () => sessions.forScope("f"), deadline: soon() }),
+      ).finally(() => {
+        ended = true;
+      });
+      await waitFor(() => plans().length === 2);
+      const stopping = runs.cancel("qf");
+      await waitFor(() => ended);
+      held.letGo("fail");
+      expect(await stopping).toBe(true);
+      expect((await running).error?.category).toBe("cancelled");
+      expect(interrupts()).toHaveLength(0);
+      // A rejection that no handler took is reported once the turn that raised it is over.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toStrictEqual([]);
+      await sessions.releaseAll();
+    } finally {
+      process.off("unhandledRejection", record);
+    }
   });
 
   test("Stop whose Interrupt fails still ends the run cancelled and answers true", async () => {
@@ -410,7 +756,39 @@ describe("the deadline and Stop (spec 4.8)", () => {
   });
 });
 
-describe("errors (spec 4.10)", () => {
+describe("Stop in a Node child, the production runtime", () => {
+  test("each Stop's Interrupt leaves the client whole before the reset of the run's stream on the shared connection", async () => {
+    const node = Bun.which("node");
+    if (node === null) throw new Error("No node on PATH: this test runs Stop under Node; install Node 24 or later");
+    const work = mkdtempSync(join(tmpdir(), "spark-stop-"));
+    try {
+      writeFileSync(join(work, "child.ts"), stopChild(NODE_STOPS));
+      const build = await Bun.build({
+        entrypoints: [join(work, "child.ts")],
+        target: "node",
+        format: "esm",
+        outdir: work,
+      });
+      if (!build.success) throw new Error(`Bun.build could not bundle the child: ${build.logs.join("\n")}`);
+      const child = Bun.spawn([node, join(work, "child.js")], { cwd: work, stdout: "pipe", stderr: "pipe" });
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+      if (exitCode !== 0) throw new Error(`The Node child exited ${exitCode}: ${stderr}`);
+      const { version, stops } = JSON.parse(stdout.trim()) as { version: string; stops: unknown[] };
+      expect(version).toMatch(/^v\d+\.\d+\.\d+/);
+      expect(stops).toStrictEqual(
+        Array.from({ length: NODE_STOPS }, () => ({ answered: true, category: "cancelled", first: "Interrupt" })),
+      );
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
+
+describe("errors", () => {
   test("a Spark error: one FetchErrorDetails before the statement session's release, its cause shown, no Interrupt", async () => {
     const { sessions, runs } = world();
     const error = await failure(
@@ -498,10 +876,25 @@ describe("errors (spec 4.10)", () => {
     await sessions.releaseAll();
   });
 
+  test("a server-side id that changes on a stream Spark has not ended ends the run as session-changed after one Interrupt by its tag", async () => {
+    const { sessions, runs } = world(rewritingIds());
+    const error = await failure(
+      runs.run({ sql: "PROGRESS", session: () => sessions.forScope("sc"), deadline: soon() }),
+    );
+    expect(error.category).toBe("session-changed");
+    expect(error.message).toBe(SPARK_ERROR_SENTENCES.sessionChanged);
+    expect(plans()).toHaveLength(2);
+    expect(interrupts()).toHaveLength(1);
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
   test.each([
     ["DROPPED", "stream-failed", SPARK_ERROR_SENTENCES.streamFailed("upstream reset")],
     ["PING", "ping-goaway", SPARK_ERROR_SENTENCES.pingGoaway],
     ["HUGE", "receive-cap", SPARK_ERROR_SENTENCES.receiveCapRelation],
+    ["HUGE COMMAND", "receive-cap", SPARK_ERROR_SENTENCES.receiveCapCommand],
     ["LARGE", "unreadable", SPARK_ERROR_SENTENCES.largeVarTypes],
   ] as const)("%s ends as %s after one Interrupt by the run's tag", async (sql, category, sentence) => {
     const { sessions, runs } = world();
@@ -542,7 +935,7 @@ describe("errors (spec 4.10)", () => {
   });
 });
 
-describe("the heartbeat and the reattach window (spec 4.6, 4.7)", () => {
+describe("the heartbeat and the reattach window", () => {
   test("beats arrive on the run's session while it runs, and stop when it ends", async () => {
     const { sessions, runs, beatAnswers } = world();
     await failure(runs.run({ sql: "SLOW", session: () => sessions.forScope("hb"), deadline: soon(320) }));
@@ -587,7 +980,7 @@ describe("the heartbeat and the reattach window (spec 4.6, 4.7)", () => {
   });
 });
 
-describe("Review Focus R1 and R2", () => {
+describe("a SET and concurrent scopes", () => {
   const zstd = () => {
     const capture = readSparkCapture("4.2.0", "compressed-zstd");
     if (capture.outcome !== "pass") throw new Error("compressed-zstd is an error capture");
@@ -613,7 +1006,7 @@ describe("Review Focus R1 and R2", () => {
       () => ({ kind: "oversized", bytes: 17 * MiB, path: "relation" }) as SparkFakeAnswer,
       SPARK_ERROR_SENTENCES.receiveCapRelation,
     ],
-  ] as const)("R1: a SET in one scope changes only that scope's later results (%s)", async (set, refused, sentence) => {
+  ] as const)("a SET in one scope changes only that scope's later results (%s)", async (set, refused, sentence) => {
     // The fake answers by text and keeps no session state: the SET is answered as Spark's inline echo, and the test
     // switches the SELECT's answer between the scopes, so what is proven is the provider's side: the refusal, its one
     // Interrupt, and the next scope's fresh session setup.
@@ -626,7 +1019,13 @@ describe("Review Focus R1 and R2", () => {
       runs.run({ sql: "SELECT v FROM t", session: () => sessions.forScope("A"), deadline: soon() }),
     );
     expect(error.message).toBe(sentence);
-    expect(interrupts().filter((entry) => entry.sessionId === sessionA)).toHaveLength(1);
+    const interruptsOnA = interrupts().filter((entry) => entry.sessionId === sessionA);
+    expect(interruptsOnA).toHaveLength(1);
+    // The SELECT's own tag, not the SET's.
+    const select = plans().find(
+      (entry) => entry.sessionId === sessionA && JSON.stringify(entry.request).includes("SELECT v FROM t"),
+    );
+    expect(tagOf(interruptsOnA[0] as { request: object })).toBe(select?.tags[0]);
     await sessions.endScope("A");
     statements["SELECT v FROM t"] = { kind: "relation", schema: V_SCHEMA, ipc: [stringBatch(2, 3)] };
     const whole = await runs.run({ sql: "SELECT v FROM t", session: () => sessions.forScope("B"), deadline: soon() });
@@ -643,8 +1042,8 @@ describe("Review Focus R1 and R2", () => {
     await sessions.releaseAll();
   });
 
-  test("R2: concurrent scopes share no session, tag or Interrupt, and ending one scope leaves the other run reading", async () => {
-    const { sessions, runs } = world();
+  test("concurrent scopes share no session, tag or Interrupt, each holds its own heartbeat, and ending one scope leaves the other run reading", async () => {
+    const { sessions, runs, beatAnswers } = world();
     const a = settle(
       runs.run({ sql: "SLOW", queryId: "qa", session: () => sessions.forScope("A2"), deadline: soon() }),
     );
@@ -655,10 +1054,23 @@ describe("Review Focus R1 and R2", () => {
     expect(new Set(plans().map((entry) => entry.sessionId)).size).toBe(2);
     expect(new Set(plans().map((entry) => entry.tags[0])).size).toBe(2);
     const sessionA = (await sessions.forScope("A2")).sessionId;
+    const sessionB = (await sessions.forScope("B2")).sessionId;
+    const beatsOn = (session: string) =>
+      fake.log.entries.filter((entry) => isBeat(entry) && entry.sessionId === session).length;
+    // Both sessions beat while both runs are open.
+    await waitFor(() => beatsOn(sessionA) > 0 && beatsOn(sessionB) > 0);
     expect(await runs.cancel("qa")).toBe(true);
     expect((await a).error?.category).toBe("cancelled");
     expect(interrupts()).toHaveLength(1);
     expect(interrupts()[0]?.sessionId).toBe(sessionA);
+    const tagA = plans().find((entry) => entry.sessionId === sessionA)?.tags[0];
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(tagA);
+    // A's hold ended with its run, B's did not: once every beat sent so far answered, only B's session beats on.
+    await Promise.allSettled(beatAnswers);
+    const beatsA = beatsOn(sessionA);
+    const beatsB = beatsOn(sessionB);
+    await waitFor(() => beatsOn(sessionB) >= beatsB + 2);
+    expect(beatsOn(sessionA)).toBe(beatsA);
     await sessions.endScope("A2");
     expect(runs.runsInFlight()).toBe(1);
     expect(await runs.cancel("qb")).toBe(true);

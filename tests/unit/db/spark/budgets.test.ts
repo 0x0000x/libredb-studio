@@ -1,9 +1,9 @@
 /**
- * The statement budgets over the fake (spec 5.6, 4.8): 100,000 rows, 16 MiB of decoded cost and 32 MiB received per
- * stream, each cut shown with the rows before it after one Interrupt by the run's tag; a result that ends exactly on
- * the row budget whole and uninterrupted; an inline command answer under the same budget; a first batch that cannot
- * fit under 32 MiB refused as batch-too-large; and a VARIANT's text counted against the decoded budget still left, so
- * that a row whose text, or whose cost alone, passes what the texts before it left is cut before it.
+ * The statement budgets over the fake: 100,000 rows, 16 MiB of decoded cost and 32 MiB received per stream, each cut
+ * shown with the rows before it after one Interrupt by the run's tag; a result that ends exactly on the row budget
+ * whole and uninterrupted; an inline command answer under the same budget; a first batch that cannot fit under 32 MiB
+ * refused as batch-too-large; and a VARIANT's text counted against the decoded budget still left, so that a row whose
+ * text, or whose cost alone, passes what the texts before it left is cut before it.
  */
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { buildSparkConnectionOptions } from "@/lib/db/providers/sql/spark/connection-options";
@@ -148,7 +148,7 @@ test("exactly 100,000 rows is whole and sends no Interrupt", async () => {
 test("wide rows: the 16 MiB budget cuts before the row that would pass it, and interrupts once", async () => {
   const result = await run("WIDE ROWS");
   expect(result.cut).toBe("bytes");
-  // 100-row batches of 10,008 a row, each kept batch paying its overhead once (spec 5.6): 16 whole, then the rest.
+  // 100-row batches of 10,008 a row, each kept batch paying its overhead once: 16 whole, then the rest.
   const wholeBatch = 100 * 10_008 + SPARK_BATCH_OVERHEAD_BYTES;
   const left = 16 * MiB - 16 * wholeBatch;
   expect(result.rows.length).toBe(16 * 100 + 1 + Math.floor((left - 10_008 - SPARK_BATCH_OVERHEAD_BYTES) / 10_008));
@@ -181,7 +181,7 @@ test("an inline command answer is under the same row budget", async () => {
 
 test("a VARIANT text past the decoded budget still left cuts bytes before its row, and interrupts once", async () => {
   // Row 2 costs about 10 MiB by rowCost, so the batch is kept; its VARIANT text of 6 MiB and 2 quotes passes the
-  // 6 MiB less a few bytes the budget still has, so the run keeps row 1 only (spec 5.6).
+  // 6 MiB less a few bytes the budget still has, so the run keeps row 1 only.
   const result = await run("VARIANT PAST BUDGET");
   expect(result.cut).toBe("bytes");
   expect(result.rows).toStrictEqual([{ s: "x".repeat(16), v: `"${"a".repeat(16)}"` }]);
@@ -191,7 +191,7 @@ test("a VARIANT text past the decoded budget still left cuts bytes before its ro
 test("a row whose cost alone passes what a VARIANT text before it left cuts bytes before it, and interrupts once", async () => {
   // Row 1 costs about 6 MiB by rowCost and writes a text of 6 MiB and 2 quotes, so about 4 MiB is left. Row 2 writes
   // no text, and its cost of about 5 MiB fits what keepRows counts (rowCost alone, about 11 MiB in all), so both
-  // batches are kept; it passes the decoded budget the text left, so the run keeps row 1 only (spec 5.6).
+  // batches are kept; it passes the decoded budget the text left, so the run keeps row 1 only.
   const result = await run("VARIANT THEN WIDE");
   expect(result.cut).toBe("bytes");
   expect(result.rows).toHaveLength(1);
