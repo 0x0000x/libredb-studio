@@ -8,10 +8,19 @@ import { DatabaseConnection, QueryHistoryItem, SavedQuery, SchemaSnapshot, Saved
 import { type AuditEvent } from "../audit";
 import { DEFAULT_MASKING_CONFIG, type MaskingConfig } from "../data-masking";
 import { DEFAULT_THRESHOLDS, type ThresholdConfig } from "../monitoring-thresholds";
-import { readJSON, writeJSON, readString, writeString, remove, removeWorkspaceTabs } from "./local-storage";
+import {
+  activeCatalogKey,
+  readJSON,
+  writeJSON,
+  readString,
+  writeString,
+  remove,
+  removeWorkspaceTabs,
+} from "./local-storage";
 import type { ConnectionGroup, StorageCollection } from "./types";
 
 const MAX_HISTORY_ITEMS = 500;
+
 const MAX_SNAPSHOTS = 50;
 const MAX_AUDIT_EVENTS = 1000;
 
@@ -109,6 +118,7 @@ export const storage = {
     // The SQL the user typed for this connection is still under its own key; nothing in the UI
     // can reach it once the connection is gone (#1448).
     removeWorkspaceTabs(id);
+    remove(activeCatalogKey(id));
   },
 
   getFavoriteConnectionIds: (): string[] => {
@@ -293,6 +303,14 @@ export const storage = {
     }
     dispatchChange("active_connection_id", id);
   },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Active database of a server-level connection (#1530)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  getActiveCatalog: (connectionId: string): string | null => readString(activeCatalogKey(connectionId)),
+
+  setActiveCatalog: (connectionId: string, catalog: string) => writeString(activeCatalogKey(connectionId), catalog),
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Audit Log (consolidated from audit.ts)

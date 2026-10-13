@@ -26,6 +26,8 @@ import { historyMaskOf, maskStatementForHistory } from "@/lib/history-mask";
 import { buildConnectionPayload } from "./use-connection-payload";
 
 export interface QueryExecutionOptions {
+  /** The database to run in on a server-level connection when not the active one: an object's (#1530). */
+  catalog?: string;
   limit?: number;
   offset?: number;
   unlimited?: boolean;
@@ -59,6 +61,8 @@ interface UseQueryExecutionParams {
   currentTab: QueryTab;
   setTabs: Dispatch<SetStateAction<QueryTab[]>>;
   transactionActive: boolean;
+  /** The database a server-level connection's statements run in: its active one (#1530). */
+  activeCatalog?: string;
   playgroundMode: boolean;
   fetchSchema: (conn: DatabaseConnection) => Promise<void>;
   /**
@@ -251,6 +255,7 @@ export function useQueryExecution({
   currentTab,
   setTabs,
   transactionActive,
+  activeCatalog,
   playgroundMode,
   fetchSchema,
   onObjectsChanged,
@@ -454,6 +459,9 @@ export function useQueryExecution({
       // initial read, a re-run, a selection, an inline edit, the next page - names it. See
       // `payloadForRun`.
       const runPayload = payloadForRun(activeConnection, tabToExec.databaseOverride);
+      // On a server-level connection, also its database: an object's, else the active one (#1530).
+      const catalog = executionOptions?.catalog ?? activeCatalog;
+      if (catalog !== undefined) runPayload.catalog = catalog;
 
       // Safety check for dangerous queries (skip for explain, load-more, playground, and force-execute)
       const skipSafety = executionOptions?.skipSafety ?? false;
@@ -1138,6 +1146,7 @@ export function useQueryExecution({
       onStatementSent,
       metadata,
       transactionActive,
+      activeCatalog,
       playgroundMode,
       setTabs,
       queryEditorRef,

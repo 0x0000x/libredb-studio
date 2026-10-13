@@ -8,6 +8,7 @@ import {
   resolveKinds,
 } from "@/lib/api/object-route";
 import { enumerateContainers, kindsByContainer } from "@/lib/db/container-walk";
+import { assertNotWholeServer } from "@/lib/db/catalog-scope";
 import { applicableKinds } from "@/lib/db/object-kinds";
 import type { DatabaseObject } from "@/lib/db/types";
 
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
     const term = requireString(body, "term").toLowerCase();
     const kinds = resolveKinds(provider, optionalStringArray(body, "kinds"));
 
+    assertNotWholeServer(provider);
     const enumerated = await enumerateContainers(provider);
     const kindsOf = kindsByContainer(enumerated);
     const pairs = enumerated.containers.flatMap((container) =>

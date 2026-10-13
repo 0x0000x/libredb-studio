@@ -152,6 +152,8 @@ export interface TreeRowProps {
    * is reachable by keyboard, and saying that row is SELECTED would announce a choice nobody made.
    */
   readonly selected: boolean;
+  /** The container the shell runs in (#1530): announced as `aria-current` and drawn in bold. */
+  readonly current?: boolean;
   readonly busy: boolean;
   /** This row's own read failed, as opposed to the engine refusing to count it. */
   readonly failure?: TreeReadFailure;
@@ -184,6 +186,7 @@ export function TreeRow({
   object,
   active,
   selected,
+  current = false,
   busy,
   failure,
   hasActions,
@@ -209,6 +212,7 @@ export function TreeRow({
       aria-posinset={row.posInSet}
       aria-expanded={row.expanded}
       aria-selected={selected}
+      aria-current={current ? "true" : undefined}
       aria-busy={busy ? true : undefined}
       aria-haspopup={hasActions === true ? "menu" : undefined}
       aria-labelledby={ROW_NAME_PARTS.map((part) => rowNameId(part, row.id)).join(" ")}
@@ -220,7 +224,7 @@ export function TreeRow({
         row.kind === "column" ? "cursor-default" : "cursor-pointer"
       } select-none outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand ${
         selected ? "bg-muted" : "hover:bg-muted/60"
-      }`}
+      }${current ? " font-semibold" : ""}`}
     >
       {/*
         A HIT TARGET, and only where the row's own activation does not already toggle it. A

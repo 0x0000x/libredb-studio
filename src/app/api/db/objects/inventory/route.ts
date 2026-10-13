@@ -21,6 +21,7 @@ import {
   kindsByContainer,
   namedContainerListings,
 } from "@/lib/db/container-walk";
+import { assertNotWholeServer } from "@/lib/db/catalog-scope";
 import { applicableKinds } from "@/lib/db/object-kinds";
 import type { DatabaseObject, DatabaseProvider, ObjectDetail } from "@/lib/db/types";
 
@@ -97,6 +98,7 @@ export async function POST(req: NextRequest) {
     // kinds, the named ones are still asked of the provider, because which kinds a container
     // holds is the provider's answer: a caller naming a cluster's cluster-scoped container must
     // not have its namespaced kinds listed there. See `namedEnumeration`.
+    if (named === undefined) assertNotWholeServer(provider);
     const enumerated =
       named === undefined ? await enumerateContainers(provider) : await namedEnumeration(provider, dedupePaths(named));
     const containers = dedupePaths(enumerated.containers);

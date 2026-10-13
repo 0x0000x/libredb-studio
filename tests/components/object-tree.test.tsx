@@ -652,6 +652,61 @@ describe("ObjectTree container shapes", () => {
   });
 });
 
+describe("ObjectTree current container (#1530)", () => {
+  const twoLevelRoutes = (): Handlers => ({
+    containers: (body) =>
+      body.parent === undefined
+        ? [
+            { path: ["prod"], name: "prod", level: 0 },
+            { path: ["staging"], name: "staging", level: 0 },
+          ]
+        : [{ path: ["prod", "app"], name: "app", level: 1 }],
+    counts: () => ({ table: { count: 1 } }),
+    list: () => [{ path: ["prod", "app", "orders"], name: "orders", kind: "table" }],
+  });
+
+  test("activating a container or a folder hands the caller its container path and still opens it", async () => {
+    installFetch(twoLevelRoutes());
+    const activated: (readonly string[])[] = [];
+    const clicked: DatabaseObject[] = [];
+    render(
+      <ObjectTree
+        connection={connectionOf("pg")}
+        capabilities={twoLevels}
+        onContainerActivate={(path) => activated.push(path)}
+        onObjectClick={(object) => clicked.push(object)}
+      />,
+    );
+
+    await userEvent.click(await screen.findByRole("treeitem", { name: /prod/ }));
+    expect(row(/prod/).getAttribute("aria-expanded")).toBe("true");
+    await userEvent.click(await screen.findByRole("treeitem", { name: /app/ }));
+    await userEvent.click(await screen.findByRole("treeitem", { name: /Tables/ }));
+    await userEvent.click(await screen.findByRole("treeitem", { name: /orders/ }));
+
+    expect(activated).toEqual([["prod"], ["prod", "app"], ["prod", "app"]]);
+    // An object row is the object click's, and hands no container of its own.
+    expect(clicked.map((object) => object.name)).toEqual(["orders"]);
+
+    // The keyboard activates through the same handler: End reaches the last database, Enter acts on it.
+    await userEvent.keyboard("{End}{Enter}");
+    expect(activated.at(-1)).toEqual(["staging"]);
+  });
+
+  test("the current container's row says so, and no other row does", async () => {
+    installFetch(twoLevelRoutes());
+    const view = render(
+      <ObjectTree connection={connectionOf("pg")} capabilities={twoLevels} currentContainer={["staging"]} />,
+    );
+
+    expect((await screen.findByRole("treeitem", { name: /staging/ })).getAttribute("aria-current")).toBe("true");
+    expect(row(/prod/).getAttribute("aria-current")).toBeNull();
+
+    view.rerender(<ObjectTree connection={connectionOf("pg")} capabilities={twoLevels} />);
+    expect(row(/staging/).getAttribute("aria-current")).toBeNull();
+  });
+});
+
 describe("ObjectTree object rows", () => {
   const withObjects = () =>
     installFetch(

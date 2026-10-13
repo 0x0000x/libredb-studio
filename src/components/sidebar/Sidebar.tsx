@@ -149,6 +149,10 @@ interface SidebarProps {
    * inventory; the embedded workspace does not, because its host runs the statements.
    */
   objectRefreshToken?: number;
+  /** The container the shell runs in, marked in the tree (#1530). */
+  currentContainer?: readonly string[];
+  /** A container row was activated in the tree, with its path (#1530). */
+  onContainerActivate?: (path: readonly string[]) => void;
   /**
    * The active connection's pulse, the same state the header reads, handed through by the standalone shell.
    *
@@ -198,6 +202,8 @@ export const Sidebar = React.memo(function Sidebar({
   objectReadsColumns,
   objectRefreshToken,
   connectionPulse,
+  currentContainer,
+  onContainerActivate,
   onOpenKey,
 }: SidebarProps) {
   const appVersion = getAppVersion();
@@ -511,6 +517,8 @@ export const Sidebar = React.memo(function Sidebar({
                     deferredForBilledCompute={deferredForBilledCompute}
                     onLoad={onLoadObjects}
                     onObjectClick={onObjectClick}
+                    onContainerActivate={onContainerActivate}
+                    currentContainer={currentContainer}
                     actions={actions}
                     source={objectSource}
                     readsColumns={objectReadsColumns}

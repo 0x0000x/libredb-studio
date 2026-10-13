@@ -1676,6 +1676,8 @@ export interface AgentRunRecord {
    * user the conversation they were having.
    */
   readonly connectionIdentity?: string;
+  /** The database a run on a server-level connection reads, fixed when it opens (#1530). */
+  readonly catalog?: string;
   /** The user's own question, in their words. */
   readonly objective: string;
   readonly createdAtMs: number;

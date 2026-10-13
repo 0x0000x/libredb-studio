@@ -62,6 +62,9 @@ import {
 import { readObjectPathParam } from "@/lib/db/object-path";
 import { withConnectedMaintenance } from "@/lib/db/types";
 import { useProviderMetadata } from "@/hooks/use-provider-metadata";
+import { useCatalogs } from "@/hooks/use-catalogs";
+import { catalogOfPath, declaresCatalogSessions } from "@/lib/db/object-kinds";
+import { CatalogSelect } from "@/components/catalog-select";
 
 /**
  * The per-row maintenance controls this tab can render, in display order, with the
@@ -277,7 +280,7 @@ export function OperationsTab() {
   // tab). Unknown capabilities hide the controls rather than showing them —
   // `metadata` is also null when /api/db/provider-meta fails, and failing open
   // would put the dead buttons back on exactly the connections this gate is for.
-  const { metadata } = useProviderMetadata(selectedConnection);
+  const { metadata, error: metadataError } = useProviderMetadata(selectedConnection);
 
   // Redis and the embedded engine declare `tablesAreDerivedGroupings`: their rows
   // are key-prefix/namespace groupings, not addressable tables, so a Tables panel
@@ -291,15 +294,41 @@ export function OperationsTab() {
   // `includeTables` is NOT gated on the flag above, and that is measured rather than an oversight.
   // useMonitoringData fetches once per CONNECTION (its effect depends on [connection, fetchData],
   // and fetchData reads its options through a ref), autoRefresh is off here, so the one request
-  // this tab makes is issued while `metadata` is still null and no later option change can reach
-  // it. Gating it would need either a shared-hook rewrite or making every engine's health and
-  // session panels wait on provider-meta first. The PANEL below is gated instead: that is where
+  // this tab makes is issued once and no later option change can reach it. That request now waits
+  // for `metadata` (#1530), so gating it has become possible, and is left to a change of its own.
+  // The PANEL below is gated instead: that is where
   // the empty "Tables (0)" a key-value provider used to render actually came from, and rendering
   // is reactive so it settles as soon as the capability arrives.
   const monitoringOptions = useMemo(() => ({ includeTables: true, includeIndexes: false, includeStorage: false }), []);
 
+  // On a server-level connection this panel is one database's (#1530): the one a deep link's path
+  // names, until the operator picks another, else the one the studio chose last.
+  const {
+    catalogs,
+    catalog: storedCatalog,
+    setCatalog,
+    error: catalogsError,
+    retry: retryCatalogs,
+  } = useCatalogs(selectedConnection, metadata?.capabilities);
+  const [pickedCatalog, setPickedCatalog] = useState<string | null>(null);
+  const linkedCatalog =
+    metadata === null || deepLinkedPath === null ? undefined : catalogOfPath(metadata.capabilities, deepLinkedPath);
+  const catalog =
+    pickedCatalog ?? (linkedCatalog !== undefined && catalogs.includes(linkedCatalog) ? linkedCatalog : storedCatalog);
+  const chooseCatalog = (next: string) => {
+    setPickedCatalog(next);
+    setCatalog(next);
+  };
+  // Nothing is read before the database is known, nor while the declaration that says whether
+  // there is one is still being read; a failed declaration reads as before.
+  const waitingForCatalog =
+    selectedConnection !== null &&
+    (metadata === null
+      ? metadataError === null
+      : declaresCatalogSessions(metadata.capabilities) && catalog === undefined);
+
   const { data, loading, error, refresh, killSession, runMaintenanceOutcome, maintenanceReport, previewMaintenance } =
-    useMonitoringData(selectedConnection, monitoringOptions);
+    useMonitoringData(waitingForCatalog ? null : selectedConnection, monitoringOptions, catalog);
   // Both maintenance surfaces ask ONE question - `maintenanceControl` in
   // src/lib/db/types.ts - so that neither can offer a control the other's engine
   // rejects. `capabilities` may be undefined here (provider-meta in flight, or its
@@ -398,6 +427,8 @@ export function OperationsTab() {
   const handleConnectionChange = (id: string) => {
     const conn = connections.find((c) => c.id === id);
     if (conn) setSelectedId(conn.id);
+    // A database picked for one connection is not a database of the next.
+    setPickedCatalog(null);
   };
 
   const addLogEntry = useCallback(
@@ -622,11 +653,18 @@ export function OperationsTab() {
             ))}
           </SelectContent>
         </Select>
+        <CatalogSelect
+          catalogs={catalogs}
+          value={catalog}
+          onChange={chooseCatalog}
+          className="h-9 w-full sm:w-[220px] ml-2 bg-panel border-hairline-strong text-fg-secondary"
+        />
         <Button
           variant="ghost"
           size="sm"
           className="h-8 text-fg-muted hover:text-fg-secondary"
-          onClick={refresh}
+          // A refused database list holds every read, so Refresh lists the databases again (#1530).
+          onClick={catalogsError === null ? refresh : retryCatalogs}
           disabled={loading}
         >
           <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} />
@@ -634,8 +672,10 @@ export function OperationsTab() {
         </Button>
       </div>
 
-      {error && !data && (
-        <div className="rounded-xl border border-danger-tint/20 bg-danger-tint/5 p-4 text-danger text-sm">{error}</div>
+      {(catalogsError ?? error) && !data && (
+        <div className="rounded-xl border border-danger-tint/20 bg-danger-tint/5 p-4 text-danger text-sm">
+          {catalogsError ?? error}
+        </div>
       )}
 
       {/* Global Operations — hidden entirely where not one operation has a

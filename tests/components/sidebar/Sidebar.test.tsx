@@ -68,6 +68,8 @@ mock.module("@/components/object-tree", () => ({
           .sort()
           .join(","),
         "data-has-labels": String(props.labels !== undefined),
+        "data-current": JSON.stringify(props.currentContainer ?? null),
+        "data-has-container-activate": String(props.onContainerActivate !== undefined),
       },
       "ObjectTree Mock",
     );
@@ -267,6 +269,17 @@ describe("Sidebar", () => {
 
     expect(getByTestId("object-tree").getAttribute("data-connection")).toBe(mockPostgresConnection.id);
     expect(getByTestId("object-tree").getAttribute("data-levels")).toBe("1");
+  });
+
+  // #1530: the tree is the one place a server-level connection's database is chosen and shown.
+  test("the current container and the container activation reach the tree, and no database select is drawn", () => {
+    const onContainerActivate = mock((_path: readonly string[]) => {});
+    const props = createDefaultProps({ currentContainer: ["sales"], onContainerActivate });
+    const { getByTestId, queryByRole } = render(<Sidebar {...props} />);
+
+    expect(getByTestId("object-tree").getAttribute("data-current")).toBe('["sales"]');
+    expect(getByTestId("object-tree").getAttribute("data-has-container-activate")).toBe("true");
+    expect(queryByRole("combobox", { name: "Database" })).toBeNull();
   });
 
   /**

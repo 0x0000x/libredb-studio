@@ -110,6 +110,14 @@ export function remove(collection: string): void {
  */
 const WORKSPACE_TABS_KEY_PREFIX = `${KEY_PREFIX}workspace_tabs_v1`;
 
+/** The collection one server-level connection's active database is stored under (#1530). */
+export function activeCatalogKey(connectionId: string): string {
+  return `active_catalog:${connectionId}`;
+}
+
+/** Per-connection keys of the account's browser copy, swept by prefix on sign-out. */
+const ACCOUNT_KEY_PREFIXES: readonly string[] = [`${WORKSPACE_TABS_KEY_PREFIX}:`, getKey(activeCatalogKey(""))];
+
 export function workspaceTabsKey(connectionId: string): string {
   return `${WORKSPACE_TABS_KEY_PREFIX}:${connectionId}`;
 }
@@ -215,12 +223,12 @@ export function clearAccountWorkspace(): void {
   if (!isClient()) return;
   for (const key of ACCOUNT_KEYS) localStorage.removeItem(key);
   // Collected first: removing while walking by index would skip the key after each removal.
-  const tabKeys: string[] = [];
+  const perConnection: string[] = [];
   for (let index = 0; index < localStorage.length; index++) {
     const key = localStorage.key(index);
-    if (key?.startsWith(`${WORKSPACE_TABS_KEY_PREFIX}:`)) tabKeys.push(key);
+    if (key !== null && ACCOUNT_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))) perConnection.push(key);
   }
-  for (const key of tabKeys) localStorage.removeItem(key);
+  for (const key of perConnection) localStorage.removeItem(key);
 }
 
 /**

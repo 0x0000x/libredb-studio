@@ -16,6 +16,7 @@ import {
   claimAccountWorkspace,
   resetAccountWorkspace,
   workspaceTabsKey,
+  activeCatalogKey,
   removeWorkspaceTabs,
   holdsAccountWorkspace,
   WORKSPACE_OWNER_KEY,
@@ -257,6 +258,8 @@ describe("local-storage: clearAccountWorkspace", () => {
     for (const collection of STORAGE_COLLECTIONS) localStorage.setItem(getKey(collection), "x");
     localStorage.setItem(workspaceTabsKey("c1"), "[]");
     localStorage.setItem(workspaceTabsKey("seed:sample"), "[]");
+    // The database last picked on a server-level connection names one of this account's (#1530).
+    localStorage.setItem(getKey(activeCatalogKey("c1")), "payroll");
     localStorage.setItem(SOURCE_DRAFTS_KEY, "{}");
     localStorage.setItem(AGENT_THREAD_KEY, "{}");
     localStorage.setItem(UNSAVED_COLLECTIONS_KEY, '["history"]');

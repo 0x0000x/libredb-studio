@@ -21,7 +21,7 @@ import { useCallback, useDeferredValue, useEffect, useRef, useState } from "reac
 import { CircleAlert, Database, LoaderCircle, SearchX } from "lucide-react";
 import type { DatabaseObject, ProviderCapabilities, ProviderLabels } from "@/lib/db/types";
 import type { DatabaseConnection } from "@/lib/types";
-import type { TreeRowModel } from "./flatten";
+import { containerRowId, type TreeRowModel } from "./flatten";
 import { RowMenu, type RowMenuAnchor } from "./RowMenu";
 import { rowActions, type TreeRowAction, type TreeRowActionHandlers } from "./row-actions";
 import { TreeFilter } from "./TreeFilter";
@@ -64,6 +64,15 @@ export interface ObjectTreeProps {
   /** What the load action calls. Absent means no action is offered. */
   readonly onLoad?: () => void;
   readonly onObjectClick?: (object: DatabaseObject) => void;
+  /**
+   * A container, group or folder row was activated, with the container path it sits in (#1530).
+   *
+   * Called before the row opens or closes, which it still does. A server-level connection makes the
+   * database it names the active one, so where the reader is in the tree is where the editor runs.
+   */
+  readonly onContainerActivate?: (path: readonly string[]) => void;
+  /** The container the shell runs in, whose row is marked `aria-current` (#1530). Absent marks none. */
+  readonly currentContainer?: readonly string[];
   /**
    * What the row menu may offer (U22, #789). Absent, or absent field by field, means the
    * shell cannot do that thing and the item is not drawn: the embedded workspace mounts no
@@ -153,6 +162,8 @@ export function ObjectTree({
   deferredForBilledCompute,
   onLoad,
   onObjectClick,
+  onContainerActivate,
+  currentContainer,
   actions,
   labels,
   source,
@@ -174,6 +185,7 @@ export function ObjectTree({
   const filterQuery = useDeferredValue(query);
   const tree = useTreeNodes(connection, capabilities, deferred, source, columnsReadable, filterQuery);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const currentRowId = currentContainer === undefined ? undefined : containerRowId(currentContainer);
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [pinned, setPinned] = useState(false);
   // Keyed by the query, so a new query starts at the top without an effect to reset it.
@@ -368,10 +380,11 @@ export function ObjectTree({
         if (object !== undefined) onObjectClick?.(object);
         return;
       }
+      onContainerActivate?.(row.path);
       // `expanded` is absent on a leaf, and a folder whose count the engine refused is a leaf.
       if (row.expanded !== undefined) tree.toggle(row.id);
     },
-    [focusRow, onObjectClick, tree],
+    [focusRow, onObjectClick, onContainerActivate, tree],
   );
 
   const onKeyDown = useCallback(
@@ -684,6 +697,7 @@ export function ObjectTree({
                   object={tree.objectFor(row)}
                   active={row.id === activeRowId}
                   selected={row.id === activeId}
+                  current={row.kind === "container" && row.id === currentRowId}
                   busy={tree.isBusy(row)}
                   failure={tree.failureFor(row)}
                   hasActions={hasRowMenu(row)}

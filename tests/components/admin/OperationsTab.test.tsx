@@ -1,6 +1,7 @@
 import "../../setup-dom";
 import "../../helpers/mock-sonner";
 import { resetMockSearchParams, setMockSearchParams } from "../../helpers/mock-navigation";
+import { mockGlobalFetch, restoreGlobalFetch } from "../../helpers/mock-fetch";
 
 import { mock } from "bun:test";
 import { setupRechartssMock, setupFramerMotionMock } from "../../helpers/mock-monaco";
@@ -61,10 +62,28 @@ const defaultTables = [
 // The options the tab asked for, so a test can assert that a provider whose rows
 // are derived groupings never requests tables at all (#459).
 let lastMonitoringOptions: Record<string, unknown> | undefined;
+// The declaration read's failure, when a case makes it fail.
+let mockMetadataError: string | null = null;
+// The connection and database the tab monitors, so a server-level connection's database is asserted (#1530).
+let lastMonitored: { connection: unknown; catalog?: string } | undefined;
+// Every one of them in order, so a case can assert that nothing was read before the database was known.
+const monitoredCalls: { connection: unknown; catalog?: string }[] = [];
+
+// The databases a server-level connection lists, and the one the studio chose last (#1530). The real
+// hook is kept before the module is mocked, so one case can drive it against a refused list.
+import * as realCatalogs from "@/hooks/use-catalogs";
+const realUseCatalogs = realCatalogs.useCatalogs;
+let mockCatalogs: { catalogs: string[]; catalog?: string } = { catalogs: [] };
+const mockSetCatalog = mock((_catalog: string) => {});
+const mockedCatalogs = () => ({ ...mockCatalogs, error: null, retry: () => {}, setCatalog: mockSetCatalog });
+const mockUseCatalogs = mock(mockedCatalogs as (...args: Parameters<typeof realUseCatalogs>) => unknown);
+mock.module("@/hooks/use-catalogs", () => ({ useCatalogs: mockUseCatalogs }));
 
 mock.module("@/hooks/use-monitoring-data", () => ({
-  useMonitoringData: mock((_conn: unknown, options?: Record<string, unknown>) => {
+  useMonitoringData: mock((_conn: unknown, options?: Record<string, unknown>, catalog?: string) => {
     lastMonitoringOptions = options;
+    lastMonitored = { connection: _conn, catalog };
+    monitoredCalls.push(lastMonitored);
     return {
       data: {
         activeSessions: defaultSessions,
@@ -87,7 +106,7 @@ mock.module("@/hooks/use-monitoring-data", () => ({
 }));
 
 mock.module("@/hooks/use-provider-metadata", () => ({
-  useProviderMetadata: mock(() => ({ metadata: mockMetadata, isLoading: false })),
+  useProviderMetadata: mock(() => ({ metadata: mockMetadata, isLoading: false, error: mockMetadataError })),
 }));
 
 mock.module("@/lib/storage", () => ({
@@ -95,6 +114,9 @@ mock.module("@/lib/storage", () => ({
     getConnections: mock(() => mockConnectionsList),
     getActiveConnectionId: mock(() => mockActiveConnectionId),
     getDismissedSeeds: mock(() => []),
+    // Read by the real useCatalogs on a server-level connection (#1530).
+    getActiveCatalog: mock(() => null),
+    setActiveCatalog: mock(() => {}),
   },
 }));
 
@@ -219,6 +241,12 @@ describe("OperationsTab", () => {
     mockRunMaintenance.mockClear();
     mockRunMaintenance.mockImplementation(() => true);
     lastMonitoringOptions = undefined;
+    lastMonitored = undefined;
+    monitoredCalls.length = 0;
+    mockMetadataError = null;
+    mockCatalogs = { catalogs: [] };
+    mockUseCatalogs.mockImplementation(mockedCatalogs);
+    mockSetCatalog.mockClear();
     resetMockSearchParams();
   });
 
@@ -3004,5 +3032,112 @@ describe("OperationsTab", () => {
     const dialog = await openTypedDialog(view, "Defragment", "Defragment the member");
     expect(within(dialog).getByLabelText("Type PG Dev to confirm")).toBeTruthy();
     expect(mockRunMaintenance).not.toHaveBeenCalled();
+  });
+
+  // A server-level connection is monitored one database at a time (#1530).
+  test("a deep link's database is monitored until the operator picks another, and none before one is known", async () => {
+    mockMetadata = {
+      capabilities: {
+        ...mockMetadata!.capabilities,
+        catalogSessions: true,
+        containerLevels: [{ id: "catalog" }, { id: "schema" }],
+      },
+    };
+    await act(async () => {
+      render(<OperationsTab />);
+    });
+    expect(lastMonitored).toEqual({ connection: null, catalog: undefined });
+    cleanup();
+
+    mockCatalogs = { catalogs: ["analytics", "shop"], catalog: "analytics" };
+    setMockSearchParams(
+      new URLSearchParams([
+        ["path", "shop"],
+        ["path", "public"],
+        ["path", "users"],
+      ]),
+    );
+    let view: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(<OperationsTab />);
+    });
+    expect(lastMonitored?.catalog).toBe("shop");
+    await act(async () => {
+      fireEvent.keyDown(view!.getByRole("combobox", { name: "Database" }), { key: "ArrowDown" });
+    });
+    await act(async () => {
+      fireEvent.keyDown(view!.getByRole("option", { name: "analytics" }), { key: "Enter" });
+    });
+    expect(mockSetCatalog).toHaveBeenCalledWith("analytics");
+    expect(lastMonitored?.catalog).toBe("analytics");
+  });
+
+  test("a declaration that failed to read does not hold the tab: it monitors the connection as before", async () => {
+    mockMetadata = null;
+    mockMetadataError = "provider-meta refused";
+    await act(async () => {
+      render(<OperationsTab />);
+    });
+    expect(monitoredCalls.some((call) => call.connection !== null)).toBe(true);
+    expect(lastMonitored?.catalog).toBeUndefined();
+  });
+
+  test("nothing is read while the declaration is pending, and the first read names the database", async () => {
+    const serverLevel = {
+      capabilities: {
+        ...mockMetadata!.capabilities,
+        catalogSessions: true,
+        containerLevels: [{ id: "catalog" }, { id: "schema" }],
+      },
+    };
+    mockMetadata = null;
+    await act(async () => {
+      render(<OperationsTab />);
+    });
+    expect(monitoredCalls.length).toBeGreaterThan(0);
+    expect(monitoredCalls.every((call) => call.connection === null)).toBe(true);
+    cleanup();
+
+    mockMetadata = serverLevel;
+    mockCatalogs = { catalogs: ["analytics", "shop"], catalog: "analytics" };
+    monitoredCalls.length = 0;
+    await act(async () => {
+      render(<OperationsTab />);
+    });
+    expect(monitoredCalls.find((call) => call.connection !== null)?.catalog).toBe("analytics");
+  });
+
+  test("a database list the server refuses is shown, nothing is read, and Refresh lists it again", async () => {
+    mockMetadata = {
+      capabilities: {
+        ...mockMetadata!.capabilities,
+        catalogSessions: true,
+        containerLevels: [{ id: "catalog" }, { id: "schema" }],
+      },
+    };
+    mockUseCatalogs.mockImplementation(realUseCatalogs);
+    // Held, the real monitoring hook has no data to show.
+    monitoringOverride = { data: null };
+    mockGlobalFetch({
+      "/api/db/objects/containers": { ok: false, status: 503, json: { error: "permission denied to list databases" } },
+    });
+    try {
+      let view: ReturnType<typeof render>;
+      await act(async () => {
+        view = render(<OperationsTab />);
+      });
+      expect(await view!.findByText("permission denied to list databases")).toBeTruthy();
+      expect(monitoredCalls.every((call) => call.connection === null)).toBe(true);
+
+      mockGlobalFetch({
+        "/api/db/objects/containers": { ok: true, json: [{ path: ["analytics"], name: "analytics", level: 0 }] },
+      });
+      await act(async () => {
+        fireEvent.click(view!.getByRole("button", { name: /Refresh/ }));
+      });
+      await waitFor(() => expect(lastMonitored?.catalog).toBe("analytics"));
+    } finally {
+      restoreGlobalFetch();
+    }
   });
 });

@@ -118,6 +118,7 @@ let authOverride: Record<string, unknown> = {};
 let editingOverride: Record<string, unknown> = {};
 let capabilitiesOverride: Record<string, unknown> = {};
 let metadataOverride: Record<string, unknown> = {};
+let txnOverride: Record<string, unknown> = {};
 // The split views whose stub throws on render (X5). A throw from the lazy component lands
 // where a rejected import does, at the lazy element, so it reaches the same boundary.
 const failingSplitViews = new Set<"diagram" | "connection-dialog" | "schema-explorer">();
@@ -133,6 +134,8 @@ mock.module("@/hooks/use-auth", () => ({
   })),
 }));
 
+const mockSetActiveCatalog = mock(() => {});
+
 mock.module("@/hooks/use-connection-manager", () => ({
   useConnectionManager: mock(() => ({
     connections: [],
@@ -140,6 +143,10 @@ mock.module("@/hooks/use-connection-manager", () => ({
     activeConnection: null,
     schema: EMPTY_SCHEMA,
     schemaContext: "[]",
+    // A connection that names its own database lists none (#1530). Stable references, as the
+    // hook's own are, so a keystroke hands the sidebar the props it already had.
+    activeCatalog: undefined,
+    setActiveCatalog: mockSetActiveCatalog,
     isLoadingSchema: false,
     setConnections: mockSetConnections,
     setActiveConnection: mockSetActiveConnection,
@@ -216,6 +223,7 @@ mock.module("@/hooks/use-transaction-control", () => ({
     handleTransaction: mockHandleTransaction,
     setPlaygroundMode: mockSetPlaygroundMode,
     resetTransactionState: mockResetTransactionState,
+    ...txnOverride,
   })),
 }));
 
@@ -604,6 +612,7 @@ describe("Studio", () => {
     editingOverride = {};
     capabilitiesOverride = {};
     metadataOverride = {};
+    txnOverride = {};
     failingSplitViews.clear();
 
     // Clear trackable mocks
@@ -1368,6 +1377,77 @@ describe("Studio", () => {
 
     act(() => actions.onOpenMaintenance?.(clicked));
     expect(mockRouterPush).toHaveBeenCalledWith("/admin/operations?path=shop&path=dbo&path=customers");
+  });
+
+  test("on a server-level connection everything runs in the active database, and an object elsewhere moves it (#1530)", async () => {
+    const mockSetActiveCatalog = mock((_catalog: string) => {});
+    connMgrOverride = {
+      activeConnection: pgConn,
+      schema: collisionSchema,
+      activeCatalog: "libredb_objects",
+      setActiveCatalog: mockSetActiveCatalog,
+    };
+    capabilitiesOverride = {
+      catalogSessions: true,
+      containerLevels: [{ id: "catalog" }, { id: "schema" }],
+      objectKinds: [{ id: "table", role: "relation", label: "Table", labelPlural: "Tables" }],
+    };
+    const view = render(<Studio />);
+    const click = (path: string[]) =>
+      act(() =>
+        (capturedSidebarProps.onObjectClick as (object: DatabaseObject) => void)({ path, name: "t", kind: "table" }),
+      );
+
+    // An object in another database makes that one active, and its statement runs there.
+    click(["shop", "dbo", "customers"]);
+    expect(mockSetActiveCatalog).toHaveBeenCalledWith("shop");
+    const run = (mockHandleTableClick.mock.calls.at(-1) as unknown[])[1] as (q: string, id: string) => unknown;
+    run("SELECT 1", "tab-1");
+    expect(mockExecuteQuery).toHaveBeenLastCalledWith("SELECT 1", "tab-1", undefined, { catalog: "shop" });
+
+    act(() => sidebarActions().onGenerateTestData?.({ path: ["shop", "dbo", "customers"], name: "t", kind: "table" }));
+    await act(async () => {
+      await (capturedTestDataProps.onExecuteQuery as (sql: string) => unknown)("INSERT 1");
+    });
+    expect(mockExecuteQuery).toHaveBeenLastCalledWith("INSERT 1", undefined, false, { catalog: "shop" });
+
+    // The tree is where the database is chosen and shown: activating a database or anything inside
+    // one makes it active, the active one again changes nothing, and its row is the current one.
+    const activate = (path: string[]) =>
+      act(() => (capturedSidebarProps.onContainerActivate as (path: readonly string[]) => void)(path));
+    expect(capturedSidebarProps.currentContainer).toEqual(["libredb_objects"]);
+    mockSetActiveCatalog.mockClear();
+    activate(["shop", "dbo"]);
+    expect(mockSetActiveCatalog).toHaveBeenCalledWith("shop");
+    mockSetActiveCatalog.mockClear();
+    activate(["libredb_objects"]);
+    expect(mockSetActiveCatalog).not.toHaveBeenCalled();
+
+    // During a transaction the active database stays where it is, from the tree or from an object,
+    // and the reader is told why, since the click itself changed nothing.
+    txnOverride = { transactionActive: true };
+    view.rerender(<Studio />);
+    mockToast.mockClear();
+    activate(["shop"]);
+    click(["shop", "dbo", "customers"]);
+    expect(mockSetActiveCatalog).not.toHaveBeenCalled();
+    expect(mockToast).toHaveBeenCalledWith({
+      title: "The open transaction stays in libredb_objects",
+      description: "Commit or roll it back to work in shop.",
+    });
+    mockToast.mockClear();
+    activate(["libredb_objects", "dbo"]);
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  test("a connection with no active database marks no container and moves nothing (#1530)", () => {
+    const mockSetActiveCatalog = mock((_catalog: string) => {});
+    connMgrOverride = { activeConnection: pgConn, schema: collisionSchema, setActiveCatalog: mockSetActiveCatalog };
+    render(<Studio />);
+
+    expect(capturedSidebarProps.currentContainer).toBeUndefined();
+    act(() => (capturedSidebarProps.onContainerActivate as (path: readonly string[]) => void)(["public"]));
+    expect(mockSetActiveCatalog).not.toHaveBeenCalled();
   });
 
   test("the other object in the collision is still reachable, so the address is what decides", () => {

@@ -7,7 +7,8 @@ import { bridgeAbortToCancel } from "@/lib/api/abort-cancel";
 import { QueryCancelledError } from "@/lib/db/errors";
 import { resolveConnection } from "@/lib/seed/resolve-connection";
 import { guardRoute } from "@/lib/api/require-session";
-import { editorExecutionContext } from "@/lib/api/execution-context";
+import { requestCatalog } from "@/lib/db/catalog-scope";
+import { editorProvider } from "@/lib/api/editor-provider";
 import { readBoundParams } from "@/lib/api/bound-params";
 import { consoleTextByteLimit, consoleTextOverLimit } from "@/lib/db/destructive-commands";
 import { ObjectRouteError, objectRouteErrorBody, optionalDatabase } from "@/lib/api/object-route";
@@ -207,7 +208,7 @@ export async function POST(req: NextRequest) {
     // The DuckDB editor file-access posture rides on the server-derived execution context: an
     // admin keeps the full editor reach, every other role opens with external access off, and so
     // does every role on a seed a non-admin role can use, whose one handle they share (non-admin DuckDB file access).
-    const provider = await getOrCreateProvider(connection, {}, editorExecutionContext(guard.session, connection));
+    const provider = await editorProvider(guard.session, connection, requestCatalog(body));
 
     // The statement that actually runs. For an explain request it is the one the
     // CONNECTED provider's strategy builds, never the caller's own SQL: falling

@@ -77,6 +77,9 @@ mock.module("@/lib/storage", () => ({
     ]),
     getActiveConnectionId: mock(() => "c1"),
     getDismissedSeeds: mock(() => []),
+    // Read by the real useCatalogs on a server-level connection (#1530).
+    getActiveCatalog: mock(() => null),
+    setActiveCatalog: mock(() => {}),
   },
 }));
 
@@ -201,10 +204,16 @@ const providerMetadataCalls: Array<{ id?: string } | null> = [];
 // The capabilities the metadata mock answers with; a test swaps in its own declaration and
 // beforeEach puts the shared one back.
 let currentCapabilities: Record<string, unknown> = mockCapabilities;
+// While true the declaration is still being read, so the dashboard knows nothing of the connection yet.
+let metadataPending = false;
+// While set, the declaration read failed with this message.
+let metadataFailure: string | null = null;
 
 mock.module("@/hooks/use-provider-metadata", () => ({
   useProviderMetadata: mock((connection: { id?: string } | null) => {
     providerMetadataCalls.push(connection);
+    if (metadataPending) return { metadata: null, isLoading: true, error: null };
+    if (metadataFailure !== null) return { metadata: null, isLoading: false, error: metadataFailure };
     return {
       metadata: {
         capabilities: currentCapabilities,
@@ -237,6 +246,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 
 import { mockRouterPush } from "../../helpers/mock-navigation";
+import { mockGlobalFetch, restoreGlobalFetch } from "../../helpers/mock-fetch";
 
 // Dynamic import AFTER the mock.module() calls above: a static import would be
 // hoisted and evaluate the real tab modules, poisoning coverage with all-zero
@@ -693,5 +703,88 @@ describe("MonitoringDashboard", () => {
 
     const capabilities = sessionsTabProps.at(-1)?.capabilities as { maintenanceOperations: string[] };
     expect(capabilities.maintenanceOperations).toEqual(["analyze"]);
+  });
+});
+
+/** A server-level connection's panels are one database's, and nothing is read before that database is known (#1530). */
+describe("MonitoringDashboard on a server-level connection", () => {
+  const SERVER_LEVEL = {
+    ...mockCapabilities,
+    catalogSessions: true,
+    containerLevels: [{ id: "catalog" }, { id: "schema" }],
+  };
+  const databases = {
+    json: [
+      { path: ["analytics"], name: "analytics", level: 0 },
+      { path: ["shop"], name: "shop", level: 0 },
+    ],
+  };
+  /** The connection and database of every monitoring read the dashboard asked for, in order. */
+  const reads = () =>
+    (mockUseMonitoringData.mock.calls as unknown[][]).map((call) => ({ connection: call[0], catalog: call[2] }));
+
+  beforeEach(() => {
+    mockUseMonitoringData.mockClear();
+    mockUseMonitoringData.mockImplementation(monitoringDataDefaults);
+    currentCapabilities = mockCapabilities;
+    metadataPending = false;
+    metadataFailure = null;
+  });
+
+  afterEach(() => {
+    cleanup();
+    restoreGlobalFetch();
+    metadataPending = false;
+    metadataFailure = null;
+  });
+
+  test("a declaration that failed to read does not hold the page: it reads the connection as before", async () => {
+    metadataFailure = "provider-meta refused";
+    await act(async () => {
+      render(<MonitoringDashboard />);
+    });
+    await waitFor(() => expect(reads().some((read) => read.connection !== null)).toBe(true));
+    expect(reads().find((read) => read.connection !== null)?.catalog).toBeUndefined();
+  });
+
+  test("nothing is read while the declaration is pending, and the first read names the database", async () => {
+    metadataPending = true;
+    await act(async () => {
+      render(<MonitoringDashboard />);
+    });
+    expect(reads().length).toBeGreaterThan(0);
+    expect(reads().every((read) => read.connection === null)).toBe(true);
+    cleanup();
+
+    metadataPending = false;
+    currentCapabilities = SERVER_LEVEL;
+    mockGlobalFetch({ "/api/db/objects/containers": databases });
+    mockUseMonitoringData.mockClear();
+    await act(async () => {
+      render(<MonitoringDashboard />);
+    });
+    await waitFor(() => expect(reads().some((read) => read.connection !== null)).toBe(true));
+    expect(reads().find((read) => read.connection !== null)?.catalog).toBe("analytics");
+  });
+
+  test("a database list the server refuses is the page's error, and Try Again reads it again", async () => {
+    currentCapabilities = SERVER_LEVEL;
+    // Held, the real hook has no data to show; the error panel stands in for it.
+    mockUseMonitoringData.mockImplementation(() => ({ ...monitoringDataDefaults(), data: null }));
+    mockGlobalFetch({ "/api/db/objects/containers": { ok: false, status: 500, text: "not json" } });
+    let view: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(<MonitoringDashboard />);
+    });
+    expect(await view!.findByText("Failed to list the server's databases")).toBeTruthy();
+    expect(reads().every((read) => read.connection === null)).toBe(true);
+    expect(mockRefresh).not.toHaveBeenCalled();
+
+    mockGlobalFetch({ "/api/db/objects/containers": databases });
+    await act(async () => {
+      fireEvent.click(view!.getByText("Try Again"));
+    });
+    await waitFor(() => expect(reads().some((read) => read.connection !== null)).toBe(true));
+    expect(reads().find((read) => read.connection !== null)?.catalog).toBe("analytics");
   });
 });
