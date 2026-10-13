@@ -661,12 +661,15 @@ export interface AgentInventory {
     readonly labelPlural: string;
     readonly read: readonly string[];
     /**
-     * Each parent the walk could not list and that the scope reads nothing below, in walk order, the first five it
-     * met. Its children were never listed, so none of them is in `count`, which is 0 where they are all the walk left
-     * out. Absent where every listing answered.
+     * Each parent the walk could not list and that the scope reads nothing below, in walk order, the first
+     * `UNLISTED_PARENTS_NAMED_MAX` (tools.ts) it met. Its children were never listed, so none of them is in `count`,
+     * which is 0 where they are all the walk left out. Absent where every listing answered.
      */
     readonly unlistedParents?: readonly AgentUnlistedParent[];
-    /** The parents past those five that the walk could not list either, counted. Absent where it named every one. */
+    /**
+     * The parents past the first `UNLISTED_PARENTS_NAMED_MAX` that the walk could not list either, counted. Absent
+     * where it named every one.
+     */
     readonly unlistedParentsNotNamed?: AgentUnlistedParentsNotNamed;
   };
   /**

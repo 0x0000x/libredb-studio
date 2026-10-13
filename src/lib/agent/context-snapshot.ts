@@ -1358,8 +1358,8 @@ function renderColumn(table: AgentInventoryObject, column: ColumnSchema): string
  *    session-default container and the ones the provider names, and the note says how many others exist and
  *    names the ones read, since a read that lists no object names none of them through its entries. A parent
  *    the scope reads nothing below whose listing failed is named with the provider's sentence, since its
- *    children were never listed and so are in no count; past the first five such parents the rest are only
- *    counted, so however many fail the note leaves the packing room for its rows.
+ *    children were never listed and so are in no count; past the first `UNLISTED_PARENTS_NAMED_MAX` (tools.ts)
+ *    such parents the rest are only counted, so however many fail the note leaves the packing room for its rows.
  *
  * Inside the fence with the inventory rather than in the preface, the same as the omission
  * notice already is: each one is about the lines beside it, and the bound belongs to the

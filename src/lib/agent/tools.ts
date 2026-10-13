@@ -3310,9 +3310,9 @@ const UNLISTED_REASON_MAX_CHARS = 200;
 /**
  * How many of the parents it could not list the walk names, each with the provider's sentence; the rest are counted.
  * Each note is read inside every packing of the inventory, and beside the parent's own name it is at most about 470
- * characters, the sentence cut and its quoting bounded by `unlistedReason`, so five of them stay well inside
+ * characters, the sentence cut and its quoting bounded by `unlistedReason`, so this many of them stay well inside
  * `AGENT_CONTEXT_PACK_MAX_CHARS` and leave the packing room for its rows however many configured catalogs cannot load.
- * Five is also how many unlisted containers the inventory route names in a refusal before it counts the rest.
+ * The inventory route names as many unlisted containers in a refusal before it counts the rest (`UNLISTED_ECHO_LIMIT`).
  */
 const UNLISTED_PARENTS_NAMED_MAX = 5;
 
