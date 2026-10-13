@@ -125,6 +125,29 @@ describe("wkbToWkt: the copied reader's forms", () => {
     }
   });
 
+  test("a ring or part count that cannot fit is refused before any ring or part is read", () => {
+    const polygon = wkb(3, u32(0xffffffff));
+    const multi = wkb(6, u32(0xffffffff));
+    const collection = wkb(7, u32(0xffffffff));
+    const allocated = spyOn(Array, "from");
+    const orders = spyOn(DataView.prototype, "getUint8");
+    let results: (string | undefined)[];
+    let allocations: number;
+    let orderReads: number;
+    try {
+      results = [wkbToWkt(polygon), wkbToWkt(multi), wkbToWkt(collection)];
+      allocations = allocated.mock.calls.length;
+      orderReads = orders.mock.calls.length;
+    } finally {
+      allocated.mockRestore();
+      orders.mockRestore();
+    }
+    expect(results).toStrictEqual([undefined, undefined, undefined]);
+    expect(allocations).toBe(0);
+    // Each value reads its own byte order once and no part's.
+    expect(orderReads).toBe(3);
+  });
+
   test("a byte order other than 0 or 1 is not decoded", () => {
     const bigEndianPoint = wkb(1, f64be(1, 2), false);
     expect(wkbToWkt(bigEndianPoint)).toBe("POINT (1 2)");

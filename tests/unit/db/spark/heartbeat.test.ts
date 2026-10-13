@@ -7,7 +7,8 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { buildSparkConnectionOptions } from "@/lib/db/providers/sql/spark/connection-options";
-import { grpcWireTransport, type SparkWireChannel } from "@/lib/db/providers/sql/spark/grpc-client";
+import { SPARK_HEARTBEAT_DEADLINE_MS } from "@/lib/db/providers/sql/spark/constants";
+import { grpcWireTransport, type SparkWireChannel, sparkCallMetadata } from "@/lib/db/providers/sql/spark/grpc-client";
 import { SparkHeartbeat } from "@/lib/db/providers/sql/spark/heartbeat";
 import { configGetOptionRequest, relationRequest, type SparkSessionRef } from "@/lib/db/providers/sql/spark/requests";
 import type { DatabaseConnection } from "@/lib/types";
@@ -75,6 +76,30 @@ describe("timers", () => {
     releaseA2();
     expect(clock.live.size).toBe(1);
     again();
+    expect(clock.live.size).toBe(0);
+  });
+
+  test("holds are keyed by sessionId: a second object for one session shares the timer the first object beats with", async () => {
+    const beats: SparkSessionRef[] = [];
+    const clock = fakeTimers();
+    const heartbeat = new SparkHeartbeat(async (held) => void beats.push(held), 50, clock.timers);
+    const id = randomUUID();
+    const first: SparkSessionRef = { sessionId: id, serverSideSessionId: "s1" };
+    const second: SparkSessionRef = { sessionId: id };
+    const releaseFirst = heartbeat.hold(first);
+    const releaseSecond = heartbeat.hold(second);
+    expect(clock.live.size).toBe(1);
+    clock.tickAll();
+    await Promise.resolve();
+    expect(beats.length).toBe(1);
+    expect(beats[0]).toBe(first);
+    releaseFirst();
+    expect(clock.live.size).toBe(1);
+    clock.tickAll();
+    await Promise.resolve();
+    expect(beats.length).toBe(2);
+    expect(beats[1]).toBe(first);
+    releaseSecond();
     expect(clock.live.size).toBe(0);
   });
 
@@ -159,8 +184,8 @@ describe("over the fake server (10.1 row 11)", () => {
     const answers: Promise<object>[] = [];
     const beat = async (target: SparkSessionRef) => {
       const answer = channel.unary("Config", configGetOptionRequest(target, ["spark.sql.ansi.enabled"]), {
-        metadata: {},
-        deadline: new Date(Date.now() + 5_000),
+        metadata: sparkCallMetadata(undefined),
+        deadline: new Date(Date.now() + SPARK_HEARTBEAT_DEADLINE_MS),
         signal: new AbortController().signal,
       });
       answers.push(answer);

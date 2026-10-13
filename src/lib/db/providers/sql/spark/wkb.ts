@@ -3,7 +3,7 @@
  * `SRID=<srid>;<WKT>`. The reader is wkbToWkt of the Milvus provider, copied and never imported, from
  * src/lib/db/providers/vector/milvus/field-data.ts, with four changes. Two are the bounds of spec 6.5: a geometry
  * nested past 64 levels is not decoded, and a point count that would pass the end is refused before any point is
- * read. Two refuse malformed forms the Milvus reader writes as WKT: a byte order other than 0 or 1, and a multi form
+ * read, as is a ring count or a multi or collection part count that cannot fit, before any ring or part is read. Two refuse malformed forms the Milvus reader writes as WKT: a byte order other than 0 or 1, and a multi form
  * holding a part of another type, which it writes as WKT that misnames the value. A form the reader does not decode
  * (a Z or M dimension, a truncated or malformed value) is written as `SRID=<srid>;WKB(<hex>)`, lossless.
  * Pure: no I/O, no logger.
@@ -59,10 +59,14 @@ export function wkbToWkt(bytes: Uint8Array): string | undefined {
     if (type === 3) {
       const rings = data.getUint32(at, little);
       at += 4;
+      // Every ring carries at least its 4-byte point count.
+      if (at + 4 * rings > bytes.byteLength) throw new RangeError("rings past the end");
       return { name, body: wrap(Array.from({ length: rings }, () => wrap(points(little)))) };
     }
     const count = data.getUint32(at, little);
     at += 4;
+    // Every part is at least 9 bytes: its byte order, its type, and a point's coordinates or a 4-byte count.
+    if (at + 9 * count > bytes.byteLength) throw new RangeError("parts past the end");
     const parts: string[] = [];
     for (let index = 0; index < count; index += 1) {
       const part = geometry(depth + 1);

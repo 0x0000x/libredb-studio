@@ -60,6 +60,7 @@ const PURE_MODULES: readonly string[] = [
   `${SPARK}/version.ts`,
   `${SPARK}/requests.ts`,
   `${SPARK}/statement-shape.ts`,
+  `${SPARK}/heartbeat.ts`,
 ];
 const IO_MODULE =
   /^(?:node:)?(?:fs|fs\/promises|net|tls|http|http2|https|dns|dgram|child_process|worker_threads)$|^@grpc\/|^@\/lib\/logger(?:\/|$)/;
