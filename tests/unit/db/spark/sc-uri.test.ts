@@ -89,10 +89,10 @@ describe("parseSparkConnectUri", () => {
     expect(parseSparkConnectUri("sc://h;token=a+b").password).toBe("a+b");
   });
 
-  test("refuses a token whose percent escape does not decode, filling nothing and never repeating it", () => {
+  test("refuses a token whose percent escape does not decode, clearing the box, filling nothing and never repeating it", () => {
     for (const text of ["sc://h;token=s3cret%zz", "sc://h;token=s3cret%", "sc://h;use_ssl=true;token=s3cret%FF"]) {
       const parsed = parseSparkConnectUri(text);
-      expect(parsed).toEqual({ type: "spark", refusal: SPARK_PASTE_SENTENCES.tokenEscape });
+      expect(parsed).toEqual({ type: "spark", refusal: SPARK_PASTE_SENTENCES.tokenEscape, discardPaste: true });
       expect(JSON.stringify(parsed)).not.toContain("s3cret");
     }
   });
@@ -130,12 +130,11 @@ describe("parseSparkConnectUri", () => {
     expect(parseSparkConnectUri("sc://u:p@h/path;x-databricks-cluster-id=1")).toEqual(refusal);
   });
 
-  test("refuses the JDBC form, a path, a user part, a missing scheme, a bad host and a bad port, filling nothing", () => {
+  test("refuses the JDBC form, a path, a missing scheme, a bad host and a bad port, filling nothing", () => {
     const refused = (sentence: string) => ({ type: "spark", refusal: sentence }) as const;
     expect(parseSparkConnectUri("jdbc:sc://h:15002")).toEqual(refused(SPARK_PASTE_SENTENCES.jdbcPrefix));
-    expect(parseSparkConnectUri("sc://h:15002/db;token=a")).toEqual(refused(SPARK_PASTE_SENTENCES.pathNotEmpty));
+    expect(parseSparkConnectUri("sc://h:15002/db")).toEqual(refused(SPARK_PASTE_SENTENCES.pathNotEmpty));
     expect(parseSparkConnectUri("sc://h//")).toEqual(refused(SPARK_PASTE_SENTENCES.pathNotEmpty));
-    expect(parseSparkConnectUri("sc://alice:pw@h:15002")).toEqual(refused(SPARK_PASTE_SENTENCES.userInfo));
     expect(parseSparkConnectUri("h:15002")).toEqual(refused(SPARK_PASTE_SENTENCES.scheme));
     expect(parseSparkConnectUri("sc://")).toEqual(refused(SPARK_PASTE_SENTENCES.host));
     expect(parseSparkConnectUri("sc://bad_host-:1")).toEqual(refused(SPARK_PASTE_SENTENCES.host));
@@ -148,6 +147,49 @@ describe("parseSparkConnectUri", () => {
     expect(parseSparkConnectUri("sc://h:0")).toEqual(refused(SPARK_PASTE_SENTENCES.port));
     expect(parseSparkConnectUri("sc://h:65536")).toEqual(refused(SPARK_PASTE_SENTENCES.port));
     expect(parseSparkConnectUri("sc://h:port")).toEqual(refused(SPARK_PASTE_SENTENCES.port));
+  });
+
+  /**
+   * Every refusal after the Databricks one, by sentence. A text that holds a token parameter (token=, in any case, with
+   * or without a value) or a user part (an @ before the first ;) may hold a secret, so the form clears the box; a text
+   * that holds neither stays in the box to be corrected.
+   */
+  const CLEARS_THE_BOX: ReadonlyArray<readonly [string, string]> = [
+    ["jdbc:sc://h:15002;token=s3cret", SPARK_PASTE_SENTENCES.jdbcPrefix],
+    ["jdbc:sc://h;TOKEN=", SPARK_PASTE_SENTENCES.jdbcPrefix],
+    ["jdbc:sc://alice:s3cret@h:15002", SPARK_PASTE_SENTENCES.jdbcPrefix],
+    ["h:15002;token=s3cret", SPARK_PASTE_SENTENCES.scheme],
+    ["SC://h;Token=s3cret", SPARK_PASTE_SENTENCES.scheme],
+    ["alice:s3cret@h:15002", SPARK_PASTE_SENTENCES.scheme],
+    ["sc://alice:s3cret@h:15002", SPARK_PASTE_SENTENCES.userInfo],
+    ["sc://alice@h;use_ssl=true", SPARK_PASTE_SENTENCES.userInfo],
+    ["sc://@h", SPARK_PASTE_SENTENCES.userInfo],
+    ["sc://h:15002/db;token=s3cret", SPARK_PASTE_SENTENCES.pathNotEmpty],
+    ["sc://h/?token=s3cret", SPARK_PASTE_SENTENCES.pathNotEmpty],
+    ["sc://h//;Token=", SPARK_PASTE_SENTENCES.pathNotEmpty],
+    ["sc://;token=s3cret", SPARK_PASTE_SENTENCES.host],
+    ["sc://bad_host-:1;TOKEN=s3cret", SPARK_PASTE_SENTENCES.host],
+    ["sc://h:0;token=s3cret", SPARK_PASTE_SENTENCES.port],
+    ["sc://h:port;Token=", SPARK_PASTE_SENTENCES.port],
+    ["sc://h;token=s3cret%zz", SPARK_PASTE_SENTENCES.tokenEscape],
+  ];
+
+  test.each(CLEARS_THE_BOX)("%s holds a token or a user part: refused, and the box cleared", (text, sentence) => {
+    expect(parseSparkConnectUri(text)).toEqual({ type: "spark", refusal: sentence, discardPaste: true });
+  });
+
+  /** The edges of the rule: a parameter other than token, an @ inside a parameter, and a bare token with no =. */
+  const KEEPS_THE_BOX: ReadonlyArray<readonly [string, string]> = [
+    ["jdbc:sc://h;use_ssl=true;user_id=alice@example.com", SPARK_PASTE_SENTENCES.jdbcPrefix],
+    ["SC://h;use_ssl=true", SPARK_PASTE_SENTENCES.scheme],
+    ["sc://h//;use_ssl=true", SPARK_PASTE_SENTENCES.pathNotEmpty],
+    ["sc://bad_host-:1;user_id=alice@example.com", SPARK_PASTE_SENTENCES.host],
+    ["sc://h:0;user_id=alice@example.com", SPARK_PASTE_SENTENCES.port],
+    ["sc://h:65536;token", SPARK_PASTE_SENTENCES.port],
+  ];
+
+  test.each(KEEPS_THE_BOX)("%s holds neither a token nor a user part: refused, and the box kept", (text, sentence) => {
+    expect(parseSparkConnectUri(text)).toEqual({ type: "spark", refusal: sentence });
   });
 
   test("no refusal repeats the text it refuses", () => {

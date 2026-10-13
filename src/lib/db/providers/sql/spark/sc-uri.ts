@@ -4,7 +4,8 @@ import type { ParsedConnection } from "@/lib/connection-string-parser";
  * The Paste URL reader of an Apache Spark Connect address (spec 3.2): Spark's documented grammar
  * `sc://host[:port][/][;key=value]*`, the scheme fixed, the path empty, parameter names case-sensitive, port 15002 by
  * default. Pure, with type-only imports: `src/lib/connection-string-parser.ts` imports it, and the browser carries
- * that module. A refusal fills nothing and never repeats the text it refuses.
+ * that module. A refusal fills nothing and never repeats the text it refuses; when the text may hold a secret, a token
+ * or a user part, it also sets `discardPaste`, so the form clears the paste box.
  *
  * `token` and `use_ssl` are read as Spark's 4.2.0 Python and Scala clients read them: the token percent-decoded,
  * `use_ssl` true or false in any case, and TLS on when `use_ssl` is true or when a token is set and the host is not
@@ -37,6 +38,8 @@ const NAMED_NOT_APPLIED: ReadonlySet<string> = new Set([
 ]);
 /** The `use_ssl` values the paste applies: Spark's clients compare them without regard to case. */
 const USE_SSL_VALUE = /^(?:true|false)$/i;
+/** A token parameter wherever a refused text holds one: `token=` in any case, with or without a value. */
+const TOKEN_PARAMETER = /token=/i;
 
 // The host and port rules of src/lib/connection-host-uri.ts:37-45, copied because this module imports types only;
 // tests/unit/db/spark/sc-uri.test.ts holds every host and port it returns to validateHost and validatePort.
@@ -48,8 +51,8 @@ const PORT_DIGITS = /^\d{1,5}$/;
 const MAX_PORT = 65535;
 const IPV6_CHARACTERS = /^[0-9a-f:.]+$/i;
 
-function refused(sentence: string, discardPaste?: true): ParsedConnection {
-  return { type: "spark", refusal: sentence, ...(discardPaste === undefined ? {} : { discardPaste }) };
+function refused(sentence: string, discardPaste: boolean): ParsedConnection {
+  return { type: "spark", refusal: sentence, ...(discardPaste ? { discardPaste } : {}) };
 }
 
 /** The parameter names after the first `;`, values never read. */
@@ -60,6 +63,16 @@ function parameterNames(text: string): string[] {
     .slice(semicolon + 1)
     .split(";")
     .map((part) => part.split("=")[0]);
+}
+
+/**
+ * Whether a refused text may hold a secret, so the form clears the paste box rather than keep the text there to be
+ * corrected: a token parameter, or a user part, an `@` before the first `;`, where the reader looks for one.
+ */
+function mayHoldSecret(text: string): boolean {
+  const semicolon = text.indexOf(";");
+  const head = semicolon === -1 ? text : text.slice(0, semicolon);
+  return TOKEN_PARAMETER.test(text) || head.includes("@");
 }
 
 /** The authority's host and port texts, or null where it is not `host`, `host:port`, `[v6]` or `[v6]:port`. */
@@ -121,19 +134,21 @@ export function parseSparkConnectUri(text: string): ParsedConnection {
   const trimmed = text.trim();
   // First, and with the box cleared: a Databricks Connect address can carry a workspace token.
   if (parameterNames(trimmed).includes(DATABRICKS_PARAMETER)) return refused(SPARK_PASTE_SENTENCES.databricks, true);
-  if (trimmed.startsWith(JDBC_SCHEME)) return refused(SPARK_PASTE_SENTENCES.jdbcPrefix);
-  if (!trimmed.startsWith(SCHEME)) return refused(SPARK_PASTE_SENTENCES.scheme);
+  // Every other refusal clears the box only when the text may hold a secret: a token or a user part.
+  const discardPaste = mayHoldSecret(trimmed);
+  if (trimmed.startsWith(JDBC_SCHEME)) return refused(SPARK_PASTE_SENTENCES.jdbcPrefix, discardPaste);
+  if (!trimmed.startsWith(SCHEME)) return refused(SPARK_PASTE_SENTENCES.scheme, discardPaste);
   const rest = trimmed.slice(SCHEME.length);
   const semicolon = rest.indexOf(";");
   const head = semicolon === -1 ? rest : rest.slice(0, semicolon);
-  if (head.includes("@")) return refused(SPARK_PASTE_SENTENCES.userInfo);
+  if (head.includes("@")) return refused(SPARK_PASTE_SENTENCES.userInfo, discardPaste);
   const slash = head.indexOf("/");
-  if (slash !== -1 && head.slice(slash) !== "/") return refused(SPARK_PASTE_SENTENCES.pathNotEmpty);
+  if (slash !== -1 && head.slice(slash) !== "/") return refused(SPARK_PASTE_SENTENCES.pathNotEmpty, discardPaste);
   const split = splitAuthority(slash === -1 ? head : head.slice(0, slash));
   const host = split === null ? null : hostOf(split.host);
-  if (split === null || host === null) return refused(SPARK_PASTE_SENTENCES.host);
+  if (split === null || host === null) return refused(SPARK_PASTE_SENTENCES.host, discardPaste);
   const port = split.port === undefined ? DEFAULT_PORT : portOf(split.port);
-  if (port === null) return refused(SPARK_PASTE_SENTENCES.port);
+  if (port === null) return refused(SPARK_PASTE_SENTENCES.port, discardPaste);
 
   let token: string | undefined;
   let useSsl = false;
@@ -147,7 +162,7 @@ export function parseSparkConnectUri(text: string): ParsedConnection {
     const value = part.slice(equals + 1);
     if (key === "token") {
       const decoded = percentDecoded(value);
-      if (decoded === null) return refused(SPARK_PASTE_SENTENCES.tokenEscape);
+      if (decoded === null) return refused(SPARK_PASTE_SENTENCES.tokenEscape, discardPaste);
       token = decoded === "" ? undefined : decoded;
     } else if (key === "use_ssl" && USE_SSL_VALUE.test(value)) {
       useSsl = value.toLowerCase() === "true";
