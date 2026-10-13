@@ -48,7 +48,7 @@ in lockstep with the code (see the tri-sync rule in [`../../CLAUDE.md`](../../CL
 
 - **Filename = canonical type-id** (`postgres.md`, `mssql.md`, …), mirroring the source file
   (`src/lib/db/providers/<family>/<type-id>.ts`, or a `<type-id>/` directory when a provider is
-  split across modules, as Couchbase, ClickHouse, Druid, Trino, Snowflake, Spark, Cassandra, libSQL, DuckDB, Db2, Prometheus, Kafka, etcd, Neo4j, Milvus, Qdrant, InfluxDB, Oxia, Databend, S3, Kubernetes, MQTT, Firestore, RabbitMQ and OPC UA are). The official product name (e.g.
+  split across modules, as Couchbase, ClickHouse, Druid, Trino, BigQuery, Snowflake, Spark, Cassandra, libSQL, DuckDB, Db2, Prometheus, Kafka, etcd, Neo4j, Milvus, Qdrant, InfluxDB, Oxia, Databend, S3, Kubernetes, MQTT, Firestore, RabbitMQ and OPC UA are). The official product name (e.g.
   "SQL Server") is used only in each doc's title and prose. **One directory may serve two type-ids**
   — `providers/sql/search/` is `elasticsearch` and `opensearch`, and `providers/timeseries/influxdb/` is
   `influxdb` and `influxdb3`, two classes on two base classes sharing one connection layer — and each type-id still gets its own
@@ -529,6 +529,9 @@ in the table above:
 | Apache Spark 4.1.3 | `spark-4-1` | **15002** |
 | Apache Spark, token server | `spark-auth` | **15002** |
 | Apache Spark, token server over TLS | `spark-tls` | 15005 |
+
+> **`spark-tls` takes SSL mode `require` here.** The certificate `docker/spark/make-certs.sh` writes names only `localhost` and `127.0.0.1`.
+> verify-ca and verify-full both check that the certificate names Host, so both refuse the host `spark-tls`.
 
 > **OpenSearch is 9200 here, not 9201.** The 9201 in the table above is a *host* port published to
 > dodge a collision with the `elasticsearch` service. Inside the network there is no collision, so the
