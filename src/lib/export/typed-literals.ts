@@ -675,6 +675,8 @@ const SNOWFLAKE_SEMI_STRUCTURED = /^(VARIANT|OBJECT|ARRAY|MAP)$/;
  * The declaration is data, so nothing that could close a literal, start a comment or end the statement passes.
  */
 const SNOWFLAKE_CAST_TYPE = /^[A-Z_]+\([A-Z0-9_, ()]*\)$/i;
+/** One element of a VECTOR's text: a number, or a non-finite word, which only a FLOAT vector holds. */
+const SNOWFLAKE_VECTOR_ELEMENT = /^-?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|inf|infinity|nan)$/i;
 /** A NUMBER or DECFLOAT text written bare, as the decoder hands over its exact text. */
 const SNOWFLAKE_NUMERIC_TEXT = /^-?\d+(\.\d+)?(e[+-]?\d+)?$/i;
 
@@ -703,12 +705,26 @@ const SNOWFLAKE_TEMPORAL: Readonly<Record<string, { shape: RegExp; convert: stri
 };
 
 /**
+ * The VECTOR type a cell's own text spells, for a column whose result metadata carries no dimension, as the trial's
+ * did: as many elements as the value holds, FLOAT when any is not an integer, else INT.
+ */
+function snowflakeVectorType(text: string): string {
+  const inner = /^\s*\[(.*)\]\s*$/s.exec(text)?.[1];
+  const elements = inner === undefined ? [] : inner.split(",").map((element) => element.trim());
+  if (elements.length === 0 || !elements.every((element) => SNOWFLAKE_VECTOR_ELEMENT.test(element))) {
+    throw new UnwritableValue("a VECTOR whose value is not an array of numbers");
+  }
+  const float = elements.some((element) => !/^-?\d+$/.test(element));
+  return `VECTOR(${float ? "FLOAT" : "INT"}, ${elements.length})`;
+}
+
+/**
  * A Snowflake cell by its declared type, in the catalog spelling the provider's decoder reports.
  *
  * Provisional until a replay on an account confirms each form. A semi-structured, structured or VECTOR cell is
  * `PARSE_JSON` of its JSON text, which `INSERT ... VALUES` refuses, so the export writes Snowflake's rows as
  * `INSERT ... SELECT`; a VECTOR or a structured type is cast to its declaration, and a VECTOR without its dimension
- * has no cast to name. A date, a time or a timestamp goes through its `TO_*` function with a mask matching the
+ * to the type its value spells. A date, a time or a timestamp goes through its `TO_*` function with a mask matching the
  * decoder's text, the fraction digits as the text carries them, so no account input format moves the value; a cell
  * not in that text is refused rather than left to an input format.
  */
@@ -717,11 +733,9 @@ function snowflakeValue(value: unknown, declared: string, scalar: ScalarLiteral)
   const name = spelled.split("(")[0].trim().toUpperCase();
   const structured = spelled.includes("(");
   if (SNOWFLAKE_SEMI_STRUCTURED.test(name) || name === "VECTOR") {
-    const parsed = `PARSE_JSON(${quoteLiteral(typeof value === "string" ? value : jsonText(value), "snowflake")})`;
-    if (!structured) {
-      if (name === "VECTOR") throw new UnwritableValue("a VECTOR whose dimension is not declared");
-      return parsed;
-    }
+    const text = typeof value === "string" ? value : jsonText(value);
+    const parsed = `PARSE_JSON(${quoteLiteral(text, "snowflake")})`;
+    if (!structured) return name === "VECTOR" ? `${parsed}::${snowflakeVectorType(text)}` : parsed;
     if (!SNOWFLAKE_CAST_TYPE.test(spelled)) throw new UnwritableValue(`a ${name} whose declared type is not a type`);
     return `${parsed}::${spelled}`;
   }

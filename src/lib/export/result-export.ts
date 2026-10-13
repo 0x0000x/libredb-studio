@@ -1038,7 +1038,8 @@ function oracleZonedTextLiteral(text: string): string | undefined {
  * no NaN at all (it stores one as NULL); Oracle AI Database 23.26.3 reads its own
  * constants into `BINARY_DOUBLE` and `BINARY_FLOAT`; Databend (M08b, on the pinned image) inserted
  * `'NaN'::FLOAT`, `'inf'::DOUBLE` and `'-inf'::FLOAT` into its `FLOAT` and `DOUBLE` columns and read back NaN,
- * Infinity and -Infinity. Every other dialect, which either
+ * Infinity and -Infinity; Snowflake's trial setup (2026-10-12) created its FLOAT infinities with `'inf'::FLOAT` and
+ * `'-inf'::FLOAT`, and `'NaN'::FLOAT` is the same documented form. Every other dialect, which either
  * cannot store these values or was not replayed, keeps writing NULL.
  */
 const NON_FINITE_LITERALS: Partial<Record<DatabaseType, Readonly<Record<NonFiniteWord, string>>>> = {
@@ -1047,6 +1048,7 @@ const NON_FINITE_LITERALS: Partial<Record<DatabaseType, Readonly<Record<NonFinit
   sqlite: { NaN: "NULL", Infinity: "9e999", "-Infinity": "-9e999" },
   oracle: { NaN: "BINARY_DOUBLE_NAN", Infinity: "BINARY_DOUBLE_INFINITY", "-Infinity": "-BINARY_DOUBLE_INFINITY" },
   databend: { NaN: "'NaN'::FLOAT", Infinity: "'inf'::DOUBLE", "-Infinity": "'-inf'::FLOAT" },
+  snowflake: { NaN: "'NaN'::FLOAT", Infinity: "'inf'::FLOAT", "-Infinity": "'-inf'::FLOAT" },
 };
 
 function nonFiniteLiteral(word: NonFiniteWord, dialect: DatabaseType | undefined): string {

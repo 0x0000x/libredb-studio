@@ -2006,6 +2006,43 @@ describe("buildResultExport: Snowflake's rows and types", () => {
     );
   });
 
+  test("a VECTOR column, as the SQL API reports it, is cast to the dimension its value spells", () => {
+    const file = buildResultExport(
+      "sql-insert",
+      source({
+        rows: [{ vec: "[1.500000,2.000000,-3.000000]" }],
+        fields: ["vec"],
+        tabName: "t",
+        dialect: "snowflake",
+        columnTypes: { vec: "VECTOR" },
+      }),
+    );
+    expect(file.content).toBe(
+      `INSERT INTO t ("vec") SELECT PARSE_JSON('[1.500000,2.000000,-3.000000]')::VECTOR(FLOAT, 3);`,
+    );
+  });
+
+  test("NaN and the infinities in a FLOAT column are Snowflake's own literals, never NULL", () => {
+    const file = buildResultExport(
+      "sql-insert",
+      source({
+        rows: [{ f: "Infinity" }, { f: "-Infinity" }, { f: "NaN" }, { f: Number.NEGATIVE_INFINITY }],
+        fields: ["f"],
+        tabName: "t",
+        dialect: "snowflake",
+        columnTypes: { f: "FLOAT" },
+      }),
+    );
+    expect(file.content).toBe(
+      [
+        `INSERT INTO t ("f") SELECT 'inf'::FLOAT;`,
+        `INSERT INTO t ("f") SELECT '-inf'::FLOAT;`,
+        `INSERT INTO t ("f") SELECT 'NaN'::FLOAT;`,
+        `INSERT INTO t ("f") SELECT '-inf'::FLOAT;`,
+      ].join("\n"),
+    );
+  });
+
   test("a row with no typed cell is still INSERT ... SELECT", () => {
     const file = buildResultExport(
       "sql-insert",

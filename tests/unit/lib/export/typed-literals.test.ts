@@ -342,8 +342,22 @@ describe("typedLiteral: snowflake (provisional until a replay on an account)", (
     expect(typedLiteral('"it\'s\\"', "VARIANT", "snowflake", scalar)).toBe("PARSE_JSON('\"it''s\\\\\"')");
   });
 
-  test("a VECTOR without its dimension, or a cast that is not a type, skips the row", () => {
-    expect(() => typedLiteral("[1,2]", "VECTOR", "snowflake", scalar)).toThrow(UnwritableValue);
+  test("a VECTOR without its dimension is cast to the element type and length its value spells", () => {
+    // The trial's result metadata carries no dimension, and printed a FLOAT vector with six fraction digits.
+    expect(typedLiteral("[1.500000,2.000000,-3.000000]", "VECTOR", "snowflake", scalar)).toBe(
+      "PARSE_JSON('[1.500000,2.000000,-3.000000]')::VECTOR(FLOAT, 3)",
+    );
+    expect(typedLiteral("[1,-2]", "VECTOR", "snowflake", scalar)).toBe("PARSE_JSON('[1,-2]')::VECTOR(INT, 2)");
+    expect(typedLiteral("[1, 2e3]", "vector", "snowflake", scalar)).toBe("PARSE_JSON('[1, 2e3]')::VECTOR(FLOAT, 2)");
+    expect(typedLiteral("[1,NaN]", "VECTOR", "snowflake", scalar)).toBe("PARSE_JSON('[1,NaN]')::VECTOR(FLOAT, 2)");
+    expect(typedLiteral([4, 5, 6], "VECTOR", "snowflake", scalar)).toBe("PARSE_JSON('[4,5,6]')::VECTOR(INT, 3)");
+  });
+
+  test("a VECTOR value that is not an array of numbers, or a cast that is not a type, skips the row", () => {
+    expect(() => typedLiteral("[]", "VECTOR", "snowflake", scalar)).toThrow("a VECTOR whose value is not an array of numbers");
+    expect(() => typedLiteral('["a"]', "VECTOR", "snowflake", scalar)).toThrow(UnwritableValue);
+    expect(() => typedLiteral("[1,,2]", "VECTOR", "snowflake", scalar)).toThrow(UnwritableValue);
+    expect(() => typedLiteral("1,2", "VECTOR", "snowflake", scalar)).toThrow(UnwritableValue);
     expect(() => typedLiteral("[1]", "ARRAY(INT)'; DROP TABLE t; --", "snowflake", scalar)).toThrow(UnwritableValue);
   });
 
