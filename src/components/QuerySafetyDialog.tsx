@@ -747,6 +747,51 @@ function codeFormInText(text: string, form: ConfirmCodeForm, grammar: SqlGrammar
 }
 
 /**
+ * The session key a SET or RESET names: the code text after the keyword, past whitespace and comments, up to `=`,
+ * white space, `;` or the end, with one pair of enclosing backticks or double quotes removed; `""` where no key
+ * follows. Spark reads a SET's key the same way, as the raw text up to `=`, trimmed by `String.trim`, which removes
+ * every character at or below U+0020, so each of those counts as white space here; and where
+ * `spark.sql.ansi.doubleQuotedIdentifiers` is on, Spark reads a double-quoted key as the key.
+ */
+function configKeyAfter(text: string, from: number, grammar: SqlGrammar): string {
+  let i = from;
+  while (i < text.length) {
+    const span = readSqlSpan(text, i, grammar);
+    if (
+      span !== null &&
+      (span.kind === "whitespace" || span.kind === "line-comment" || span.kind === "block-comment")
+    ) {
+      i = span.end;
+    } else if (text[i] <= " ") {
+      i++;
+    } else {
+      break;
+    }
+  }
+  let end = i;
+  while (end < text.length && text[end] > " " && !/[=\s;]/.test(text[end])) end++;
+  const key = text.slice(i, end);
+  const quote = key[0];
+  return key.length > 2 && (quote === "`" || quote === '"') && key.endsWith(quote) ? key.slice(1, -1) : key;
+}
+
+/** Whether a SET or RESET names a key of `grammar.confirmConfigKeys`, or is a RESET of every key. */
+function configKeyAsks(
+  text: string,
+  reading: NonNullable<ReturnType<typeof readOperativeKeyword>>,
+  grammar: SqlGrammar,
+): boolean {
+  const keys = grammar.confirmConfigKeys;
+  if (keys === undefined || (reading.keyword !== "SET" && reading.keyword !== "RESET")) return false;
+  const key = configKeyAfter(text, reading.end, grammar).toLowerCase();
+  if (key === "") return reading.keyword === "RESET";
+  return keys.some((entry) => {
+    const wanted = entry.toLowerCase();
+    return wanted.endsWith(".") ? key.startsWith(wanted) : key === wanted;
+  });
+}
+
+/**
  * Whether ONE statement's own code asks for a confirmation, read under `grammar`.
  *
  * Its own function because the caller below asks the question twice over different
@@ -772,6 +817,8 @@ export function writesUnderGrammar(text: string, grammar: SqlGrammar): boolean {
   ) {
     return true;
   }
+  // A session key the dialect names: SET or RESET of it changes how every later statement of the session reads.
+  if (reading !== null && configKeyAsks(text, reading, grammar)) return true;
   if ((grammar.confirmCodeForms ?? []).some((form) => codeFormInText(text, form, grammar))) return true;
 
   // A statement led by a control-flow word, or by a `<<label>>` no keyword reading

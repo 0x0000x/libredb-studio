@@ -2427,3 +2427,70 @@ describe("a confirmCodeForms word followed by a string literal", () => {
     expect(writesUnderGrammar("SELECT TRANSFORM(a) USING 'cat' FROM t", DEFAULT_SQL_GRAMMAR)).toBe(false);
   });
 });
+
+// The `confirmConfigKeys` fact, read before any row declares it: a SET or RESET of a listed session key asks, and so
+// does a RESET with no key, which restores every key. Spark's row lists variable substitution and the catalog keys.
+describe("a confirmConfigKeys key set or reset", () => {
+  const KEYS: SqlGrammar = {
+    ...DEFAULT_SQL_GRAMMAR,
+    confirmConfigKeys: ["spark.sql.variable.substitute", "spark.sql.defaultCatalog", "spark.sql.catalog."],
+  };
+
+  test.each([
+    "SET spark.sql.variable.substitute=true",
+    "SET spark.sql.variable.substitute = true",
+    "set SPARK.SQL.VARIABLE.SUBSTITUTE=TRUE",
+    "SET `spark.sql.variable.substitute`=true",
+    "SET /* c */ spark.sql.variable.substitute=true",
+    "-- note\nSET spark.sql.variable.substitute=true",
+    "RESET spark.sql.variable.substitute",
+    "SET spark.sql.defaultCatalog=lake",
+    "SET spark.sql.catalog.lake=org.apache.iceberg.spark.SparkCatalog",
+    "SET spark.sql.catalog.lake.uri=thrift://metastore:9083",
+    "RESET",
+    "RESET;",
+  ])("asks for %j", (sql) => {
+    expect(writesUnderGrammar(sql, KEYS)).toBe(true);
+  });
+
+  test.each([
+    "SET spark.sql.shuffle.partitions=8",
+    "SET spark.sql.catalogImplementation=hive",
+    "SET spark.sql.variable.substitute.depth=40",
+    "SET TIME ZONE 'UTC'",
+    "SET VAR x = 1",
+    "SET CATALOG 'lake'",
+    "SET PATH = DEFAULT_PATH",
+    "SET -v",
+    "SET",
+    "RESET spark.sql.shuffle.partitions",
+    "SELECT 'SET spark.sql.variable.substitute=true'",
+  ])("does not ask for %j", (sql) => {
+    expect(writesUnderGrammar(sql, KEYS)).toBe(false);
+  });
+
+  test("absent: a RESET and a listed key ask nothing", () => {
+    expect(writesUnderGrammar("RESET", DEFAULT_SQL_GRAMMAR)).toBe(false);
+    expect(writesUnderGrammar("SET spark.sql.variable.substitute=true", DEFAULT_SQL_GRAMMAR)).toBe(false);
+  });
+
+  // Spark takes the key from the text after the keyword through `String.trim`, which removes every character at or
+  // below U+0020, and reads a double-quoted key as the key where `spark.sql.ansi.doubleQuotedIdentifiers` is on
+  // (`SparkSqlParser.scala` and `parsers.scala`, v4.2.0), so the key is read the same way here.
+  test.each([
+    "SET\u0001spark.sql.variable.substitute=true",
+    "RESET spark.sql.variable.substitute\u001f",
+    "RESET\u0001",
+    'SET "spark.sql.variable.substitute"=true',
+    'RESET "spark.sql.defaultCatalog"',
+  ])("asks for %j, the key read as Spark reads it", (sql) => {
+    expect(writesUnderGrammar(sql, KEYS)).toBe(true);
+  });
+
+  test.each(["SET\u0001spark.sql.shuffle.partitions=8", 'SET "spark.sql.variable.substitute.depth"=40'])(
+    "does not ask for %j, the key read as Spark reads it",
+    (sql) => {
+      expect(writesUnderGrammar(sql, KEYS)).toBe(false);
+    },
+  );
+});

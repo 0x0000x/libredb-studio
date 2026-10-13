@@ -290,6 +290,14 @@ export interface SqlGrammar {
    * matches `TRANSFORM (a) USING 'cat'` and not `JOIN u USING (id)`). Absent means none.
    */
   readonly confirmCodeForms?: readonly ConfirmCodeForm[];
+  /**
+   * Session configuration keys whose SET or RESET asks for a confirmation, compared without case; an entry ending in
+   * `.` matches every key under it. Read where the operative keyword is SET or RESET: the key is the code text after
+   * the keyword up to `=`, white space, `;` or the end, one pair of enclosing backticks or double quotes removed, and
+   * every character at or below U+0020 counts as white space, as Spark's `String.trim` of that text reads it. A RESET
+   * with no key, which restores every key, asks too. Absent means none.
+   */
+  readonly confirmConfigKeys?: readonly string[];
 }
 
 /**
