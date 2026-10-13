@@ -56,6 +56,14 @@ const sparkInfo = (metadata: Readonly<Record<string, string>>) => ({
   type_url: ERROR_INFO_URL,
   value: errorInfo("org.apache.spark.sql.AnalysisException", metadata),
 });
+/** One length-delimited field, written by hand for shapes the map encoder never emits. */
+function delimited(field: number, bytes: Uint8Array): Uint8Array {
+  return protobuf.Writer.create()
+    .uint32((field << 3) | 2)
+    .bytes(bytes)
+    .finish();
+}
+const utf8 = (value: string) => new TextEncoder().encode(value);
 
 /** The reference reading of the same bytes, with protobufjs. */
 function reference(bytes: Uint8Array): Record<string, string> | undefined {
@@ -87,7 +95,7 @@ describe("well-formed details", () => {
         other: "x",
       }),
     ]);
-    expect(readStatusDetails(bytes)).toEqual({
+    expect(readStatusDetails(bytes)).toStrictEqual({
       reason: "org.apache.spark.sql.AnalysisException",
       errorClass: "TABLE_OR_VIEW_NOT_FOUND",
       sqlState: "42P01",
@@ -116,7 +124,7 @@ describe("well-formed details", () => {
       ...new TextEncoder().encode(ERROR_INFO_URL),
     ]);
     const bytes = new Uint8Array([26, any.length, ...any]);
-    expect(readStatusDetails(bytes)).toEqual({ reason: "r", sqlState: "42601" });
+    expect(readStatusDetails(bytes)).toStrictEqual({ reason: "r", sqlState: "42601" });
   });
 
   test("unknown fields of every allowed wire type are skipped", () => {
@@ -133,7 +141,7 @@ describe("well-formed details", () => {
     const value = new Uint8Array([26, entry.length, ...entry]);
     const url = encoder.encode(ERROR_INFO_URL);
     const any = new Uint8Array([10, url.length, ...url, 24, 5, 18, value.length, ...value]);
-    expect(readStatusDetails(new Uint8Array([26, any.length, ...any]))).toEqual({ errorId: "e1" });
+    expect(readStatusDetails(new Uint8Array([26, any.length, ...any]))).toStrictEqual({ errorId: "e1" });
   });
 
   test("a later map entry with the same key replaces the earlier one", () => {
@@ -188,8 +196,28 @@ describe("well-formed details", () => {
     const bom = String.fromCharCode(0xfeff);
     const value = errorInfo(`${bom}r`, { [`${bom}errorClass`]: "X", sqlState: `${bom}42000` });
     const bytes = status([{ type_url: ERROR_INFO_URL, value }]);
-    expect(readStatusDetails(bytes)).toEqual({ reason: `${bom}r`, sqlState: `${bom}42000` });
-    expect(readStatusDetails(bytes)).toEqual(reference(bytes));
+    expect(readStatusDetails(bytes)).toStrictEqual({ reason: `${bom}r`, sqlState: `${bom}42000` });
+    expect(readStatusDetails(bytes)).toStrictEqual(reference(bytes));
+  });
+
+  test("a later entry over 8 KiB removes an earlier in-bound value of the same key", () => {
+    const oversized = delimited(
+      3,
+      new Uint8Array([...delimited(1, utf8("errorClass")), ...delimited(2, utf8("p".repeat(8_193)))]),
+    );
+    const value = new Uint8Array([...errorInfo("r", { errorClass: "A" }), ...oversized]);
+    expect(readStatusDetails(status([{ type_url: ERROR_INFO_URL, value }]))).toStrictEqual({ reason: "r" });
+  });
+
+  test("a kept key whose map entry has no value field is kept as the empty string", () => {
+    const value = delimited(3, delimited(1, utf8("errorClass")));
+    expect(readStatusDetails(status([{ type_url: ERROR_INFO_URL, value }]))).toStrictEqual({ errorClass: "" });
+  });
+
+  test("a reason present on the wire with length 0 is left out", () => {
+    const entry = delimited(3, new Uint8Array([...delimited(1, utf8("sqlState")), ...delimited(2, utf8("42000"))]));
+    const value = new Uint8Array([10, 0, ...entry]);
+    expect(readStatusDetails(status([{ type_url: ERROR_INFO_URL, value }]))).toStrictEqual({ sqlState: "42000" });
   });
 
   test("no ErrorInfo is undefined, and an ErrorInfo with none of the kept fields is {}", () => {
@@ -198,7 +226,7 @@ describe("well-formed details", () => {
     expect(
       readStatusDetails(status([{ type_url: "type.googleapis.com/google.rpc.RetryInfo", value: new Uint8Array(0) }])),
     ).toBeUndefined();
-    expect(readStatusDetails(status([{ type_url: ERROR_INFO_URL, value: new Uint8Array(0) }]))).toEqual({});
+    expect(readStatusDetails(status([{ type_url: ERROR_INFO_URL, value: new Uint8Array(0) }]))).toStrictEqual({});
   });
 });
 
@@ -235,7 +263,11 @@ describe("bounds (spec 4.10 step 1)", () => {
         status([sparkInfo({ errorClass: "C", sqlState: "42000", messageParameters: "p".repeat(length) })]),
       );
     expect(at(8_192)?.messageParameters).toHaveLength(8_192);
-    expect(at(8_193)).toEqual({ reason: "org.apache.spark.sql.AnalysisException", errorClass: "C", sqlState: "42000" });
+    expect(at(8_193)).toStrictEqual({
+      reason: "org.apache.spark.sql.AnalysisException",
+      errorClass: "C",
+      sqlState: "42000",
+    });
   });
 });
 
@@ -289,7 +321,7 @@ describe("the captured answers decode as protobufjs decodes them", () => {
         const capture = readSparkCapture(version, name);
         if (capture.outcome !== "error" || capture.metadata["grpc-status-details-bin"] === undefined) continue;
         const bytes = captureBytes(capture.metadata["grpc-status-details-bin"]);
-        expect({ name, info: readStatusDetails(bytes) }).toEqual({ name, info: reference(bytes) });
+        expect({ name, info: readStatusDetails(bytes) }).toStrictEqual({ name, info: reference(bytes) });
         decoded += 1;
       }
     }
