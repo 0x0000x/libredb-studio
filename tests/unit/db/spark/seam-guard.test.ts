@@ -26,14 +26,15 @@ const DESCRIPTOR = `${SPARK}/proto/descriptor.ts`;
 const GENERATOR = "scripts/generate-spark-descriptor.mjs";
 const DESCRIPTOR_TEST = "tests/unit/db/spark/descriptor.test.ts";
 const THIS_FILE = "tests/unit/db/spark/seam-guard.test.ts";
+const HARNESS = "tests/live/spark-evidence.ts";
 const SOURCE_FILE = /\.(c|m)?(t|j)sx?$/;
 
 // The named lists. Each grows in the task that adds its files (T4.2, T5.1, T5.5, T5.7, T12.2).
-const GRPC_IMPORTERS: readonly string[] = [];
-const PROTO_LOADER_IMPORTERS: readonly string[] = [DESCRIPTOR, GENERATOR, DESCRIPTOR_TEST];
+const GRPC_IMPORTERS: readonly string[] = [HARNESS];
+const PROTO_LOADER_IMPORTERS: readonly string[] = [DESCRIPTOR, GENERATOR, DESCRIPTOR_TEST, HARNESS];
 const DESCRIPTOR_IMPORTERS: readonly string[] = [];
 const DESCRIPTOR_READERS: readonly string[] = [GENERATOR, DESCRIPTOR_TEST, THIS_FILE];
-const GENERATOR_IMPORTERS: readonly string[] = [DESCRIPTOR_TEST];
+const GENERATOR_IMPORTERS: readonly string[] = [DESCRIPTOR_TEST, HARNESS];
 /** The only files under src/ outside the provider directory that may import a Spark module (spec 8.10). */
 const OUTSIDE_IMPORTERS_ALLOWED: readonly string[] = ["src/lib/db/factory.ts", "src/lib/connection-string-parser.ts"];
 /** The one module under src/lib/db/providers/ outside the directory a Spark file may import (spec 8.10). */
