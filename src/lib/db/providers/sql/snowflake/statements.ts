@@ -42,7 +42,12 @@ import {
   serverMessage,
   transportFailureError,
 } from "./errors";
-import { readResultRows, SNOWFLAKE_FIRST_ANSWER_MAX_BYTES, SNOWFLAKE_ROWS_SENTENCES } from "./rows";
+import {
+  partitionFailureText,
+  readResultRows,
+  SNOWFLAKE_FIRST_ANSWER_MAX_BYTES,
+  SNOWFLAKE_ROWS_SENTENCES,
+} from "./rows";
 import {
   SNOWFLAKE_CONTROL_ANSWER_MAX_BYTES,
   type SnowflakeTextAnswer,
@@ -473,7 +478,7 @@ export function createSnowflakeStatements(options: SnowflakeStatementsOptions): 
         if (part.status === 200) return part;
         if (PARTITION_GAVE_UP.has(part.status)) await cancelOwn(handle);
         throw failureError(
-          failureOf(part.status, part.bytes.toString("utf8"), "partition"),
+          failureOf(part.status, await partitionFailureText(part, maxResponseBytes), "partition"),
           failureContext(run, part.attempts, true),
         );
       },

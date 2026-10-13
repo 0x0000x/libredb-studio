@@ -350,6 +350,7 @@ A statement nobody can reach any more stops billing at that moment.
 ## 6. Results
 
 Snowflake answers in partitions, every request setting `client_result_chunk_size` to 16: the first arrives inline, up to 24 MiB of text, and each further one is fetched in order, gzip-decoded as a stream.
+A failed partition answer is gzip-decoded the same way, under the same bound, before its error is read; one that inflates past the bound is classified by its HTTP status alone.
 One budget spans a statement's whole result: 16 MiB of decoded rows and 100,000 rows.
 A cut keeps the rows before it, marks the result limited, and says so:
 

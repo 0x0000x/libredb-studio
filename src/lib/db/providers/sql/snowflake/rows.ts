@@ -408,6 +408,33 @@ function feedSlices(bytes: Buffer, sink: (chunk: Buffer) => boolean): BodyOutcom
 
 const PRODUCTION_ROWS_DEPS: SnowflakeRowsDeps = { createGunzip: () => createGunzip() };
 
+/** Whether a body is gzip: `gzip` (any case) as its encoding, or the gzip magic bytes at its start. */
+function isGzip(answer: SnowflakeByteAnswer, named: string): boolean {
+  return named === "gzip" || (answer.bytes[0] === 0x1f && answer.bytes[1] === 0x8b);
+}
+
+/**
+ * A failed partition answer's text, decoded as a success body is: gunzipped when it is gzip, the inflated text cut off
+ * at `maxBytes`, the same bound the request's response took. A body that inflates past it, or does not inflate, is
+ * empty text, so its status alone classifies it.
+ */
+export async function partitionFailureText(
+  answer: SnowflakeByteAnswer,
+  maxBytes: number,
+  deps: SnowflakeRowsDeps = PRODUCTION_ROWS_DEPS,
+): Promise<string> {
+  const named = (answer.contentEncoding ?? "").trim().toLowerCase();
+  if (!isGzip(answer, named)) return answer.bytes.toString("utf8");
+  const chunks: Buffer[] = [];
+  let size = 0;
+  const outcome = await inflate(answer.bytes, deps.createGunzip(), (chunk) => {
+    size += chunk.length;
+    chunks.push(chunk);
+    return size <= maxBytes;
+  });
+  return outcome === "end" ? Buffer.concat(chunks).toString("utf8") : "";
+}
+
 /**
  * One partition body into the budget. The encoding is checked before any decoding: `gzip` (any case) or a body that
  * starts with the gzip magic bytes is gunzipped, no encoding or `identity` is read as text, anything else is refused by
@@ -435,8 +462,7 @@ async function readPartition(
     }
   };
   const sink = (chunk: Buffer): boolean => reader.feed(decode(chunk));
-  const gzipped = named === "gzip" || (answer.bytes[0] === 0x1f && answer.bytes[1] === 0x8b);
-  const outcome = gzipped ? await inflate(answer.bytes, deps.createGunzip(), sink) : feedSlices(answer.bytes, sink);
+  const outcome = isGzip(answer, named) ? await inflate(answer.bytes, deps.createGunzip(), sink) : feedSlices(answer.bytes, sink);
   if (outcome === "stopped") return;
   if (answer.truncated) {
     budget.cut = "bytes";
