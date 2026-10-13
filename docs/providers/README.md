@@ -26,7 +26,7 @@ in lockstep with the code (see the tri-sync rule in [`../../CLAUDE.md`](../../CL
 | Databend | `databend` | SQL (analytics) | none, HTTP over the shared `node:http(s)` transport (the query API, `POST /v1/query`) | SQL (Databend) | [databend.md](./databend.md) |
 | BigQuery | `bigquery` | SQL (analytics) | none, REST over the shared `node:https` transport (`jobs.query`); `jose` signs service-account tokens | SQL (GoogleSQL) | [bigquery.md](./bigquery.md) |
 | Snowflake | `snowflake` | SQL (analytics) | none, the SQL API v2 over the shared `node:https` transport; `node:crypto` signs the key-pair JWT | SQL (Snowflake) | [snowflake.md](./snowflake.md) |
-| Apache Spark | `spark` | SQL (analytics) | none, Spark Connect over the shared gRPC channel; `apache-arrow` decodes the Arrow results | SQL (Spark SQL) | [spark.md](./spark.md) |
+| Apache Spark | `spark` | SQL (analytics) | `@grpc/grpc-js` (pure JavaScript, gRPC, the shared gRPC transport; Spark Connect with no Spark client library) and `apache-arrow` (the Arrow results) | SQL (Spark SQL) | [spark.md](./spark.md) |
 | Apache Cassandra | `cassandra` | SQL (wide-column) | `cassandra-driver` (pure JS) | SQL-shaped (CQL) | [cassandra.md](./cassandra.md) |
 | Prometheus | `prometheus` | Time series | none (HTTP: the Prometheus HTTP API, `/api/v1/*`) | PromQL | [prometheus.md](./prometheus.md) |
 | Apache Kafka | `kafka` | Stream | `@platformatic/kafka` (pure TypeScript) | JSON (a read request) | [kafka.md](./kafka.md) |
