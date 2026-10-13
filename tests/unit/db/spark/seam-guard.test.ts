@@ -12,7 +12,8 @@
  * Every rule is proven both ways: the real sources pass it and a planted file fails it by name.
  *
  * The pure modules (PURE_MODULES) import no I/O, no logger and no transport, and write nothing to the console
- * (spec 4.1); that rule is proven both ways too.
+ * (spec 4.1); that rule is proven both ways too, and so is the allowlist rule: grpc-client.ts names no
+ * SparkConnectService RPC off SPARK_ALLOWLISTED_RPCS (spec 4.4).
  *
  * The guard is syntactic: a module name built at run time is stated, not chased. Each list grows in the task that adds
  * its files.
@@ -22,6 +23,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import ts from "typescript";
+import { SPARK_ALLOWLISTED_RPCS } from "@/lib/db/providers/sql/spark/grpc-client";
 import { GRPC_SEAM_HOLDINGS } from "../../../helpers/grpc-seam-holdings";
 
 const ROOT = join(import.meta.dir, "..", "..", "..", "..");
@@ -31,22 +33,32 @@ const GENERATOR = "scripts/generate-spark-descriptor.mjs";
 const DESCRIPTOR_TEST = "tests/unit/db/spark/descriptor.test.ts";
 const THIS_FILE = "tests/unit/db/spark/seam-guard.test.ts";
 const HARNESS = "tests/live/spark-evidence.ts";
+const ADAPTER = `${SPARK}/grpc-client.ts`;
+const FAKE = "tests/helpers/spark-connect-server.ts";
+const CLIENT_TEST = "tests/unit/db/spark/grpc-client.test.ts";
 const SOURCE_FILE = /\.(c|m)?(t|j)sx?$/;
 
 // The named lists. Each grows in the task that adds its files (T4.2, T5.1, T5.5, T5.7, T12.2).
-const GRPC_IMPORTERS: readonly string[] = [HARNESS];
-const PROTO_LOADER_IMPORTERS: readonly string[] = [DESCRIPTOR, GENERATOR, DESCRIPTOR_TEST, HARNESS];
-const DESCRIPTOR_IMPORTERS: readonly string[] = [];
+const GRPC_IMPORTERS: readonly string[] = [HARNESS, FAKE, CLIENT_TEST];
+const PROTO_LOADER_IMPORTERS: readonly string[] = [ADAPTER, DESCRIPTOR, GENERATOR, DESCRIPTOR_TEST, HARNESS];
+const DESCRIPTOR_IMPORTERS: readonly string[] = [ADAPTER];
 const DESCRIPTOR_READERS: readonly string[] = [GENERATOR, DESCRIPTOR_TEST, THIS_FILE];
 const GENERATOR_IMPORTERS: readonly string[] = [DESCRIPTOR_TEST, HARNESS];
-/** The provider files that import src/lib/db/grpc/, type-only imports included, as the shared guard's G5 counts them. T5.7 adds grpc-client.ts. */
-const TRANSPORT_IMPORTERS: readonly string[] = [`${SPARK}/connection-options.ts`];
+/** The provider files that import src/lib/db/grpc/, type-only imports included, as the shared guard's G5 counts them. */
+const TRANSPORT_IMPORTERS: readonly string[] = [`${SPARK}/connection-options.ts`, ADAPTER];
 /** The only files under src/ outside the provider directory that may import a Spark module (spec 8.10). */
 const OUTSIDE_IMPORTERS_ALLOWED: readonly string[] = ["src/lib/db/factory.ts", "src/lib/connection-string-parser.ts"];
 /** The one module under src/lib/db/providers/ outside the directory a Spark file may import (spec 8.10). */
 const SQL_BASE = "src/lib/db/providers/sql/sql-base";
-/** Lane B's pure modules: no I/O, no logger, no transport and no console (spec 4.1). T5.7 adds status-details.ts, errors.ts, version.ts and requests.ts. */
-const PURE_MODULES: readonly string[] = [`${SPARK}/constants.ts`, `${SPARK}/namespace.ts`];
+/** Lane B's pure modules: no I/O, no logger, no transport and no console (spec 4.1). */
+const PURE_MODULES: readonly string[] = [
+  `${SPARK}/constants.ts`,
+  `${SPARK}/namespace.ts`,
+  `${SPARK}/status-details.ts`,
+  `${SPARK}/errors.ts`,
+  `${SPARK}/version.ts`,
+  `${SPARK}/requests.ts`,
+];
 const IO_MODULE =
   /^(?:node:)?(?:fs|fs\/promises|net|tls|http|http2|https|dns|dgram|child_process|worker_threads)$|^@grpc\/|^@\/lib\/logger(?:\/|$)/;
 const NO_IO_TARGET = /^src\/lib\/(?:db\/grpc|logger)(?:\/|$)/;
@@ -334,5 +346,33 @@ describe("pure modules import no I/O, no logger and no transport (spec 4.1)", ()
     expect(pureFindings(replaced(HELD, `${SPARK}/constants.ts`, "console.log(1);\n"))).toEqual([
       `${SPARK}/constants.ts writes to the console`,
     ]);
+  });
+});
+
+/** Every string in `sf` that names one of `rpcs` off SPARK_ALLOWLISTED_RPCS (syntactic, as Milvus's check is). */
+function offAllowlist(sf: ts.SourceFile, rpcs: readonly string[]): string[] {
+  const allowed: readonly string[] = SPARK_ALLOWLISTED_RPCS;
+  const strings: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) strings.push(node.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return strings.filter((text) => rpcs.includes(text) && !allowed.includes(text));
+}
+
+describe("the allowlist (spec 4.4)", () => {
+  const proto = readFileSync(join(ROOT, SPARK, "proto", "spark", "connect", "base.proto"), "utf8");
+  const block = proto.slice(proto.indexOf("service SparkConnectService {"));
+  const rpcs = [...block.matchAll(/^\s*rpc (\w+)\(/gm)].map((match) => match[1] as string);
+
+  test("grpc-client.ts names no SparkConnectService RPC off SPARK_ALLOWLISTED_RPCS", () => {
+    expect(rpcs).toHaveLength(12);
+    const adapter = HELD.find((file) => file.path === ADAPTER) as RepositoryFile;
+    expect(offAllowlist(adapter.sf, rpcs)).toStrictEqual([]);
+  });
+
+  test("a planted RPC name off the allowlist fails by name", () => {
+    expect(offAllowlist(parse(ADAPTER, 'const rpc = "ReattachExecute";\n'), rpcs)).toStrictEqual(["ReattachExecute"]);
   });
 });
