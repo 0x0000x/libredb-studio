@@ -465,8 +465,8 @@ export class SparkProvider extends SQLBaseProvider {
    * The option checks, the channel, the version read on a probe session, the metadata session's setup, then the current
    * catalog and namespace read. A failure closes what it opened and is mapped once. A second `connect()` replaces the
    * first connection and closes it; when the second fails, it closes the first connection too, so no connection stays
-   * open behind a provider that reports itself disconnected. A connect still running when a second one starts ends
-   * cancelled.
+   * open behind a provider that reports itself disconnected. A connect still running when a second one starts, or when
+   * a disconnect begins, ends cancelled.
    */
   public async connect(): Promise<void> {
     let options: SparkConnectionOptions | undefined;
@@ -482,14 +482,20 @@ export class SparkProvider extends SQLBaseProvider {
       // A disconnect() or a second connect() took this connection while it opened: this connect ended cancelled.
       if (this.connecting !== opened) throw new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled);
     } catch (error) {
-      // A second connect() displaced this one from `connecting`: its connection is closed here whoever holds it, and
-      // its failure leaves the state of the connect that replaced it alone.
-      const displaced = opened !== null && this.connecting !== opened && (this.connecting ?? this.connection) !== null;
+      // A disconnect() or a second connect() took this connection from `connecting`: this connect ended cancelled,
+      // whatever its own call met then, a failure of the channel a disconnect closed included, so it never reports a
+      // server that answered as unreachable.
+      const taken = opened !== null && this.connecting !== opened;
+      // A second connect() displaced this one: its connection is closed here whoever holds it, and its failure leaves
+      // the state of the connect that replaced it alone.
+      const displaced = taken && (this.connecting ?? this.connection) !== null;
       // A refusal of the option checks is already the repository's DatabaseConfigError.
       const failure = toDatabaseError(
-        options === undefined
-          ? error
-          : toSparkError(error, { connection: sparkErrorConnection(options), phase: "connect" }),
+        taken
+          ? new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled)
+          : options === undefined
+            ? error
+            : toSparkError(error, { connection: sparkErrorConnection(options), phase: "connect" }),
       );
       // Not displaced, the failure becomes the provider's state at once, before any close awaits, so a connect that
       // completes during the closes keeps its own; the connection this one was to replace is closed too.

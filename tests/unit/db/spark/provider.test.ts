@@ -337,6 +337,10 @@ const failureOf = (pending: Promise<unknown>): Promise<unknown> =>
     (error: unknown) => error,
   );
 
+/** The error the provider recorded as its last one, which only its protected state holds. */
+const lastErrorOf = (provider: SparkProvider): Error | undefined =>
+  (provider as unknown as { state: { lastError?: Error } }).state.lastError;
+
 /** Settles once `ms` milliseconds of real time have passed, whatever Date.now() answers. */
 const later = (ms: number) =>
   new Promise<void>((resolve) => {
@@ -1827,6 +1831,56 @@ describe("SparkProvider: the version floor and the probe session", () => {
     expect(provider.hasRunsInFlight()).toBe(false);
     expect(script.calls.filter((call) => call.rpc === "Interrupt")).toHaveLength(1);
     expect(script.closed()).toBe(1);
+  });
+
+  test("a connect a disconnect cuts at once ends cancelled and records no reachability error, though the server answers", async () => {
+    const provider = new SparkProvider(connection(port));
+    const connecting = failureOf(provider.connect());
+    await provider.disconnect();
+    const failure = await connecting;
+    expect(failure).toBeInstanceOf(QueryCancelledError);
+    expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+    expect(lastErrorOf(provider)).toBe(failure as Error);
+    expect(provider.isConnected()).toBe(false);
+    expect(provider.hasRunsInFlight()).toBe(false);
+    // The server answered all along: the next connect succeeds.
+    await provider.connect();
+    expect(provider.isConnected()).toBe(true);
+    await provider.disconnect();
+  });
+
+  test("a connect a second connect displaced ends cancelled though its own call then fails as unreachable, and leaves the second connect's state alone", async () => {
+    const probe = gate();
+    const namespace = gate();
+    let versions = 0;
+    const script = scripted({
+      unary: (rpc) => {
+        if (rpc !== "AnalyzePlan") return undefined;
+        versions += 1;
+        // The first connect's version read fails as an unreachable server's would.
+        return versions === 1 ? probe.promise.then(() => Promise.reject(unavailable())) : undefined;
+      },
+      // The second connect's namespace read waits on the test, so the first fails while the second still connects.
+      stream: (sql, request, call) =>
+        sql === "SHOW CURRENT NAMESPACE" ? heldStream(request, call, CURRENT, namespace.promise) : undefined,
+    });
+    const channels = channelsOf(script);
+    const provider = new SparkProvider(connection(1), {}, channels);
+    const displaced = failureOf(provider.connect());
+    await eventually(() => versions === 1);
+    const second = provider.connect();
+    await eventually(() => script.calls.some((call) => statementOf(call.request) === "SHOW CURRENT NAMESPACE"));
+    probe.open();
+    const failure = await displaced;
+    expect(failure).toBeInstanceOf(QueryCancelledError);
+    expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+    expect(lastErrorOf(provider)).toBeUndefined();
+    expect(channels.closed()).toStrictEqual([true, false]);
+    namespace.open();
+    await second;
+    expect(provider.isConnected()).toBe(true);
+    expect(lastErrorOf(provider)).toBeUndefined();
+    await provider.disconnect();
   });
 });
 
