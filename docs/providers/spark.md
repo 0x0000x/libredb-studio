@@ -29,7 +29,7 @@ The provider reaches a Spark Connect server only: gRPC with Arrow results, on po
 It needs Spark 4.1 or later, the first release that splits large results into chunks Studio can read, and it was tested on Spark 4.1.3 and 4.2.0.
 `connect()` reads the server's version with one AnalyzePlan call before anything else, and a server below 4.1.0 is refused with `This server runs Spark <version>. Studio connects to Spark 4.1 and later, the first release that splits large results into chunks Studio can read.`
 A pre-release of exactly 4.1.0 (`-preview<n>`, `-rc<n>`, `-SNAPSHOT`) reads as below the floor.
-A refused probe that the server cannot release, on a server below the floor without ReleaseSession, is remembered by the connection's id and its configured endpoint, the far end under an SSH tunnel, at most 256 such entries per process.
+A probe refused at the version check that the server cannot release, on a server without ReleaseSession, is remembered by the connection's id and its configured endpoint, the far end under an SSH tunnel, at most 256 such entries per process.
 The next connect of that connection reads the version on the remembered session, so repeated refusals hold one server session, not one per attempt.
 `createDatabaseProvider()` ([`factory.ts`](../../src/lib/db/factory.ts)) builds the provider for the type id `spark`.
 
@@ -280,7 +280,7 @@ While a run's stream is open, a heartbeat sends one Config read every 15 s on th
 A connection the server still closes that way reads `The connection to Spark was closed by the server's keepalive rule while the statement ran. Studio asked Spark to stop the statement; run it again.`
 
 Stop and a closed tab send Interrupt by the run's tag, which reaches both steps of the run, and the Spark job fails with its tasks killed: `The query was cancelled.`
-A run stopped while its session is still being set up sends nothing and ends with the same sentence.
+A run stopped while its session is still being set up sends neither its statement nor an Interrupt, and ends with the same sentence.
 Stop hands the Interrupt to the channel and aborts the run's stream one turn of the event loop later, without waiting for the Interrupt's answer, so the Interrupt leaves ahead of the stream's reset on the shared connection.
 A run stays reachable by Stop until it has ended and its Interrupt, if it sent one, answered or failed, and no run is sent more than one Interrupt; a Stop also reaches a run whose connection is still closing.
 Every other early end of a stream also sends Interrupt by tag, once, because cancelling a gRPC call alone leaves the Spark job running.
@@ -427,7 +427,7 @@ A caller's limit at or below 1,000 bounds the read and keeps the caller's own tr
 A limit that is not a whole number above 0 is refused before any statement: `An Apache Spark bulk column read limit must be a positive whole number, received <limit>.`
 An object Spark answers `TABLE_OR_VIEW_NOT_FOUND` for, one dropped since the listing, is left out, and any other failure fails the whole read.
 For functions the read sends no statement and answers no details.
-The whole read runs under one deadline, the connection's query timeout from the read's start: each statement runs in the time left, and once it is up the read fails with a timeout sentence of [section 5](#5-how-a-statement-runs), or with the lost-session sentence of [section 4](#4-sessions-and-scripts) for a statement sent once on a session the server closed, and sends nothing more.
+The whole read runs under one deadline, the connection's query timeout from the read's start: each statement runs in the time left, and once it is up the read fails with a timeout sentence of [section 5](#5-how-a-statement-runs), or with the lost-session sentence of [section 4](#4-sessions-and-scripts) for a statement sent once on a session the server closed, and sends none of its remaining statements.
 
 Definitions come from `SHOW CREATE TABLE`.
 Only the refusals Spark gives for an object it holds but cannot print become the definition's unavailable sentence, in Spark's own text:
@@ -578,11 +578,11 @@ Studio treats every answer from the server as untrusted input and bounds it:
 
 Each bound is a unit test against a stub gRPC server or a hand-built Arrow stream.
 
-Isolation between Studio users: one cached provider serves every Studio user of a connection, so no two requests share a Spark session, and no user sees another's `SET`, `USE` or temp view.
+Isolation between Studio users: one cached provider serves every Studio user of a connection, but no two requests run their statements on a shared Spark session, and the metadata session they share runs no user statement, so no user sees another's `SET`, `USE` or temp view.
 The global temp views in `global_temp` are shared by every client of the Spark server, by Spark's design.
 A run is cancelled only through its own query id.
 
-Control 3.22 of [`docs/SECURITY.md`](../SECURITY.md) lists what the provider enforces: a session per request, substitution and compression off in every session, the token rule and every bound above.
+Control 3.22 of [`docs/SECURITY.md`](../SECURITY.md) lists what the provider enforces: a session per request for its statements, substitution and compression off in every session, the token rule and every bound above.
 The private-host egress guard does not cover a Spark connection, because grpc-js resolves names itself; this gap, D212, is listed under [Known limits](../SECURITY.md#known-limits).
 
 Known limits:
@@ -599,7 +599,7 @@ Each failure becomes one of the repository's error classes at the provider bound
 | Category | What arrives | Class | Sentence |
 | --- | --- | --- | --- |
 | `config` | a field check | `DatabaseConfigError` | [section 2.1](#21-fields) |
-| `unsent` | a call its own signal ended before it left Studio; when Stop ended a run's call so, the run reports `cancelled` instead | `QueryCancelledError` | `The statement was cancelled before it was sent.` |
+| `unsent` | a call its own signal ended before it left Studio; only a run's signal ends, once Stop or a close marked the run cancelled or the run ended, so a run reports `cancelled` instead and this sentence does not reach a user from a run | `QueryCancelledError` | `The statement was cancelled before it was sent.` |
 | `not-connected`, `tls` | UNAVAILABLE, a refused or unknown host, a TLS cause | `ConnectionError` | [section 2.4](#24-test-connection) |
 | `unauthenticated` | UNAUTHENTICATED | `AuthenticationError` | [section 2.4](#24-test-connection) |
 | `connection-dropped`, `stream-failed` | the stream broke while the statement ran | `ConnectionError` | [section 5](#5-how-a-statement-runs) |
@@ -627,7 +627,7 @@ Sentences Studio adds:
 ## 12. Embedded package
 
 A host that embeds Studio renders the exported `ConnectionModal` and reads `connectWarnings()` for the tokenless caution.
-The embedded package mounts no route, so a host that passes a request scope ends it with `endOpenQueryTransaction(scope)`; until it does, the session lives until Spark's 60-minute idle timeout.
+The embedded package mounts no route, so a host that passes a request scope ends it with `endOpenQueryTransaction(scope)`: the scope's session lives until the host ends it, or until the provider disconnects, and one left idle before then, or whose release cannot reach the server, lives until Spark's 60-minute idle timeout.
 Only Interrupt stops Spark work, so a host stops a statement with `cancelQuery`; cancelling its own call leaves the Spark job running.
 The package depends on `apache-arrow` 21.2.0, pinned exactly.
 
