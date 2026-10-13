@@ -4,40 +4,58 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T10:10:12.456Z",
+    "date": "2026-10-13T11:07:21.914Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "a result above spark.driver.maxResultSize=4m: command step",
     "request": {
-      "session_id": "<session>",
-      "user_context": {
-        "user_id": "libredb-studio",
-        "user_name": "libredb-studio"
-      },
-      "client_type": "libredb-studio",
-      "operation_id": "<operation>",
-      "tags": [
-        "<tag>"
-      ],
       "request_options": [
         {
           "result_chunking_options": {
             "allow_arrow_batch_chunking": true,
-            "preferred_arrow_chunk_size": "4194304"
-          }
+            "preferred_arrow_chunk_size": "4194304",
+            "_preferred_arrow_chunk_size": "preferred_arrow_chunk_size"
+          },
+          "request_option": "result_chunking_options"
         }
       ],
+      "tags": [
+        "<tag>"
+      ],
+      "session_id": "<session>",
+      "user_context": {
+        "extensions": [],
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
       "plan": {
         "command": {
           "sql_command": {
+            "pos_args": [],
+            "pos_arguments": [],
+            "args": {},
+            "named_arguments": {},
+            "sql": "",
             "input": {
+              "common": null,
               "sql": {
+                "pos_args": [],
+                "pos_arguments": [],
+                "args": {},
+                "named_arguments": {},
                 "query": "SELECT id, repeat('x', 1000) AS v FROM range(0, 20000, 1, 4)"
-              }
+              },
+              "rel_type": "sql"
             }
-          }
-        }
-      }
+          },
+          "command_type": "sql_command"
+        },
+        "op_type": "command"
+      },
+      "client_type": "libredb-studio",
+      "_client_type": "client_type",
+      "operation_id": "<operation>",
+      "_operation_id": "operation_id"
     }
   },
   "outcome": "pass",
@@ -48,8 +66,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "2b107bb7-e61e-470e-9b71-4c8ffd595ce8",
-      "server_side_session_id": "24a8a9ee-452a-40fb-bf7b-ede5c2bdc2c2",
+      "response_id": "5e381d83-060e-4e6e-bdea-732089c1e1b0",
+      "server_side_session_id": "bd57b7ab-dcdf-46f0-bfec-0098b6901d39",
       "sql_command_result": {
         "relation": {
           "common": null,
@@ -71,8 +89,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "3a166de3-c6c3-48e4-9242-3cb8243c645e",
-      "server_side_session_id": "24a8a9ee-452a-40fb-bf7b-ede5c2bdc2c2",
+      "response_id": "6813db87-dab8-48b0-a7d8-60253196ba72",
+      "server_side_session_id": "bd57b7ab-dcdf-46f0-bfec-0098b6901d39",
       "execution_progress": {
         "stages": [],
         "num_inflight_tasks": "0"

@@ -4,22 +4,26 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T10:07:44.495Z",
+    "date": "2026-10-13T11:06:35.804Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/Config",
     "surface": "overview: Config get_all of spark.app.",
     "request": {
       "session_id": "<session>",
       "user_context": {
+        "extensions": [],
         "user_id": "libredb-studio",
         "user_name": "libredb-studio"
       },
-      "client_type": "libredb-studio",
       "operation": {
         "get_all": {
-          "prefix": "spark.app."
-        }
-      }
+          "prefix": "spark.app.",
+          "_prefix": "prefix"
+        },
+        "op_type": "get_all"
+      },
+      "client_type": "libredb-studio",
+      "_client_type": "client_type"
     }
   },
   "outcome": "pass",
@@ -27,7 +31,7 @@
     "pairs": [
       {
         "key": "id",
-        "value": "local-1791886003302",
+        "value": "local-1791889584547",
         "_value": "value"
       },
       {
@@ -37,17 +41,17 @@
       },
       {
         "key": "submitTime",
-        "value": "1791886002298",
+        "value": "1791889583497",
         "_value": "value"
       },
       {
         "key": "startTime",
-        "value": "1791886002801",
+        "value": "1791889584013",
         "_value": "value"
       }
     ],
     "warnings": [],
     "session_id": "<session>",
-    "server_side_session_id": "45a035d6-34d0-4241-87a2-6961bc3b86a9"
+    "server_side_session_id": "5907391a-9b18-466a-b876-c18c3d4e83ba"
   }
 }

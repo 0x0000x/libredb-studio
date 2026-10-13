@@ -4,29 +4,30 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T10:07:42.424Z",
+    "date": "2026-10-13T11:06:33.175Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "O11: 2,500 rows in batches of maxRecordsPerBatch: relation step",
     "request": {
-      "session_id": "<session>",
-      "user_context": {
-        "user_id": "libredb-studio",
-        "user_name": "libredb-studio"
-      },
-      "client_type": "libredb-studio",
-      "operation_id": "<operation>",
-      "tags": [
-        "<tag>"
-      ],
       "request_options": [
         {
           "result_chunking_options": {
             "allow_arrow_batch_chunking": true,
-            "preferred_arrow_chunk_size": "4194304"
-          }
+            "preferred_arrow_chunk_size": "4194304",
+            "_preferred_arrow_chunk_size": "preferred_arrow_chunk_size"
+          },
+          "request_option": "result_chunking_options"
         }
       ],
+      "tags": [
+        "<tag>"
+      ],
+      "session_id": "<session>",
+      "user_context": {
+        "extensions": [],
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
       "plan": {
         "root": {
           "common": null,
@@ -38,8 +39,13 @@
             "query": "FROM range(0, 2500, 1, 1) SELECT id"
           },
           "rel_type": "sql"
-        }
-      }
+        },
+        "op_type": "root"
+      },
+      "client_type": "libredb-studio",
+      "_client_type": "client_type",
+      "operation_id": "<operation>",
+      "_operation_id": "operation_id"
     }
   },
   "outcome": "pass",
@@ -67,8 +73,8 @@
         "kind": "struct"
       },
       "operation_id": "<operation>",
-      "response_id": "87d3a5a5-c042-40c6-9558-eb47c9fccb68",
-      "server_side_session_id": "c4a130e4-a7da-4695-8178-0eb2de961e05"
+      "response_id": "1fbbbbe5-d9fb-4968-b183-0abaeb8580fd",
+      "server_side_session_id": "b9f1a499-c2d4-4528-b712-13c743b2ed72"
     },
     {
       "observed_metrics": [],
@@ -76,8 +82,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "83760303-4882-47cb-882a-da08089269f6",
-      "server_side_session_id": "c4a130e4-a7da-4695-8178-0eb2de961e05",
+      "response_id": "b4324e2c-cfbd-43dd-8361-54b5933573c2",
+      "server_side_session_id": "b9f1a499-c2d4-4528-b712-13c743b2ed72",
       "execution_progress": {
         "stages": [],
         "num_inflight_tasks": "0"
@@ -90,8 +96,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "ceaaebc3-bcfe-40b0-ae76-2931e19f132c",
-      "server_side_session_id": "c4a130e4-a7da-4695-8178-0eb2de961e05",
+      "response_id": "073eb466-e1b8-4471-8b15-6c02ec90f035",
+      "server_side_session_id": "b9f1a499-c2d4-4528-b712-13c743b2ed72",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -112,12 +118,12 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "d0e76561-a543-440c-8d97-756f32c40c86",
-      "server_side_session_id": "c4a130e4-a7da-4695-8178-0eb2de961e05",
+      "response_id": "ad1084df-8014-42bb-912a-ede36a7c19bf",
+      "server_side_session_id": "b9f1a499-c2d4-4528-b712-13c743b2ed72",
       "execution_progress": {
         "stages": [
           {
-            "stage_id": "7",
+            "stage_id": "4",
             "num_tasks": "1",
             "num_completed_tasks": "1",
             "input_bytes_read": "0",
@@ -134,8 +140,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "625f152d-ede3-4598-8669-6c994da74567",
-      "server_side_session_id": "c4a130e4-a7da-4695-8178-0eb2de961e05",
+      "response_id": "37d24dfe-57e3-4afa-b65f-969d7ed39d98",
+      "server_side_session_id": "b9f1a499-c2d4-4528-b712-13c743b2ed72",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -156,12 +162,12 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "f9d4a467-e3fa-417b-9305-fa4a1b5661a4",
-      "server_side_session_id": "c4a130e4-a7da-4695-8178-0eb2de961e05",
+      "response_id": "8c7a0518-ea1c-4989-976d-4c9fbe2d7f00",
+      "server_side_session_id": "b9f1a499-c2d4-4528-b712-13c743b2ed72",
       "execution_progress": {
         "stages": [
           {
-            "stage_id": "7",
+            "stage_id": "4",
             "num_tasks": "1",
             "num_completed_tasks": "1",
             "input_bytes_read": "0",
@@ -178,8 +184,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "d01603f7-a09b-49ad-b091-96d6ef34741b",
-      "server_side_session_id": "c4a130e4-a7da-4695-8178-0eb2de961e05",
+      "response_id": "49d02d04-e778-47bc-a8be-7e34d8ec7ecb",
+      "server_side_session_id": "b9f1a499-c2d4-4528-b712-13c743b2ed72",
       "arrow_batch": {
         "row_count": "500",
         "data": {
@@ -203,13 +209,13 @@
             "execution_metrics": {
               "pipelineTime": {
                 "name": "duration",
-                "value": "8",
+                "value": "9",
                 "metric_type": "timing"
               }
             },
             "name": "WholeStageCodegen (1)",
-            "plan_id": "281",
-            "parent": "281"
+            "plan_id": "190",
+            "parent": "190"
           },
           {
             "execution_metrics": {
@@ -220,15 +226,15 @@
               }
             },
             "name": "Range",
-            "plan_id": "280",
-            "parent": "281"
+            "plan_id": "189",
+            "parent": "190"
           }
         ]
       },
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "84589967-f013-4c03-95f1-01cf4c900719",
-      "server_side_session_id": "c4a130e4-a7da-4695-8178-0eb2de961e05"
+      "response_id": "0407a044-acf6-4620-9d31-bc735f886f5b",
+      "server_side_session_id": "b9f1a499-c2d4-4528-b712-13c743b2ed72"
     }
   ]
 }

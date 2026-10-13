@@ -4,29 +4,30 @@
     "image": "apache/spark:4.1.3",
     "digest": "sha256:bf9d035a7c32a8ca46aa58d6348182ffd7d2dff6409206ecfbb3915ff1fef211",
     "sparkVersion": "4.1.3",
-    "date": "2026-10-13T10:08:04.539Z",
+    "date": "2026-10-13T11:07:13.588Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "O11: 2,500 rows in batches of maxRecordsPerBatch: relation step",
     "request": {
-      "session_id": "<session>",
-      "user_context": {
-        "user_id": "libredb-studio",
-        "user_name": "libredb-studio"
-      },
-      "client_type": "libredb-studio",
-      "operation_id": "<operation>",
-      "tags": [
-        "<tag>"
-      ],
       "request_options": [
         {
           "result_chunking_options": {
             "allow_arrow_batch_chunking": true,
-            "preferred_arrow_chunk_size": "4194304"
-          }
+            "preferred_arrow_chunk_size": "4194304",
+            "_preferred_arrow_chunk_size": "preferred_arrow_chunk_size"
+          },
+          "request_option": "result_chunking_options"
         }
       ],
+      "tags": [
+        "<tag>"
+      ],
+      "session_id": "<session>",
+      "user_context": {
+        "extensions": [],
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
       "plan": {
         "root": {
           "common": null,
@@ -38,8 +39,13 @@
             "query": "FROM range(0, 2500, 1, 1) SELECT id"
           },
           "rel_type": "sql"
-        }
-      }
+        },
+        "op_type": "root"
+      },
+      "client_type": "libredb-studio",
+      "_client_type": "client_type",
+      "operation_id": "<operation>",
+      "_operation_id": "operation_id"
     }
   },
   "outcome": "pass",
@@ -67,8 +73,8 @@
         "kind": "struct"
       },
       "operation_id": "<operation>",
-      "response_id": "0a7fc10b-1ee4-4553-9859-c9da2ca26627",
-      "server_side_session_id": "335b3438-0854-4adb-8b47-268858394834"
+      "response_id": "faee7246-7872-4b6c-967f-b725f9d17b34",
+      "server_side_session_id": "f4935098-84e1-4e2d-be1a-e792633f7642"
     },
     {
       "observed_metrics": [],
@@ -76,8 +82,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "f6a23c6b-4d41-4294-8d81-b44f767d2c2f",
-      "server_side_session_id": "335b3438-0854-4adb-8b47-268858394834",
+      "response_id": "ed539bf2-4b38-4122-8d7e-3a6c8ad9210f",
+      "server_side_session_id": "f4935098-84e1-4e2d-be1a-e792633f7642",
       "execution_progress": {
         "stages": [],
         "num_inflight_tasks": "0"
@@ -90,8 +96,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "fa63f4f3-918a-4098-9897-01d0894fb912",
-      "server_side_session_id": "335b3438-0854-4adb-8b47-268858394834",
+      "response_id": "308e8765-13c1-4c25-9ad6-c089538fb6c4",
+      "server_side_session_id": "f4935098-84e1-4e2d-be1a-e792633f7642",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -112,8 +118,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "e7713f69-d639-471d-9f18-bb9978ef202f",
-      "server_side_session_id": "335b3438-0854-4adb-8b47-268858394834",
+      "response_id": "6cb9af9a-bbb3-4713-bace-c569480e99eb",
+      "server_side_session_id": "f4935098-84e1-4e2d-be1a-e792633f7642",
       "execution_progress": {
         "stages": [
           {
@@ -134,8 +140,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "8dfea7f6-3847-480f-8d8f-f8d343f23cbf",
-      "server_side_session_id": "335b3438-0854-4adb-8b47-268858394834",
+      "response_id": "66418fd6-1677-497e-a9fb-afd118ecd88b",
+      "server_side_session_id": "f4935098-84e1-4e2d-be1a-e792633f7642",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -156,8 +162,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "7feab224-88f2-4678-9ffd-cee83c3acb83",
-      "server_side_session_id": "335b3438-0854-4adb-8b47-268858394834",
+      "response_id": "7dde7a74-ccf0-4611-a782-5c3a01cbd2ab",
+      "server_side_session_id": "f4935098-84e1-4e2d-be1a-e792633f7642",
       "arrow_batch": {
         "row_count": "500",
         "data": {
@@ -178,8 +184,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "1cb0265b-5410-4e5f-ac8b-00ac664ee058",
-      "server_side_session_id": "335b3438-0854-4adb-8b47-268858394834",
+      "response_id": "be62e019-2bf9-4f23-a33a-7b2a11fd8201",
+      "server_side_session_id": "f4935098-84e1-4e2d-be1a-e792633f7642",
       "execution_progress": {
         "stages": [
           {
@@ -203,7 +209,7 @@
             "execution_metrics": {
               "pipelineTime": {
                 "name": "duration",
-                "value": "4",
+                "value": "6",
                 "metric_type": "timing"
               }
             },
@@ -227,8 +233,8 @@
       },
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "0934a8fc-2846-4218-a763-fd6bfa02fc14",
-      "server_side_session_id": "335b3438-0854-4adb-8b47-268858394834"
+      "response_id": "b46bd642-5275-4769-abd1-37896a6e1341",
+      "server_side_session_id": "f4935098-84e1-4e2d-be1a-e792633f7642"
     }
   ]
 }

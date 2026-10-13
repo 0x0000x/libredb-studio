@@ -4,29 +4,30 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T10:07:42.546Z",
+    "date": "2026-10-13T11:06:33.335Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "100,001 bigint rows, FROM-led, which the row budget cuts: relation step",
     "request": {
-      "session_id": "<session>",
-      "user_context": {
-        "user_id": "libredb-studio",
-        "user_name": "libredb-studio"
-      },
-      "client_type": "libredb-studio",
-      "operation_id": "<operation>",
-      "tags": [
-        "<tag>"
-      ],
       "request_options": [
         {
           "result_chunking_options": {
             "allow_arrow_batch_chunking": true,
-            "preferred_arrow_chunk_size": "4194304"
-          }
+            "preferred_arrow_chunk_size": "4194304",
+            "_preferred_arrow_chunk_size": "preferred_arrow_chunk_size"
+          },
+          "request_option": "result_chunking_options"
         }
       ],
+      "tags": [
+        "<tag>"
+      ],
+      "session_id": "<session>",
+      "user_context": {
+        "extensions": [],
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
       "plan": {
         "root": {
           "common": null,
@@ -38,8 +39,13 @@
             "query": "FROM range(0, 100001, 1, 1) SELECT id"
           },
           "rel_type": "sql"
-        }
-      }
+        },
+        "op_type": "root"
+      },
+      "client_type": "libredb-studio",
+      "_client_type": "client_type",
+      "operation_id": "<operation>",
+      "_operation_id": "operation_id"
     }
   },
   "outcome": "pass",
@@ -67,8 +73,8 @@
         "kind": "struct"
       },
       "operation_id": "<operation>",
-      "response_id": "bc96edba-d8c7-446d-8ea6-1eb096da0db9",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75"
+      "response_id": "a7eb25f5-f502-4101-b1cf-8f00254f7237",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f"
     },
     {
       "observed_metrics": [],
@@ -76,8 +82,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "5ccf172b-b0ce-4955-98dc-ffa7c701bf16",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "59d606a4-1539-447d-bcb2-33e2b41871a3",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "execution_progress": {
         "stages": [],
         "num_inflight_tasks": "0"
@@ -90,8 +96,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "cf55623e-e4bb-48c2-886d-dcef7a2d8c87",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "fe12d6c4-84ac-4538-8a51-2aed61c5a5fd",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -112,30 +118,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "bc3a0c77-4553-4138-87f1-315c6a1f7326",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
-      "execution_progress": {
-        "stages": [
-          {
-            "stage_id": "8",
-            "num_tasks": "1",
-            "num_completed_tasks": "1",
-            "input_bytes_read": "0",
-            "done": true
-          }
-        ],
-        "num_inflight_tasks": "0"
-      },
-      "response_type": "execution_progress"
-    },
-    {
-      "observed_metrics": [],
-      "session_id": "<session>",
-      "metrics": null,
-      "schema": null,
-      "operation_id": "<operation>",
-      "response_id": "32d883df-8173-47ab-9058-11b12fb00d5e",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "bbeb0ff5-5355-4f71-b433-d208567069ff",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -156,30 +140,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "2b003e91-591f-4786-921a-7180739fb07d",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
-      "execution_progress": {
-        "stages": [
-          {
-            "stage_id": "8",
-            "num_tasks": "1",
-            "num_completed_tasks": "1",
-            "input_bytes_read": "0",
-            "done": true
-          }
-        ],
-        "num_inflight_tasks": "0"
-      },
-      "response_type": "execution_progress"
-    },
-    {
-      "observed_metrics": [],
-      "session_id": "<session>",
-      "metrics": null,
-      "schema": null,
-      "operation_id": "<operation>",
-      "response_id": "7c11fc75-8463-4944-a056-f8228999a997",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "e9752a02-11f1-41fa-97e2-02fc000c24df",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -200,8 +162,30 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "e5e7949a-cea1-4b56-8023-f95c5b115a9f",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "f86acc05-68f9-4fbb-8cde-fe76aabd50aa",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
+      "execution_progress": {
+        "stages": [
+          {
+            "stage_id": "5",
+            "num_tasks": "1",
+            "num_completed_tasks": "1",
+            "input_bytes_read": "0",
+            "done": true
+          }
+        ],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "f8801629-22f8-4e53-a536-3d2ff9fc649c",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -222,8 +206,30 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "be4206f6-c86c-4cde-8c16-b089025b09e2",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "0face581-b7af-4cc7-b731-9bad8e14b130",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
+      "execution_progress": {
+        "stages": [
+          {
+            "stage_id": "5",
+            "num_tasks": "1",
+            "num_completed_tasks": "1",
+            "input_bytes_read": "0",
+            "done": true
+          }
+        ],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "c5aea7d5-5a79-49b2-a230-5977ebfd8213",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -244,8 +250,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "5670893a-24e4-4869-adf9-91169bb420e6",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "ff3b4a9e-359b-47a1-8678-47473c0260be",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -266,8 +272,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "2663fde6-3517-4b8e-8d67-886fb0639ba2",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "9be9d995-da5e-4c96-816b-aa404aa23eff",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -288,8 +294,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "49506cab-ef13-4cc3-8f13-02695631614c",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "e0377351-7e22-4beb-84ff-873c1bf483d2",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -310,8 +316,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "6f4a5ed9-485e-4198-b9c1-d033eb6db9f8",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "a0f86418-ffd5-426e-afc6-da798a692f7e",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -332,8 +338,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "665e218d-ce4b-4cea-bd36-93057a5ba766",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "e1f6eb8b-0596-45f5-aa5d-7793f87d1d13",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -354,8 +360,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "a2bc1ea2-6178-4e7b-a900-2111d8d55301",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "58beccef-c647-4c02-8f23-2d23fecbb02e",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -376,8 +382,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "ae383918-679b-47b3-869c-0b91eea7f61a",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "9314d4de-a487-4eee-a5a9-85a170b6623b",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -398,8 +404,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "e46a1057-964f-4942-920e-050ebdcf145b",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "a754e01f-a4d8-4e05-a14a-ac6ddce76277",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -420,8 +426,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "02544e74-8404-4247-832f-863ac455a603",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "a87a96f1-c1d0-46c5-9b01-1da0a73ab02d",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -442,8 +448,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "85ee52de-0d8c-45ca-835a-b1f81d30cd9d",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "63bf70a5-1ec5-44b4-a0ad-5ab8b1a1e01d",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -464,8 +470,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "338ea0fe-5ea5-42c1-9f35-334e6d48923c",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "fca0c9ad-01c9-440f-8e17-61f40da7523e",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -486,8 +492,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "01483a24-9ac7-4342-ad51-af647e5ffddf",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "6919e01b-d4c6-41c5-ba5c-af4f45803064",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -508,8 +514,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "9d0d6cb5-cba5-4dd2-b2c5-17c02428826a",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "83230e9a-3615-4316-b807-850006bfde49",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -530,8 +536,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "4d9c7ef4-ef52-45a1-87b6-ce9e75ddfe8f",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "699be1b1-a967-4662-8742-c908582d138f",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -552,8 +558,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "54502fed-e487-4480-b965-7588d18b68eb",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "132f95b5-cc74-47f4-bddd-57e2dd6cf95a",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -574,8 +580,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "7b529ea8-ef39-44c5-bb43-706a16387c7a",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "0bd106e0-f899-4cc5-bbca-6c7c6157c60f",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -596,8 +602,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "cb3e1aa9-3ae1-4ca1-80ef-e190ffe368c6",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "23585937-98ba-4df6-96a3-3654ec81da0b",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -618,8 +624,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "5d484125-d01a-4844-8a26-6d488ed3d90a",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "671f9dcf-4660-4bf4-b737-d9bb0ba6d108",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -640,8 +646,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "e1868dd2-3fd1-40f3-a340-6ee1bcafdabf",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "4631253b-c8e6-4889-8943-97ab5eb7c175",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -662,8 +668,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "3c239a1b-59d7-48e1-aa1a-5ec15d768389",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "912c837c-4c61-485c-83a8-ec1953cbb90a",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -684,8 +690,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "c5b6423d-a11f-416c-99e5-4da7fca7e95d",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "231efe7d-2e30-40d4-8858-e7e0f1cf8203",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -706,8 +712,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "b71c2ec3-9fc8-46c1-bf28-8997486779d1",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "eaaa46ae-ee16-4abe-854b-f81ad9da5225",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -728,8 +734,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "f9f9712b-967a-416a-b77e-db5f58cf02df",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "704b9ec2-8019-4205-a117-f2b744dae116",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -750,8 +756,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "0a7f9370-454d-4586-981e-8e6a5ddf41ab",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "a3006885-fddd-448b-a214-6be18b3ace8a",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -772,8 +778,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "9005e279-cc5a-440e-afc8-06b4e539480f",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "2e22e5f4-360e-432d-b481-990dbd59f546",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -794,8 +800,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "4af2992c-2cab-4d68-a21f-2d39fb483c3f",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "9de93df9-55d5-4c82-93d0-ce9723736e29",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -816,8 +822,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "df9b9944-2910-49c1-a0de-b3d35295b603",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "2238cb2f-6b10-417f-bd17-cd6288d50942",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -838,8 +844,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "3914473e-3517-4da9-a7c4-fdcd4c80ae79",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "53e7b59b-6678-40be-b9b6-83480069ca73",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -860,8 +866,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "ea32af17-e9d3-4040-aad5-5101cd709c42",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "9fa0b0ae-6130-4995-8c45-5464b71bf51a",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -882,8 +888,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "8206b3ac-d609-4c1e-90b2-310d17928fb7",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "27f19b40-94c8-4a74-8b4d-1a01a5304f37",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -904,8 +910,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "e592874b-97bb-4d1f-b5a6-ee0edc6f37b3",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "ad212989-b8bc-43ca-a645-a24c458307a0",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -926,8 +932,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "a264d5fb-b6ed-4540-91a3-3efeb7aed617",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "e6476cb4-b573-4a27-a8c3-01aba6eb9d9f",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -948,8 +954,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "0adeaf92-9ad5-4430-b9aa-377eafb5c701",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "2df771fe-9db3-4026-a75b-e1818518d832",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -970,8 +976,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "3e3e369e-b32b-47ac-9a7b-dedc2f0c0eea",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "a1b1f6ad-21c3-4a0d-8f47-f1aa37853096",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -992,8 +998,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "3d5ce698-1b03-46e8-9f6b-66ee050402d4",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "032a64f1-eb0e-48cc-abec-0869d3bb72bb",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1014,8 +1020,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "f65e7d36-7a8f-4641-afbd-c0a9d0699185",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "5184243a-46cf-4c5d-8eaf-94a1d0af7383",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1036,8 +1042,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "ead9f047-e072-4ecd-956b-e2b28488b2e7",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "12fc77a5-7a3f-481e-9563-2fdae2b961fd",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1058,8 +1064,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "11b91173-9b7f-4bc4-ad5d-53003db31dd3",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "5abd9b76-77c2-4669-9987-681a75619d5f",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1080,8 +1086,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "e7a62f7b-630a-44d6-a038-c4f88b53a939",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "5bb7e351-b2ed-4d99-917f-bc5d7aa4ab2c",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1102,8 +1108,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "03d44013-2c0f-4793-bb45-2663c500f4c2",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "62877f62-a97a-4baa-af88-7f86d2f607db",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1124,8 +1130,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "9c9f279f-0c2f-4026-ad31-e8183cb0c634",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "6b0083fa-ce4b-462a-9264-f6463bbb7665",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1146,8 +1152,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "ad338a79-1c0b-41f1-bb9c-f6d2b0b5523d",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "911d109b-b44e-4c64-8199-d358ec57bb54",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1168,8 +1174,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "6cf8dbdb-8a1b-4f4e-bb56-3243a7a4c359",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "c6d8a86c-09a3-4e38-9650-987b6329c060",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1190,8 +1196,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "0c889eab-7cc1-4319-b261-27c0af1c4880",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "f921e03b-0325-40fe-bf08-39ee70e1f951",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1212,8 +1218,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "99cce207-d627-4920-8b17-6f07ef86e93a",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "26fba563-baa5-472b-9dff-9d06ca08dff6",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1234,8 +1240,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "9257699d-4326-44f9-838e-4710392238cb",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "7e51b9d5-867d-4fca-a808-e3c8338ff79e",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1256,8 +1262,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "975e4578-7ac7-494e-8e61-202bfdf23f36",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "d21335dd-45d6-44df-94e1-7096d0797ae1",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1278,8 +1284,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "067e56ba-2ae2-4ed6-9e0d-39ca1e3fcb71",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "49c5ad44-698c-4195-bb29-da4ae70bbe7c",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1300,8 +1306,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "27cbf242-c56c-4491-9454-679df5188429",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "d9903b41-0f08-451f-b08d-2c1f5dfecda6",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1322,8 +1328,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "62870754-5aa1-44a4-a2d0-10a58ec87e8c",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "2004c801-6ea8-4647-9b6c-5880b16ecf79",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1344,8 +1350,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "073946d5-d4f6-449d-86ab-539c6059c54c",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "b8f57cd2-a763-40b7-84fd-64950723de7f",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1366,8 +1372,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "e365d7c6-d465-452c-9559-cb7a3057ddd9",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "6d82f6b4-6e9f-456c-9294-443e3d524a93",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1388,8 +1394,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "88a1b859-cce1-4bda-9d29-596d9cc84e49",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "eb44c92e-d05d-410a-a0f6-4b3006c91c6a",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1410,8 +1416,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "1c93547d-1525-41d1-8005-57c903695f2f",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "1f45cf00-d942-4804-ab6d-2b2df0828f83",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1432,8 +1438,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "59a6288e-2fd2-46ab-acac-e2c2e6860d70",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "bc3975ce-20e5-4e1f-abac-355b9faef776",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1454,8 +1460,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "549c0522-e37e-4c4a-a39e-edb58a82a947",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "2f048a7b-9d4c-4c1b-b03c-f1da5f8ee178",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1476,8 +1482,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "c841e9b8-8de9-4bcd-ab90-f51d8eeab9a3",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "75a167cc-41f0-4ebe-85b4-45ebc610233c",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1498,8 +1504,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "7812af5b-6df5-402e-ac6b-9ef7c62fdc5a",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "67ca3256-b4f3-435d-b1f1-a6197d65ed1d",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1520,8 +1526,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "f628abce-4f34-438e-a6d7-7783f8e38207",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "b689a676-0259-4de5-8541-8fa43fafd0fc",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1542,8 +1548,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "dd7ecfa9-73bf-4810-84f2-225718d3dd4d",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "4b84a93d-9d6c-4238-8a29-d443c40e36d5",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1564,8 +1570,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "98bc8248-8a5a-41f1-aeb2-5c7e34dd99ca",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "96bd233f-61b9-4674-b648-b0efa461905e",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1586,8 +1592,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "3668bcc1-316d-43d4-9300-e3fb9dc2673b",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "8bfabb45-6aba-4666-b1ed-dbd26f65cb8e",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1608,8 +1614,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "ed78c7af-7b17-40e6-a96d-f7bda8df360a",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "7960d9ce-1141-4179-9d1d-a8b45ef91775",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1630,8 +1636,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "63795fbc-2902-4c82-ab1c-a5e604c3b125",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "4650f1c0-0f05-44c2-9889-090fbd58b156",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1652,8 +1658,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "5930f9fc-2b8b-4b7e-8d1a-57f3ea2f0b0c",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "44ea8f0b-2b1e-47bf-acca-2e16caeb3bec",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1674,8 +1680,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "6119c3a7-5fb9-4583-b753-f4c4d5094a5b",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "d272d779-9162-4a1e-81f2-604a51b36523",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1696,8 +1702,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "9403ede0-3fd1-486f-9355-fcdb2aafb98a",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "b138fb83-f2cb-4987-b3ae-03c5a55814c8",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1718,8 +1724,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "3913e163-1a2f-44e7-a172-e750e643d1ca",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "cf64606f-74c9-4c29-9a93-4e776cfd5701",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1740,8 +1746,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "1b70208d-e19c-4def-85e3-74fe5fe67f44",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "e44c2cf7-104c-4132-b35a-4ca5c03b5ea5",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1762,8 +1768,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "42235145-aabc-4947-b87c-6fa0fa89d862",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "3610f7ab-49cd-4c4b-9c71-b904b5d68a8e",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1784,8 +1790,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "033fd548-041a-4b3f-97fc-e08819600de4",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "3bffa9f8-64af-4835-8978-9e37146807d1",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1806,8 +1812,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "9ae972f8-e40c-4a4b-b43a-d1478cabf2fb",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "d24b7d28-dc12-4bf4-839a-10eda5e4f791",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1828,8 +1834,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "c75d1af9-77db-4f06-bf42-80423c1b08e2",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "2c9ce590-bcd6-4e8c-9be9-ec659d77dc0e",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1850,8 +1856,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "6bf273e1-1546-4dbc-9e0b-2681e1924421",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "609c63c4-9d7e-4129-bec9-348bfbccf1c0",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1872,8 +1878,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "b10046cf-b480-4b3c-b24e-863770b17ee8",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "ac6927da-08ce-4c7c-8845-01a978c7d84d",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1894,8 +1900,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "bb531708-1b0a-4128-9195-d8fcc4a24f02",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "84ced5da-65fa-4d18-8ad0-dd4697173778",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1916,8 +1922,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "ff3766fa-280e-4563-842f-e35040debe6e",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "59313a5d-0006-4897-be56-b965bbcedde7",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1938,8 +1944,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "cf44b91d-8960-4e5f-b1bc-a37e24abdd9f",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "8b32e836-b0ba-4a7d-99b6-6768d70b8d89",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1960,8 +1966,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "2a55beed-9c97-49e7-a7d1-53962399af4c",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "c4b36139-0a0d-4492-86de-b2d546fbae77",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -1982,8 +1988,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "617740d8-6870-4bd0-8c78-34e22a2e473e",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "4ba53546-60ee-4bbf-ba39-3b637fd1af35",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2004,8 +2010,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "15bae249-53c7-47d2-88dc-63421d6a098b",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "81e9fb3a-3d49-4a53-9f27-58c6559b7cb0",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2026,8 +2032,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "41ab937a-aebb-4acb-9256-46b447969cca",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "dc7b6635-7697-4070-a2c0-3a5aabb24ccc",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2048,8 +2054,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "bf505238-85ad-4399-8a8c-358dd1712e86",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "dafe790f-3a28-407e-b909-5a7dea4da49d",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2070,8 +2076,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "181ceb21-cb41-4b32-a52a-78c82e47d39c",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "840f3555-b087-45ac-ae08-683ba9c3f3df",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2092,8 +2098,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "8c9e78be-4ae3-4808-ab4a-7a145a0a312b",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "72739543-bbff-4d0d-871c-584cf7b37d43",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2114,8 +2120,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "7500272f-06e1-41b0-b8b3-5ce2607102c9",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "93a31212-26cf-4a46-84ae-39b2a1394743",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2136,8 +2142,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "e4fd0ae4-ff3b-467a-8df8-197fb9a0febb",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "82efe463-eba8-44f1-b686-e52edf44a827",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2158,8 +2164,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "741dbc00-16df-47fb-9ae9-c5fa9ca2a166",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "cfbb6cb1-038f-4140-a1b7-83c5824add47",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2180,8 +2186,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "75acfcbc-c99d-463c-b1a5-9c3d8f63fa0e",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "912fb1a8-b2a0-43e9-93b5-bdc56053303d",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2202,8 +2208,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "3daf46a5-7f9c-4fb4-b712-076fb34c7751",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "eb008460-5180-43f3-8c50-2120600402e7",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2224,8 +2230,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "7b3bddf1-98ca-4314-9563-1e7c7008e24c",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "6165aa80-8f9e-4288-b5d9-0f19e5bec5f2",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2246,8 +2252,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "7a8b6edb-6bd9-451a-8eb4-245acfbff3dd",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "dc11d09e-70b5-4c44-9d01-9eab5e4393a9",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2268,8 +2274,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "babf3bb5-aba8-4aff-a50d-0f02f82d2f6d",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "bcdc3559-cab1-4456-a983-f00ab2e8b219",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2290,8 +2296,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "be01f690-4757-4bd1-b199-33d7657a6f3f",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "f99c6415-7beb-4e92-bcbe-b393b866c3aa",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2312,8 +2318,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "d5c927f6-69ce-4d8d-9d55-3f3539c4f139",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "f41a32d6-061a-4547-b3e1-0a70c575a797",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1000",
         "data": {
@@ -2334,8 +2340,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "6cb2951c-153e-4d76-8163-d9ec7c1b8d58",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75",
+      "response_id": "8a3718a4-0870-482a-8794-a66f5f32be30",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f",
       "arrow_batch": {
         "row_count": "1",
         "data": {
@@ -2359,13 +2365,13 @@
             "execution_metrics": {
               "pipelineTime": {
                 "name": "duration",
-                "value": "64",
+                "value": "74",
                 "metric_type": "timing"
               }
             },
             "name": "WholeStageCodegen (1)",
-            "plan_id": "285",
-            "parent": "285"
+            "plan_id": "194",
+            "parent": "194"
           },
           {
             "execution_metrics": {
@@ -2376,15 +2382,15 @@
               }
             },
             "name": "Range",
-            "plan_id": "284",
-            "parent": "285"
+            "plan_id": "193",
+            "parent": "194"
           }
         ]
       },
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "eedb42d7-8876-4490-847b-815323a8f6e6",
-      "server_side_session_id": "48058fc6-de76-4e94-88c2-a4ccbfd81a75"
+      "response_id": "94625950-6f58-4205-ab81-95cdc20df6ba",
+      "server_side_session_id": "4146d8b7-bd31-49eb-af43-dff659a81b5f"
     }
   ]
 }

@@ -4,29 +4,30 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T10:07:44.314Z",
+    "date": "2026-10-13T11:06:35.515Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "a result after a session SET of the codec to lz4: relation step",
     "request": {
-      "session_id": "<session>",
-      "user_context": {
-        "user_id": "libredb-studio",
-        "user_name": "libredb-studio"
-      },
-      "client_type": "libredb-studio",
-      "operation_id": "<operation>",
-      "tags": [
-        "<tag>"
-      ],
       "request_options": [
         {
           "result_chunking_options": {
             "allow_arrow_batch_chunking": true,
-            "preferred_arrow_chunk_size": "4194304"
-          }
+            "preferred_arrow_chunk_size": "4194304",
+            "_preferred_arrow_chunk_size": "preferred_arrow_chunk_size"
+          },
+          "request_option": "result_chunking_options"
         }
       ],
+      "tags": [
+        "<tag>"
+      ],
+      "session_id": "<session>",
+      "user_context": {
+        "extensions": [],
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
       "plan": {
         "root": {
           "common": null,
@@ -38,8 +39,13 @@
             "query": "SELECT id, 'x' AS v FROM range(0, 3, 1, 1)"
           },
           "rel_type": "sql"
-        }
-      }
+        },
+        "op_type": "root"
+      },
+      "client_type": "libredb-studio",
+      "_client_type": "client_type",
+      "operation_id": "<operation>",
+      "_operation_id": "operation_id"
     }
   },
   "outcome": "pass",
@@ -78,8 +84,8 @@
         "kind": "struct"
       },
       "operation_id": "<operation>",
-      "response_id": "e4aac622-fd0f-4b38-97ff-af155963da12",
-      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2"
+      "response_id": "17720318-8342-42ab-9d57-9b89c8c88144",
+      "server_side_session_id": "17d3f22e-5cfa-43b6-87e6-ba8c3095c6db"
     },
     {
       "observed_metrics": [],
@@ -87,8 +93,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "d7c231eb-37da-4aef-9748-9a8632041413",
-      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2",
+      "response_id": "81447882-3016-401a-b5ba-690aecfb57c4",
+      "server_side_session_id": "17d3f22e-5cfa-43b6-87e6-ba8c3095c6db",
       "execution_progress": {
         "stages": [],
         "num_inflight_tasks": "0"
@@ -101,8 +107,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "bc8f4f5f-8759-42b2-8a06-a932daf69039",
-      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2",
+      "response_id": "3c785fd7-2812-4607-88db-5923c929f544",
+      "server_side_session_id": "17d3f22e-5cfa-43b6-87e6-ba8c3095c6db",
       "arrow_batch": {
         "row_count": "3",
         "data": {
@@ -123,12 +129,12 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "4333f83b-4960-4202-8acd-ddc6338a615f",
-      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2",
+      "response_id": "73aa46ed-bff3-4029-baf1-aa91d819149c",
+      "server_side_session_id": "17d3f22e-5cfa-43b6-87e6-ba8c3095c6db",
       "execution_progress": {
         "stages": [
           {
-            "stage_id": "15",
+            "stage_id": "11",
             "num_tasks": "1",
             "num_completed_tasks": "1",
             "input_bytes_read": "0",
@@ -145,12 +151,12 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "ee78c3c4-b49d-437f-ab1c-e2fc1c093113",
-      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2",
+      "response_id": "0634f02a-91df-42b4-88b3-61abef2d74af",
+      "server_side_session_id": "17d3f22e-5cfa-43b6-87e6-ba8c3095c6db",
       "execution_progress": {
         "stages": [
           {
-            "stage_id": "15",
+            "stage_id": "11",
             "num_tasks": "1",
             "num_completed_tasks": "1",
             "input_bytes_read": "0",
@@ -175,14 +181,14 @@
               }
             },
             "name": "WholeStageCodegen (1)",
-            "plan_id": "393",
-            "parent": "393"
+            "plan_id": "290",
+            "parent": "290"
           },
           {
             "execution_metrics": {},
             "name": "Project",
-            "plan_id": "392",
-            "parent": "393"
+            "plan_id": "289",
+            "parent": "290"
           },
           {
             "execution_metrics": {
@@ -193,15 +199,15 @@
               }
             },
             "name": "Range",
-            "plan_id": "391",
-            "parent": "392"
+            "plan_id": "288",
+            "parent": "289"
           }
         ]
       },
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "ca4a3f37-e7ca-4fdf-a0f3-cf8abb183214",
-      "server_side_session_id": "629fd94f-abc5-4346-aee0-06c5234566f2"
+      "response_id": "e024f4ff-fa1e-49f0-9e75-beb7d3b6756c",
+      "server_side_session_id": "17d3f22e-5cfa-43b6-87e6-ba8c3095c6db"
     }
   ]
 }

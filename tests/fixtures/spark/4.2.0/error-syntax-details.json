@@ -4,18 +4,20 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T10:07:42.661Z",
+    "date": "2026-10-13T11:06:33.526Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/FetchErrorDetails",
-    "surface": "FetchErrorDetails of the syntax error",
+    "surface": "a syntax error with ErrorInfo: FetchErrorDetails of its errorId",
     "request": {
       "session_id": "<session>",
       "user_context": {
+        "extensions": [],
         "user_id": "libredb-studio",
         "user_name": "libredb-studio"
       },
+      "error_id": "7aafcac3-44c0-4880-a7b8-f1024a5d5143",
       "client_type": "libredb-studio",
-      "error_id": "804b7dec-66de-4063-83f3-ff928ce708f5"
+      "_client_type": "client_type"
     }
   },
   "outcome": "pass",

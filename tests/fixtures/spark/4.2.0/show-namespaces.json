@@ -4,40 +4,58 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T10:07:44.343Z",
+    "date": "2026-10-13T11:06:35.573Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "tree: SHOW NAMESPACES IN spark_catalog: command step",
     "request": {
-      "session_id": "<session>",
-      "user_context": {
-        "user_id": "libredb-studio",
-        "user_name": "libredb-studio"
-      },
-      "client_type": "libredb-studio",
-      "operation_id": "<operation>",
-      "tags": [
-        "<tag>"
-      ],
       "request_options": [
         {
           "result_chunking_options": {
             "allow_arrow_batch_chunking": true,
-            "preferred_arrow_chunk_size": "4194304"
-          }
+            "preferred_arrow_chunk_size": "4194304",
+            "_preferred_arrow_chunk_size": "preferred_arrow_chunk_size"
+          },
+          "request_option": "result_chunking_options"
         }
       ],
+      "tags": [
+        "<tag>"
+      ],
+      "session_id": "<session>",
+      "user_context": {
+        "extensions": [],
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
       "plan": {
         "command": {
           "sql_command": {
+            "pos_args": [],
+            "pos_arguments": [],
+            "args": {},
+            "named_arguments": {},
+            "sql": "",
             "input": {
+              "common": null,
               "sql": {
+                "pos_args": [],
+                "pos_arguments": [],
+                "args": {},
+                "named_arguments": {},
                 "query": "SHOW NAMESPACES IN `spark_catalog`"
-              }
+              },
+              "rel_type": "sql"
             }
-          }
-        }
-      }
+          },
+          "command_type": "sql_command"
+        },
+        "op_type": "command"
+      },
+      "client_type": "libredb-studio",
+      "_client_type": "client_type",
+      "operation_id": "<operation>",
+      "_operation_id": "operation_id"
     }
   },
   "outcome": "pass",
@@ -48,8 +66,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "af41c1d1-463b-4046-9913-1c8eeaa71042",
-      "server_side_session_id": "9311d70f-d9e3-4a49-a049-77ee2e92b4b7",
+      "response_id": "e6db37e7-9055-47f6-af67-0c671f3d5166",
+      "server_side_session_id": "377a4043-cb6b-4ad2-b7b3-27b02c017225",
       "sql_command_result": {
         "relation": {
           "common": null,
@@ -67,6 +85,20 @@
     {
       "observed_metrics": [],
       "session_id": "<session>",
+      "metrics": null,
+      "schema": null,
+      "operation_id": "<operation>",
+      "response_id": "f367c6e3-760e-4ae3-be04-eba48f4d4c30",
+      "server_side_session_id": "377a4043-cb6b-4ad2-b7b3-27b02c017225",
+      "execution_progress": {
+        "stages": [],
+        "num_inflight_tasks": "0"
+      },
+      "response_type": "execution_progress"
+    },
+    {
+      "observed_metrics": [],
+      "session_id": "<session>",
       "metrics": {
         "metrics": [
           {
@@ -78,29 +110,15 @@
               }
             },
             "name": "CommandResult",
-            "plan_id": "405",
-            "parent": "405"
+            "plan_id": "302",
+            "parent": "302"
           }
         ]
       },
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "6cfd8379-237d-48ec-aeee-0a935d92faa7",
-      "server_side_session_id": "9311d70f-d9e3-4a49-a049-77ee2e92b4b7"
-    },
-    {
-      "observed_metrics": [],
-      "session_id": "<session>",
-      "metrics": null,
-      "schema": null,
-      "operation_id": "<operation>",
-      "response_id": "1c425a52-2553-4dc8-a440-202baf22a6d6",
-      "server_side_session_id": "9311d70f-d9e3-4a49-a049-77ee2e92b4b7",
-      "execution_progress": {
-        "stages": [],
-        "num_inflight_tasks": "0"
-      },
-      "response_type": "execution_progress"
+      "response_id": "03ab01c8-6ded-4830-9ce4-ac8af921faa0",
+      "server_side_session_id": "377a4043-cb6b-4ad2-b7b3-27b02c017225"
     }
   ]
 }

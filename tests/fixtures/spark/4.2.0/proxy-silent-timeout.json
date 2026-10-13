@@ -4,29 +4,30 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T10:10:30.061Z",
+    "date": "2026-10-13T11:07:42.649Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "O12: a silent run of about 15 s through the TLS proxy, under its 300 s read timeout: relation step",
     "request": {
-      "session_id": "<session>",
-      "user_context": {
-        "user_id": "libredb-studio",
-        "user_name": "libredb-studio"
-      },
-      "client_type": "libredb-studio",
-      "operation_id": "<operation>",
-      "tags": [
-        "<tag>"
-      ],
       "request_options": [
         {
           "result_chunking_options": {
             "allow_arrow_batch_chunking": true,
-            "preferred_arrow_chunk_size": "4194304"
-          }
+            "preferred_arrow_chunk_size": "4194304",
+            "_preferred_arrow_chunk_size": "preferred_arrow_chunk_size"
+          },
+          "request_option": "result_chunking_options"
         }
       ],
+      "tags": [
+        "<tag>"
+      ],
+      "session_id": "<session>",
+      "user_context": {
+        "extensions": [],
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
       "plan": {
         "root": {
           "common": null,
@@ -38,8 +39,13 @@
             "query": "SELECT sum(hash(id)) AS n FROM range(0, 25000000000, 1, 4)"
           },
           "rel_type": "sql"
-        }
-      }
+        },
+        "op_type": "root"
+      },
+      "client_type": "libredb-studio",
+      "_client_type": "client_type",
+      "operation_id": "<operation>",
+      "_operation_id": "operation_id"
     }
   },
   "outcome": "pass",
@@ -67,8 +73,8 @@
         "kind": "struct"
       },
       "operation_id": "<operation>",
-      "response_id": "ade5f6af-d9e3-45ae-860d-06b31bdc82b9",
-      "server_side_session_id": "5f88f2c2-6668-4722-9847-2db40d00b91e"
+      "response_id": "d467bf2a-92c3-4b33-92da-52c15dbd99f5",
+      "server_side_session_id": "fc4f6fd7-1cf1-4c8b-9684-b90341010124"
     },
     {
       "observed_metrics": [],
@@ -76,8 +82,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "3daadeca-27fb-4ebb-bf82-e64f63c08460",
-      "server_side_session_id": "5f88f2c2-6668-4722-9847-2db40d00b91e",
+      "response_id": "eba33b79-c431-453e-88c9-a10c5a637793",
+      "server_side_session_id": "fc4f6fd7-1cf1-4c8b-9684-b90341010124",
       "arrow_batch": {
         "row_count": "1",
         "data": {
@@ -100,25 +106,25 @@
           {
             "execution_metrics": {},
             "name": "AdaptiveSparkPlan",
-            "plan_id": "2747",
-            "parent": "2747"
+            "plan_id": "1221",
+            "parent": "1221"
           },
           {
             "execution_metrics": {},
             "name": "ResultQueryStage",
             "plan_id": "1",
-            "parent": "2747"
+            "parent": "1221"
           },
           {
             "execution_metrics": {
               "pipelineTime": {
                 "name": "duration",
-                "value": "2",
+                "value": "8",
                 "metric_type": "timing"
               }
             },
             "name": "WholeStageCodegen (2)",
-            "plan_id": "2763",
+            "plan_id": "1237",
             "parent": "1"
           },
           {
@@ -130,7 +136,7 @@
               },
               "aggTime": {
                 "name": "time in aggregation build",
-                "value": "0",
+                "value": "3",
                 "metric_type": "timing"
               },
               "peakMemory": {
@@ -155,20 +161,20 @@
               }
             },
             "name": "HashAggregate",
-            "plan_id": "2762",
-            "parent": "2763"
+            "plan_id": "1236",
+            "parent": "1237"
           },
           {
             "execution_metrics": {},
             "name": "InputAdapter",
-            "plan_id": "2761",
-            "parent": "2762"
+            "plan_id": "1235",
+            "parent": "1236"
           },
           {
             "execution_metrics": {},
             "name": "ShuffleQueryStage",
             "plan_id": "0",
-            "parent": "2761"
+            "parent": "1235"
           },
           {
             "execution_metrics": {
@@ -234,7 +240,7 @@
               },
               "shuffleWriteTime": {
                 "name": "shuffle write time",
-                "value": "1340338",
+                "value": "6653305",
                 "metric_type": "nsTiming"
               },
               "remoteMergedBytesRead": {
@@ -284,20 +290,20 @@
               }
             },
             "name": "Exchange",
-            "plan_id": "2755",
+            "plan_id": "1229",
             "parent": "0"
           },
           {
             "execution_metrics": {
               "pipelineTime": {
                 "name": "duration",
-                "value": "59560",
+                "value": "64885",
                 "metric_type": "timing"
               }
             },
             "name": "WholeStageCodegen (1)",
-            "plan_id": "2754",
-            "parent": "2755"
+            "plan_id": "1228",
+            "parent": "1229"
           },
           {
             "execution_metrics": {
@@ -308,7 +314,7 @@
               },
               "aggTime": {
                 "name": "time in aggregation build",
-                "value": "59558",
+                "value": "64818",
                 "metric_type": "timing"
               },
               "peakMemory": {
@@ -333,8 +339,8 @@
               }
             },
             "name": "HashAggregate",
-            "plan_id": "2745",
-            "parent": "2754"
+            "plan_id": "1219",
+            "parent": "1228"
           },
           {
             "execution_metrics": {
@@ -345,15 +351,15 @@
               }
             },
             "name": "Range",
-            "plan_id": "2744",
-            "parent": "2745"
+            "plan_id": "1218",
+            "parent": "1219"
           }
         ]
       },
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "88fc934b-24d9-48b9-8413-27ba186f40d7",
-      "server_side_session_id": "5f88f2c2-6668-4722-9847-2db40d00b91e"
+      "response_id": "62ca0020-675a-491d-bd90-072f69c650f7",
+      "server_side_session_id": "fc4f6fd7-1cf1-4c8b-9684-b90341010124"
     }
   ]
 }

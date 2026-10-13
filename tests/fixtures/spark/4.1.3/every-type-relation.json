@@ -4,29 +4,30 @@
     "image": "apache/spark:4.1.3",
     "digest": "sha256:bf9d035a7c32a8ca46aa58d6348182ffd7d2dff6409206ecfbb3915ff1fef211",
     "sparkVersion": "4.1.3",
-    "date": "2026-10-13T10:08:04.199Z",
+    "date": "2026-10-13T11:07:13.018Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "every-type SELECT: relation step: relation step",
     "request": {
-      "session_id": "<session>",
-      "user_context": {
-        "user_id": "libredb-studio",
-        "user_name": "libredb-studio"
-      },
-      "client_type": "libredb-studio",
-      "operation_id": "<operation>",
-      "tags": [
-        "<tag>"
-      ],
       "request_options": [
         {
           "result_chunking_options": {
             "allow_arrow_batch_chunking": true,
-            "preferred_arrow_chunk_size": "4194304"
-          }
+            "preferred_arrow_chunk_size": "4194304",
+            "_preferred_arrow_chunk_size": "preferred_arrow_chunk_size"
+          },
+          "request_option": "result_chunking_options"
         }
       ],
+      "tags": [
+        "<tag>"
+      ],
+      "session_id": "<session>",
+      "user_context": {
+        "extensions": [],
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
       "plan": {
         "root": {
           "common": null,
@@ -38,8 +39,13 @@
             "query": "SELECT t.*, NULL AS c_void, make_interval(1, 2, 3, 4, 5, 6, 7.000008) AS c_calendar_interval FROM spark_catalog.studio.every_type AS t"
           },
           "rel_type": "sql"
-        }
-      }
+        },
+        "op_type": "root"
+      },
+      "client_type": "libredb-studio",
+      "_client_type": "client_type",
+      "operation_id": "<operation>",
+      "_operation_id": "operation_id"
     }
   },
   "outcome": "pass",
@@ -498,8 +504,8 @@
         "kind": "struct"
       },
       "operation_id": "<operation>",
-      "response_id": "87f0f9f6-952a-46ef-bbbd-37c12302dbb3",
-      "server_side_session_id": "4175e13c-1d3d-4eca-a0e6-e2a4ea3f29cd"
+      "response_id": "83fb549f-553e-416a-9aad-92cf64a6815e",
+      "server_side_session_id": "2c29eb38-5209-43aa-9007-df11bccae28b"
     },
     {
       "observed_metrics": [],
@@ -507,8 +513,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "f7661035-b1bd-4bd2-b98f-f08dddea27c3",
-      "server_side_session_id": "4175e13c-1d3d-4eca-a0e6-e2a4ea3f29cd",
+      "response_id": "eb4ee576-406e-4188-a2e0-97389a466cff",
+      "server_side_session_id": "2c29eb38-5209-43aa-9007-df11bccae28b",
       "execution_progress": {
         "stages": [],
         "num_inflight_tasks": "0"
@@ -521,8 +527,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "6a53cbe1-8c5c-4668-bf53-08d190c0940e",
-      "server_side_session_id": "4175e13c-1d3d-4eca-a0e6-e2a4ea3f29cd",
+      "response_id": "cf04b6c0-7894-41cf-8af8-29bab01932ce",
+      "server_side_session_id": "2c29eb38-5209-43aa-9007-df11bccae28b",
       "arrow_batch": {
         "row_count": "1",
         "data": {
@@ -543,8 +549,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "b6100345-86f2-4007-81b7-eb8f7695d369",
-      "server_side_session_id": "4175e13c-1d3d-4eca-a0e6-e2a4ea3f29cd",
+      "response_id": "e10d58f4-e697-4bd0-b098-127b368afffb",
+      "server_side_session_id": "2c29eb38-5209-43aa-9007-df11bccae28b",
       "execution_progress": {
         "stages": [
           {
@@ -565,8 +571,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "ef22d863-b8b7-4d91-9c18-6083afa41c51",
-      "server_side_session_id": "4175e13c-1d3d-4eca-a0e6-e2a4ea3f29cd",
+      "response_id": "f74c5242-7292-4f52-9a6b-36e2ab1d860b",
+      "server_side_session_id": "2c29eb38-5209-43aa-9007-df11bccae28b",
       "execution_progress": {
         "stages": [
           {
@@ -590,7 +596,7 @@
             "execution_metrics": {
               "pipelineTime": {
                 "name": "duration",
-                "value": "294",
+                "value": "420",
                 "metric_type": "timing"
               }
             },
@@ -636,12 +642,12 @@
               },
               "scanTime": {
                 "name": "scan time",
-                "value": "107",
+                "value": "160",
                 "metric_type": "timing"
               },
               "metadataTime": {
                 "name": "metadata time",
-                "value": "5",
+                "value": "4",
                 "metric_type": "timing"
               },
               "filesSize": {
@@ -663,8 +669,8 @@
       },
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "4e22e8f0-72ae-4fc0-896f-e124991af9a3",
-      "server_side_session_id": "4175e13c-1d3d-4eca-a0e6-e2a4ea3f29cd"
+      "response_id": "d231bd96-1ad3-4049-9014-54f929debabe",
+      "server_side_session_id": "2c29eb38-5209-43aa-9007-df11bccae28b"
     }
   ]
 }

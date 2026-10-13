@@ -4,29 +4,30 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T10:07:42.106Z",
+    "date": "2026-10-13T11:06:32.699Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "every-type SELECT: relation step: relation step",
     "request": {
-      "session_id": "<session>",
-      "user_context": {
-        "user_id": "libredb-studio",
-        "user_name": "libredb-studio"
-      },
-      "client_type": "libredb-studio",
-      "operation_id": "<operation>",
-      "tags": [
-        "<tag>"
-      ],
       "request_options": [
         {
           "result_chunking_options": {
             "allow_arrow_batch_chunking": true,
-            "preferred_arrow_chunk_size": "4194304"
-          }
+            "preferred_arrow_chunk_size": "4194304",
+            "_preferred_arrow_chunk_size": "preferred_arrow_chunk_size"
+          },
+          "request_option": "result_chunking_options"
         }
       ],
+      "tags": [
+        "<tag>"
+      ],
+      "session_id": "<session>",
+      "user_context": {
+        "extensions": [],
+        "user_id": "libredb-studio",
+        "user_name": "libredb-studio"
+      },
       "plan": {
         "root": {
           "common": null,
@@ -38,8 +39,13 @@
             "query": "SELECT t.*, NULL AS c_void, make_interval(1, 2, 3, 4, 5, 6, 7.000008) AS c_calendar_interval FROM spark_catalog.studio.every_type AS t"
           },
           "rel_type": "sql"
-        }
-      }
+        },
+        "op_type": "root"
+      },
+      "client_type": "libredb-studio",
+      "_client_type": "client_type",
+      "operation_id": "<operation>",
+      "_operation_id": "operation_id"
     }
   },
   "outcome": "pass",
@@ -498,8 +504,8 @@
         "kind": "struct"
       },
       "operation_id": "<operation>",
-      "response_id": "a0ef9156-2bae-446e-9727-2c14c0b7b0df",
-      "server_side_session_id": "ca570e52-78ab-428f-9362-b082bedbc69a"
+      "response_id": "32b3171a-8e16-49c7-ab36-cd7ed853b339",
+      "server_side_session_id": "d0c726e6-b81b-429d-8b27-21d92594709c"
     },
     {
       "observed_metrics": [],
@@ -507,8 +513,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "5db8efec-26ef-4b10-84a7-0022152a287d",
-      "server_side_session_id": "ca570e52-78ab-428f-9362-b082bedbc69a",
+      "response_id": "f4d49a1b-2190-4651-a66b-99345aecc043",
+      "server_side_session_id": "d0c726e6-b81b-429d-8b27-21d92594709c",
       "execution_progress": {
         "stages": [],
         "num_inflight_tasks": "0"
@@ -521,8 +527,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "530413cc-0a19-4e7f-a0b8-01ba4fe6604f",
-      "server_side_session_id": "ca570e52-78ab-428f-9362-b082bedbc69a",
+      "response_id": "ae5bf1e0-49cd-4a70-b823-fd4bd8c57c4e",
+      "server_side_session_id": "d0c726e6-b81b-429d-8b27-21d92594709c",
       "arrow_batch": {
         "row_count": "1",
         "data": {
@@ -543,12 +549,12 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "031c0ec1-b10c-464b-96e2-0dc71e0b670d",
-      "server_side_session_id": "ca570e52-78ab-428f-9362-b082bedbc69a",
+      "response_id": "b72bbdb6-20c8-4d8b-bdb0-d4cbe4d0d85d",
+      "server_side_session_id": "d0c726e6-b81b-429d-8b27-21d92594709c",
       "execution_progress": {
         "stages": [
           {
-            "stage_id": "4",
+            "stage_id": "1",
             "num_tasks": "1",
             "num_completed_tasks": "1",
             "input_bytes_read": "8910",
@@ -565,12 +571,12 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "14cfc555-88e3-44b4-a183-779164fef006",
-      "server_side_session_id": "ca570e52-78ab-428f-9362-b082bedbc69a",
+      "response_id": "a2d36c11-7fb4-4b77-afca-a41776984ab9",
+      "server_side_session_id": "d0c726e6-b81b-429d-8b27-21d92594709c",
       "execution_progress": {
         "stages": [
           {
-            "stage_id": "4",
+            "stage_id": "1",
             "num_tasks": "1",
             "num_completed_tasks": "1",
             "input_bytes_read": "8910",
@@ -590,19 +596,19 @@
             "execution_metrics": {
               "pipelineTime": {
                 "name": "duration",
-                "value": "43",
+                "value": "263",
                 "metric_type": "timing"
               }
             },
             "name": "WholeStageCodegen (1)",
-            "plan_id": "230",
-            "parent": "230"
+            "plan_id": "139",
+            "parent": "139"
           },
           {
             "execution_metrics": {},
             "name": "Project",
-            "plan_id": "229",
-            "parent": "230"
+            "plan_id": "138",
+            "parent": "139"
           },
           {
             "execution_metrics": {
@@ -618,14 +624,14 @@
               }
             },
             "name": "ColumnarToRow",
-            "plan_id": "228",
-            "parent": "229"
+            "plan_id": "137",
+            "parent": "138"
           },
           {
             "execution_metrics": {},
             "name": "InputAdapter",
-            "plan_id": "227",
-            "parent": "228"
+            "plan_id": "136",
+            "parent": "137"
           },
           {
             "execution_metrics": {
@@ -636,12 +642,12 @@
               },
               "scanTime": {
                 "name": "scan time",
-                "value": "16",
+                "value": "87",
                 "metric_type": "timing"
               },
               "metadataTime": {
                 "name": "metadata time",
-                "value": "0",
+                "value": "4",
                 "metric_type": "timing"
               },
               "filesSize": {
@@ -656,37 +662,15 @@
               }
             },
             "name": "Scan parquet spark_catalog.studio.every_type",
-            "plan_id": "223",
-            "parent": "227"
+            "plan_id": "132",
+            "parent": "136"
           }
         ]
       },
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "e8e0b0bd-c8da-46a1-906b-eff7e8efee75",
-      "server_side_session_id": "ca570e52-78ab-428f-9362-b082bedbc69a"
-    },
-    {
-      "observed_metrics": [],
-      "session_id": "<session>",
-      "metrics": null,
-      "schema": null,
-      "operation_id": "<operation>",
-      "response_id": "cc15283d-01c4-4d45-9fe9-dfaeee36f34b",
-      "server_side_session_id": "ca570e52-78ab-428f-9362-b082bedbc69a",
-      "execution_progress": {
-        "stages": [
-          {
-            "stage_id": "4",
-            "num_tasks": "1",
-            "num_completed_tasks": "1",
-            "input_bytes_read": "8910",
-            "done": true
-          }
-        ],
-        "num_inflight_tasks": "0"
-      },
-      "response_type": "execution_progress"
+      "response_id": "e41797ab-c5a3-45ee-a000-f33ac54b9072",
+      "server_side_session_id": "d0c726e6-b81b-429d-8b27-21d92594709c"
     }
   ]
 }

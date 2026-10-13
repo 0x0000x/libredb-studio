@@ -4,17 +4,17 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T10:07:41.959Z",
+    "date": "2026-10-13T11:06:32.144Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/Config",
     "surface": "O9: Config get of the nine keys after the setup",
     "request": {
       "session_id": "<session>",
       "user_context": {
+        "extensions": [],
         "user_id": "libredb-studio",
         "user_name": "libredb-studio"
       },
-      "client_type": "libredb-studio",
       "operation": {
         "get_option": {
           "keys": [
@@ -28,8 +28,11 @@
             "spark.sql.legacy.keepCommandOutputSchema",
             "spark.sql.debug.maxToStringFields"
           ]
-        }
-      }
+        },
+        "op_type": "get_option"
+      },
+      "client_type": "libredb-studio",
+      "_client_type": "client_type"
     }
   },
   "outcome": "pass",
@@ -83,6 +86,6 @@
     ],
     "warnings": [],
     "session_id": "<session>",
-    "server_side_session_id": "2df74acb-58b1-43e7-ad6b-4eef443f4d56"
+    "server_side_session_id": "4fe36f26-03bf-4cd0-b14e-5f4fb19417c1"
   }
 }

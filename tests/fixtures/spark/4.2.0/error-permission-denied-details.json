@@ -4,18 +4,20 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T10:07:42.890Z",
+    "date": "2026-10-13T11:06:33.848Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/FetchErrorDetails",
-    "surface": "FetchErrorDetails of the unreadable file",
+    "surface": "a file the server's user cannot read: FetchErrorDetails of its errorId",
     "request": {
       "session_id": "<session>",
       "user_context": {
+        "extensions": [],
         "user_id": "libredb-studio",
         "user_name": "libredb-studio"
       },
+      "error_id": "5cf3d516-76bf-4da6-af4b-4fc0c35d7d62",
       "client_type": "libredb-studio",
-      "error_id": "a0a8887b-73cb-4dbd-bd40-cd42d397b244"
+      "_client_type": "client_type"
     }
   },
   "outcome": "pass",
