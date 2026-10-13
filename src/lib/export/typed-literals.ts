@@ -709,7 +709,7 @@ const SNOWFLAKE_TEMPORAL: Readonly<Record<string, { shape: RegExp; convert: stri
  * did: as many elements as the value holds, FLOAT when any is not an integer, else INT.
  */
 function snowflakeVectorType(text: string): string {
-  const inner = /^\s*\[(.*)\]\s*$/s.exec(text)?.[1];
+  const inner = /^\s*\[([\s\S]*)\]\s*$/.exec(text)?.[1];
   const elements = inner === undefined ? [] : inner.split(",").map((element) => element.trim());
   if (elements.length === 0 || !elements.every((element) => SNOWFLAKE_VECTOR_ELEMENT.test(element))) {
     throw new UnwritableValue("a VECTOR whose value is not an array of numbers");

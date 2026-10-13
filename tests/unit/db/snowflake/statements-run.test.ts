@@ -141,7 +141,9 @@ describe("the request body", () => {
   });
 
   test("a bare role is sent upper-cased, since the SQL API reads the body's names exactly", async () => {
-    const harness = setup({ context: { database: "sales", schema: "public", warehouse: "studio_wh", role: "studio_ro" } });
+    const harness = setup({
+      context: { database: "sales", schema: "public", warehouse: "studio_wh", role: "studio_ro" },
+    });
     harness.transports.answer(SUBMIT, one());
     await harness.statements.runSurface("SHOW SCHEMAS", SNOWFLAKE_QUERY_TAGS.tree);
     expect(bodyOf(submits(harness)[0])).toMatchObject({
@@ -458,11 +460,16 @@ describe("failures", () => {
   });
 
   test("a failed partition answer is gunzipped, by its encoding or the gzip magic bytes, before it is read", async () => {
-    const failed = Buffer.from(JSON.stringify({ code: "000904", message: "invalid identifier 'X'", sqlState: "42000" }));
+    const failed = Buffer.from(
+      JSON.stringify({ code: "000904", message: "invalid identifier 'X'", sqlState: "42000" }),
+    );
     for (const contentEncoding of ["gzip", null]) {
       const harness = setup();
       harness.transports.answer(SUBMIT, resultAnswer({ columns: ONE_COLUMN, rows: [["1"]], partitions: 2 }));
-      harness.transports.answer({ method: "GET", path: /./ }, { status: 422, bytes: gzipSync(failed), contentEncoding });
+      harness.transports.answer(
+        { method: "GET", path: /./ },
+        { status: 422, bytes: gzipSync(failed), contentEncoding },
+      );
       // oxlint-disable-next-line no-await-in-loop -- each harness runs its own statement.
       const error = await caught(harness.statements.runSurface("SELECT 1", SNOWFLAKE_QUERY_TAGS.tree));
       expect((error as SnowflakeError).message).toBe(
@@ -475,7 +482,10 @@ describe("failures", () => {
     const harness = setup();
     harness.transports.answer(SUBMIT, resultAnswer({ columns: ONE_COLUMN, rows: [["1"]], partitions: 2 }));
     const huge = Buffer.from(JSON.stringify({ code: "000904", message: "x".repeat(SNOWFLAKE_RESULT_BYTE_BUDGET * 2) }));
-    harness.transports.answer({ method: "GET", path: /./ }, { status: 422, bytes: gzipSync(huge), contentEncoding: "gzip" });
+    harness.transports.answer(
+      { method: "GET", path: /./ },
+      { status: 422, bytes: gzipSync(huge), contentEncoding: "gzip" },
+    );
     const error = await caught(harness.statements.runSurface("SELECT 1", SNOWFLAKE_QUERY_TAGS.tree));
     expect((error as SnowflakeError).message).toBe(SNOWFLAKE_ERROR_SENTENCES.statementFailed("", null, null));
   });

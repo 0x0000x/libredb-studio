@@ -354,7 +354,9 @@ describe("typedLiteral: snowflake (provisional until a replay on an account)", (
   });
 
   test("a VECTOR value that is not an array of numbers, or a cast that is not a type, skips the row", () => {
-    expect(() => typedLiteral("[]", "VECTOR", "snowflake", scalar)).toThrow("a VECTOR whose value is not an array of numbers");
+    expect(() => typedLiteral("[]", "VECTOR", "snowflake", scalar)).toThrow(
+      "a VECTOR whose value is not an array of numbers",
+    );
     expect(() => typedLiteral('["a"]', "VECTOR", "snowflake", scalar)).toThrow(UnwritableValue);
     expect(() => typedLiteral("[1,,2]", "VECTOR", "snowflake", scalar)).toThrow(UnwritableValue);
     expect(() => typedLiteral("1,2", "VECTOR", "snowflake", scalar)).toThrow(UnwritableValue);

@@ -330,7 +330,10 @@ export function failureError(failure: SnowflakeFailure, context: SnowflakeFailur
   if (code === "390142") return new SnowflakeError("defect", sentences.invalidPayload);
   if (code !== null && NO_WAREHOUSE_CODES.has(code)) return new SnowflakeError("query", sentences.noWarehouse);
   if (code === "002003") {
-    return new SnowflakeError("query", sentences.objectMissing(context.role, quoteLiteral(context.role, SNOWFLAKE), text));
+    return new SnowflakeError(
+      "query",
+      sentences.objectMissing(context.role, quoteLiteral(context.role, SNOWFLAKE), text),
+    );
   }
   if (code === "003001") return new SnowflakeError("query", sentences.privileges(context.role, text));
   if (code === UNSUPPORTED_COMMAND_CODE) return new SnowflakeError("query", sentences.unsupportedCommand(text));

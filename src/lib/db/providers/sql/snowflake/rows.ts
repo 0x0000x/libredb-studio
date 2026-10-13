@@ -462,7 +462,9 @@ async function readPartition(
     }
   };
   const sink = (chunk: Buffer): boolean => reader.feed(decode(chunk));
-  const outcome = isGzip(answer, named) ? await inflate(answer.bytes, deps.createGunzip(), sink) : feedSlices(answer.bytes, sink);
+  const outcome = isGzip(answer, named)
+    ? await inflate(answer.bytes, deps.createGunzip(), sink)
+    : feedSlices(answer.bytes, sink);
   if (outcome === "stopped") return;
   if (answer.truncated) {
     budget.cut = "bytes";
