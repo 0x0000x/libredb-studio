@@ -451,7 +451,11 @@ Information Schema reads are cached for 60 s, and auto-refresh stays off until t
 
 ### 8.3 Plan mode and agent operations
 
-Plan mode grounds on the session-default database and schema through `SHOW` only, under its 10 s timer, and drafts SQL without running it; the draft reaches the editor, where the gate applies.
+Plan mode grounds through `SHOW` only, under its 10 s timer, and drafts SQL without running it; the draft reaches the editor, where the gate applies.
+With a Schema set, it reads that schema alone.
+With a Database set and no Schema, Snowflake's session has no current schema, so it reads that database's schemas in listing order, leaving out `INFORMATION_SCHEMA`, within the same timer and the walk's limits.
+With neither, it reads no schema.
+In each case the inventory tells the model how many schemas it did not read and names the ones it did.
 The agent operations workflow is offered and reads through the monitoring panels' gate.
 A Role edit makes a new connection identity, so a plan held under one role is not validated under another.
 
