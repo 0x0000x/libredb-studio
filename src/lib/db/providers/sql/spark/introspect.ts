@@ -46,6 +46,8 @@ export const SPARK_INTROSPECT_SENTENCES = Object.freeze({
   noKind: (kind: string) => `Apache Spark has no object kind "${kind}" in Studio's tree.`,
   noColumns: (kind: string) => `Studio reads no columns for an Apache Spark ${kind}.`,
   noSource: (kind: string) => `Studio reads no definition for an Apache Spark ${kind}.`,
+  /** A bulk column read's truncation reason, so no full stop: its readers set it inside a sentence of their own. */
+  describeBound: `Studio describes at most ${SPARK_DESCRIBE_OBJECTS_MAX.toLocaleString("en-US")} objects in one read, since Apache Spark needs one DESCRIBE TABLE per object`,
 });
 
 type Row = Readonly<Record<string, unknown>>;
@@ -108,6 +110,13 @@ function lacksAbility(error: unknown, ability: "VIEWS" | "FUNCTIONS"): boolean {
   );
 }
 
+/** Whether Spark refused a statement because the table or view it names does not exist: the class its text opens with. */
+function tableOrViewNotFound(error: unknown): boolean {
+  return (
+    error instanceof SparkError && error.category === "spark" && error.message.startsWith("[TABLE_OR_VIEW_NOT_FOUND]")
+  );
+}
+
 async function currentNamespace(deps: SparkIntrospectDeps): Promise<{ catalog: string; spelling: string }> {
   const [row] = await readWhole(deps, "SHOW CURRENT NAMESPACE");
   if (row === undefined) throw unreadable("SHOW CURRENT NAMESPACE");
@@ -163,7 +172,9 @@ async function listChildren(deps: SparkIntrospectDeps, catalog: string, parent: 
 
 /**
  * `top` and every namespace below it, breadth first, at most SPARK_INTROSPECT_IN_FLIGHT_MAX statements in flight at
- * once; once more than SPARK_NAMESPACE_WALK_MAX are found, the walk is refused before its next batch is sent.
+ * once; once more than SPARK_NAMESPACE_WALK_MAX are found, the walk is refused before its next batch is sent. A batch
+ * that failed raises its first failure in batch order only once every statement in it has answered, so no statement of
+ * the walk outlives the call.
  */
 async function walkBelow(deps: SparkIntrospectDeps, catalog: string, top: readonly Listed[]): Promise<Listed[]> {
   const found = [...top];
@@ -176,9 +187,10 @@ async function walkBelow(deps: SparkIntrospectDeps, catalog: string, top: readon
       }
       const batch = level.slice(i, i + SPARK_INTROSPECT_IN_FLIGHT_MAX);
       // oxlint-disable-next-line no-await-in-loop -- one batch at a time keeps the walk within its in-flight bound.
-      const answers = await Promise.all(batch.map((parent) => listChildren(deps, catalog, parent)));
-      for (const children of answers) {
-        for (const child of children) next.push(child);
+      const answers = await Promise.allSettled(batch.map((parent) => listChildren(deps, catalog, parent)));
+      for (const answer of answers) {
+        if (answer.status === "rejected") throw answer.reason;
+        for (const child of answer.value) next.push(child);
       }
     }
     for (const child of next) found.push(child);
@@ -293,7 +305,9 @@ export async function describeObject(
 
 /**
  * One DESCRIBE TABLE per object, in listing order and one at a time: OSS Spark has no catalog view that lists every
- * table's columns. At most `limit` objects, or SPARK_DESCRIBE_OBJECTS_MAX with no limit, with the reason when more remain.
+ * table's columns. At most `limit` objects and never more than SPARK_DESCRIBE_OBJECTS_MAX, with the reason of the bound
+ * that bit when more remain. An object dropped since the listing is left out, since callers match details to objects by
+ * path; any other failure fails the whole read.
  */
 export async function describeObjects(
   deps: SparkIntrospectDeps,
@@ -301,15 +315,30 @@ export async function describeObjects(
 ): ReturnType<DatabaseProvider["describeObjects"]> {
   if (kind === "function") return { details: [] };
   const objects = await listObjects(deps, container, kind);
-  const bound = limit ?? SPARK_DESCRIBE_OBJECTS_MAX;
+  const bound = Math.min(limit ?? SPARK_DESCRIBE_OBJECTS_MAX, SPARK_DESCRIBE_OBJECTS_MAX);
   const details: ObjectDetail[] = [];
   for (const object of objects.slice(0, bound)) {
-    // oxlint-disable-next-line no-await-in-loop -- one DESCRIBE at a time on the metadata session.
-    details.push(await describeObject(deps, object.path, kind));
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- one DESCRIBE at a time on the metadata session.
+      details.push(await describeObject(deps, object.path, kind));
+    } catch (error) {
+      // A table or view dropped since the listing has nothing left to describe.
+      if (!tableOrViewNotFound(error)) throw error;
+    }
   }
   if (objects.length <= bound) return { details };
-  const reason = limit === undefined ? INVENTORY_TRUNCATION_REASON : callerBoundTruncationReason(limit);
-  return { details, truncated: { limit: bound, reason } };
+  return { details, truncated: { limit: bound, reason: describeBoundReason(limit) } };
+}
+
+/**
+ * Why a bulk column read stopped short: with no limit the inventory's sentence, under a limit above
+ * SPARK_DESCRIBE_OBJECTS_MAX Studio's own, and otherwise the caller's.
+ */
+function describeBoundReason(limit: number | undefined): string {
+  if (limit === undefined) return INVENTORY_TRUNCATION_REASON;
+  return limit > SPARK_DESCRIBE_OBJECTS_MAX
+    ? SPARK_INTROSPECT_SENTENCES.describeBound
+    : callerBoundTruncationReason(limit);
 }
 
 export async function readObjectSource(

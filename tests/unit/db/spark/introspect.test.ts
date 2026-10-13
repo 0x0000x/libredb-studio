@@ -122,6 +122,15 @@ describe("catalogs", () => {
     expect(prefixes).toStrictEqual(["spark.sql.catalog."]);
   });
 
+  test("SHOW CATALOGS and the configured keys are sorted together, and an empty key names no catalog", async () => {
+    const { deps } = stub({ ...CURRENT, "SHOW CATALOGS": [{ catalog: "zeta" }] }, ["alpha", ""]);
+    expect(await listCatalogs(deps)).toStrictEqual([
+      { path: ["spark_catalog"], name: "spark_catalog", level: 0, isSessionDefault: true },
+      { path: ["alpha"], name: "alpha", level: 0 },
+      { path: ["zeta"], name: "zeta", level: 0 },
+    ]);
+  });
+
   test("an empty SHOW CURRENT NAMESPACE answer is unreadable", async () => {
     const { deps } = stub({ "SHOW CURRENT NAMESPACE": [] });
     await expect(listCatalogs(deps)).rejects.toMatchObject({ category: "unreadable" });
@@ -180,6 +189,19 @@ describe("namespaces", () => {
     ]);
   });
 
+  test("a namespace below the current one is not flagged with it", async () => {
+    const { deps } = stub({
+      "SHOW CURRENT NAMESPACE": [{ catalog: "lake", namespace: "a" }],
+      "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }],
+      "SHOW NAMESPACES IN `lake`.a": [{ namespace: "a.b" }],
+      "SHOW NAMESPACES IN `lake`.a.b": [],
+    });
+    expect(await listNamespaces(deps, "lake")).toStrictEqual([
+      { path: ["lake", "a"], name: "a", level: 1, isSessionDefault: true },
+      { path: ["lake", "a.b"], name: "a.b", level: 1 },
+    ]);
+  });
+
   test(`at most ${SPARK_INTROSPECT_IN_FLIGHT_MAX} statements are in flight at once`, async () => {
     let inFlight = 0;
     let most = 0;
@@ -197,6 +219,49 @@ describe("namespaces", () => {
     };
     expect(await listNamespaces(deps, "lake")).toHaveLength(20);
     expect(most).toBe(SPARK_INTROSPECT_IN_FLIGHT_MAX);
+  });
+
+  test("a batch with a failure answers only once every statement in it has, with the first failure in its order", async () => {
+    const first = spark("[SCHEMA_NOT_FOUND] a");
+    const later = spark("[SCHEMA_NOT_FOUND] c");
+    let open: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      open = () => resolve();
+    });
+    let running = 0;
+    const deps: SparkIntrospectDeps = {
+      runSql: async (sql) => {
+        if (sql === "SHOW CURRENT NAMESPACE") return result([{ catalog: "spark_catalog", namespace: "studio" }]);
+        if (sql === "SHOW NAMESPACES IN `lake`") {
+          return result([{ namespace: "a" }, { namespace: "b" }, { namespace: "c" }]);
+        }
+        // c fails at once; a and b answer only once the gate opens, a with a failure.
+        if (sql === "SHOW NAMESPACES IN `lake`.c") throw later;
+        running++;
+        await gate;
+        running--;
+        if (sql === "SHOW NAMESPACES IN `lake`.a") throw first;
+        return result([]);
+      },
+      confKeys: async () => [],
+    };
+    let settled = false;
+    const walk = listNamespaces(deps, "lake");
+    // Watched rather than awaited, so the test can look at the walk before the gate opens.
+    walk.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(running).toBe(2);
+    expect(settled).toBe(false);
+    open();
+    await expect(walk).rejects.toBe(first);
+    expect(running).toBe(0);
   });
 
   test("more than 1,000 namespaces is refused with the walk's sentence, never a shorter list", async () => {
@@ -268,6 +333,15 @@ describe("namespaces", () => {
     await expect(listNamespaces(deps, "lake")).rejects.toThrow(SPARK_INTROSPECT_SENTENCES.namespaceListingNotReadable);
   });
 
+  test("a child listed as the namespace asked about is refused, not walked again", async () => {
+    const { deps } = stub({
+      ...CURRENT,
+      "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }],
+      "SHOW NAMESPACES IN `lake`.a": [{ namespace: "a" }],
+    });
+    await expect(listNamespaces(deps, "lake")).rejects.toThrow(SPARK_INTROSPECT_SENTENCES.namespaceListingNotReadable);
+  });
+
   test("a catalog that cannot load fails its expansion with Spark's own text, and the catalog list still names it", async () => {
     const text = "requirement failed: Option 'url' is required.";
     const { deps } = stub({ ...CURRENT, "SHOW NAMESPACES IN `studio_unloaded`": spark(text) });
@@ -318,6 +392,20 @@ describe("objects", () => {
     ]);
   });
 
+  test("a function row is matched to the asked prefix without case, and a row that is the prefix alone is skipped", async () => {
+    const { deps } = stub({
+      "SHOW USER FUNCTIONS IN `spark_catalog`.STUDIO": [
+        { function: "spark_catalog.studio.f" },
+        { function: "SPARK_CATALOG.Studio.g" },
+        { function: "spark_catalog.studio." },
+      ],
+    });
+    expect(await listObjects(deps, ["spark_catalog", "STUDIO"], "function")).toStrictEqual([
+      { path: ["spark_catalog", "STUDIO", "f"], name: "f", kind: "function" },
+      { path: ["spark_catalog", "STUDIO", "g"], name: "g", kind: "function" },
+    ]);
+  });
+
   test("a catalog without views or functions answers none of them", async () => {
     const { deps } = stub({
       [`SHOW TABLES IN ${Q}`]: [{ namespace: "studio", tableName: "orders", isTemporary: false }],
@@ -330,6 +418,29 @@ describe("objects", () => {
       table: { count: 1 },
       view: { count: 0 },
       function: { count: 0 },
+    });
+  });
+
+  test("countObjects counts each kind from its own listing", async () => {
+    const { deps } = stub({
+      [`SHOW TABLES IN ${Q}`]: [
+        { namespace: "studio", tableName: "orders", isTemporary: false },
+        { namespace: "studio", tableName: "v1", isTemporary: false },
+      ],
+      [`SHOW VIEWS IN ${Q}`]: [
+        { namespace: "studio", viewName: "v1", isTemporary: false },
+        { namespace: "studio", viewName: "v2", isTemporary: false },
+      ],
+      [`SHOW USER FUNCTIONS IN ${Q}`]: [
+        { function: "spark_catalog.studio.f1" },
+        { function: "spark_catalog.studio.f2" },
+        { function: "spark_catalog.studio.f3" },
+      ],
+    });
+    expect(await countObjects(deps, container)).toStrictEqual({
+      table: { count: 1 },
+      view: { count: 2 },
+      function: { count: 3 },
     });
   });
 
@@ -365,6 +476,25 @@ describe("objects", () => {
     const dropped = new SparkError("connection-dropped", "dropped");
     const { deps } = stub({ [`SHOW VIEWS IN ${Q}`]: dropped });
     await expect(listObjects(deps, container, "view")).rejects.toBe(dropped);
+  });
+
+  test("a failure that is not Spark's own passes through even when its text names a missing ability", async () => {
+    const views = new SparkError("connection-dropped", "[MISSING_CATALOG_ABILITY.VIEWS] x");
+    const functions = new SparkError("connection-dropped", "[MISSING_CATALOG_ABILITY.FUNCTIONS] x");
+    const { deps } = stub({ [`SHOW VIEWS IN ${Q}`]: views, [`SHOW USER FUNCTIONS IN ${Q}`]: functions });
+    await expect(listObjects(deps, container, "view")).rejects.toBe(views);
+    await expect(listObjects(deps, container, "function")).rejects.toBe(functions);
+  });
+
+  test.each<[string, SparkError, string]>([
+    ["receive-cap", new SparkError("receive-cap", "x"), SPARK_INTROSPECT_SENTENCES.listTooLarge],
+    ["command-batch-bound", new SparkError("command-batch-bound", "x"), SPARK_INTROSPECT_SENTENCES.batchBound],
+  ])("the refusal of a %s failure keeps that failure as its cause", async (_label, failure, sentence) => {
+    const { deps } = stub({ [`SHOW VIEWS IN ${Q}`]: failure });
+    const refusal = await listObjects(deps, container, "view").catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(SparkError);
+    expect(refusal).toMatchObject({ category: "refused", message: sentence });
+    expect((refusal as SparkError).cause).toBe(failure);
   });
 
   test("a namespace segment the spelling reader cannot read is refused before any statement", async () => {
@@ -491,6 +621,103 @@ describe("columns and definitions", () => {
     const batch = await describeObjects(deps, ["spark_catalog", "studio"], "table");
     expect(batch.details).toHaveLength(SPARK_DESCRIBE_OBJECTS_MAX);
     expect(batch.truncated).toStrictEqual({ limit: SPARK_DESCRIBE_OBJECTS_MAX, reason: INVENTORY_TRUNCATION_REASON });
+  });
+
+  /** A namespace of `count` tables, t0 onwards, each with one column, and how many DESCRIBEs it was sent. */
+  function tables(count: number) {
+    const rows = Array.from({ length: count }, (_, i) => ({
+      namespace: "studio",
+      tableName: `t${i}`,
+      isTemporary: false,
+    }));
+    let described = 0;
+    const deps: SparkIntrospectDeps = {
+      runSql: async (sql) => {
+        if (sql === "SHOW VIEWS IN `spark_catalog`.studio") return result([]);
+        if (sql === "SHOW TABLES IN `spark_catalog`.studio") return result(rows);
+        if (!sql.startsWith("DESCRIBE TABLE `spark_catalog`.studio.")) throw new Error(`unexpected statement: ${sql}`);
+        described++;
+        return result([{ col_name: "id", data_type: "int" }]);
+      },
+      confKeys: async () => [],
+    };
+    return { deps, described: () => described };
+  }
+
+  test("a caller's limit above 1,000 is held to 1,000 with Studio's reason, and one at or below it keeps the caller's", async () => {
+    const container = ["spark_catalog", "studio"];
+    const many = tables(1_001);
+    const capped = await describeObjects(many.deps, container, "table", 5_000);
+    expect(capped.details).toHaveLength(1_000);
+    expect(capped.truncated).toStrictEqual({ limit: 1_000, reason: SPARK_INTROSPECT_SENTENCES.describeBound });
+    expect(many.described()).toBe(1_000);
+    expect(SPARK_INTROSPECT_SENTENCES.describeBound).toContain("1,000");
+    const atCap = await describeObjects(many.deps, container, "table", 1_000);
+    expect(atCap.truncated).toStrictEqual({ limit: 1_000, reason: callerBoundTruncationReason(1_000) });
+
+    const few = tables(20);
+    const bounded = await describeObjects(few.deps, container, "table", 10);
+    expect(bounded.details.map((d) => d.path[2])).toStrictEqual(Array.from({ length: 10 }, (_, i) => `t${i}`));
+    expect(bounded.truncated).toStrictEqual({ limit: 10, reason: callerBoundTruncationReason(10) });
+    expect(few.described()).toBe(10);
+  });
+
+  const NOT_FOUND =
+    "[TABLE_OR_VIEW_NOT_FOUND] The table or view `spark_catalog`.`studio`.`b` cannot be found. Verify the spelling and correctness of the schema and catalog.";
+
+  /** Tables a, b and c in listing order, where the DESCRIBE of b answers `answer`. */
+  function threeTables(answer: Answer) {
+    return stub({
+      "SHOW VIEWS IN `spark_catalog`.studio": [],
+      "SHOW TABLES IN `spark_catalog`.studio": ["a", "b", "c"].map((tableName) => ({
+        namespace: "studio",
+        tableName,
+        isTemporary: false,
+      })),
+      "DESCRIBE TABLE `spark_catalog`.studio.`a`": [{ col_name: "id", data_type: "int" }],
+      "DESCRIBE TABLE `spark_catalog`.studio.`b`": answer,
+      "DESCRIBE TABLE `spark_catalog`.studio.`c`": [{ col_name: "day", data_type: "date" }],
+    });
+  }
+
+  test("a table dropped after the listing is left out of describeObjects, and the tables around it are described", async () => {
+    const { deps, sent } = threeTables(spark(NOT_FOUND));
+    expect(await describeObjects(deps, ["spark_catalog", "studio"], "table")).toStrictEqual({
+      details: [
+        {
+          path: ["spark_catalog", "studio", "a"],
+          columns: [{ name: "id", type: "int", nullable: true, isPrimary: false }],
+          indexes: [],
+          foreignKeys: [],
+        },
+        {
+          path: ["spark_catalog", "studio", "c"],
+          columns: [{ name: "day", type: "date", nullable: true, isPrimary: false }],
+          indexes: [],
+          foreignKeys: [],
+        },
+      ],
+    });
+    expect(sent.filter((sql) => sql.startsWith("DESCRIBE"))).toStrictEqual([
+      "DESCRIBE TABLE `spark_catalog`.studio.`a`",
+      "DESCRIBE TABLE `spark_catalog`.studio.`b`",
+      "DESCRIBE TABLE `spark_catalog`.studio.`c`",
+    ]);
+  });
+
+  test.each<[string, SparkError]>([
+    ["a permission refusal", spark("Permission denied: user [studio] does not have [select] privilege on [studio/b]")],
+    [
+      "a table Spark cannot read",
+      spark(
+        "org.apache.hadoop.hive.serde2.SerDeException: java.lang.ClassNotFoundException: Class org.example.Csv not found",
+      ),
+    ],
+    ["another error class with a missing table in its cause", spark(`[INTERNAL_ERROR] x\nCause: ${NOT_FOUND}`)],
+    ["a failure that is not Spark's own, whatever its text", new SparkError("connection-dropped", NOT_FOUND)],
+  ])("%s on one DESCRIBE fails the whole describeObjects read", async (_label, failure) => {
+    const { deps } = threeTables(failure);
+    await expect(describeObjects(deps, ["spark_catalog", "studio"], "table")).rejects.toBe(failure);
   });
 
   test("SHOW CREATE TABLE gives one part: regenerated for a table, stored for a view, bounded by the limit", async () => {
