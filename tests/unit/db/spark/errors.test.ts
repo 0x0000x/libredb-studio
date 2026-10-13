@@ -19,10 +19,11 @@ import {
   SparkError,
   type SparkErrorCategory,
   type SparkErrorContext,
+  sparkVersionText,
   toDatabaseError,
   toSparkError,
 } from "@/lib/db/providers/sql/spark/errors";
-import { secretForms } from "@/lib/db/utils/server-text";
+import { secretForms, serverText } from "@/lib/db/utils/server-text";
 import { captureBytes, readSparkCapture, type SparkCaptureVersion } from "../../../helpers/spark-captures";
 import type { SparkCaptureName } from "../../../live/spark-evidence-plan";
 
@@ -41,6 +42,8 @@ const metadataOf = (bytes?: Uint8Array) => ({
 });
 const statusOf = (code: number, details: string, bytes?: Uint8Array) =>
   Object.assign(new Error(`${code} ${details}`), { code, details, metadata: metadataOf(bytes) });
+const PHASES: readonly SparkErrorContext["phase"][] = ["connect", "command", "relation", "control"];
+const S = SPARK_ERROR_SENTENCES;
 
 /** google.rpc.Status with one ErrorInfo, written by hand: reason and metadata entries. */
 function details(reason: string, metadata: Readonly<Record<string, string>>): Uint8Array {
@@ -109,6 +112,18 @@ describe("the connect and transport rows (spec 3.3)", () => {
       toSparkError(statusOf(14, "Name resolution failed for target dns:nope:15002"), context("connect")),
       "not-connected",
     );
+    // Measured: Bun's text for a TLS proxy's alert, and both runtimes' for plaintext to a TLS port; it names no cause.
+    expectCategory(
+      toSparkError(
+        statusOf(
+          14,
+          "No connection established. Last error: Failed to connect (2026-10-13T12:27:23.245Z). Resolution note: ",
+        ),
+        context("connect"),
+      ),
+      "not-connected",
+      SPARK_ERROR_SENTENCES.notConnected("spark.test", 15002),
+    );
     expectCategory(
       toSparkError(statusOf(4, "Deadline exceeded after 9.9s,LB pick: 0.0s (Waiting for LB pick)"), context("command")),
       "not-connected",
@@ -144,6 +159,62 @@ describe("the connect and transport rows (spec 3.3)", () => {
     expectCategory(error, "tls");
     const sentence = SPARK_ERROR_SENTENCES[key];
     expect(error.message).toBe(typeof sentence === "function" ? sentence("spark.test", 15002) : sentence);
+  });
+
+  /**
+   * Measured with @grpc/grpc-js 1.14.5 under Bun 1.4.2 and Node 24.14.0 against tests/fixtures/tls; the certificate
+   * dates against a scratch certificate, since the fixtures hold no expired one. tls-handshake.test.ts repeats every
+   * case the fixtures can reach.
+   */
+  const MEASURED_TLS: readonly (readonly [string, string, string])[] = [
+    [
+      "a certificate that does not name the host (Bun and Node)",
+      "No connection established. Last error: Error [ERR_TLS_CERT_ALTNAME_INVALID]: Hostname/IP does not match certificate's altnames: Host: spark.example. is not in the cert's altnames: DNS:localhost, IP Address:127.0.0.1, IP Address:0:0:0:0:0:0:0:1. Resolution note: ",
+      S.tlsNameMismatch("spark.test"),
+    ],
+    [
+      "a certificate that does not list the IP (Bun and Node)",
+      "No connection established. Last error: Error [ERR_TLS_CERT_ALTNAME_INVALID]: Hostname/IP does not match certificate's altnames: IP: 10.0.0.5 is not in the cert's list: 127.0.0.1, ::1. Resolution note: ",
+      S.tlsNameMismatch("spark.test"),
+    ],
+    [
+      "an expired certificate (Bun and Node)",
+      "No connection established. Last error: Error: certificate has expired. Resolution note: ",
+      S.tlsCertificateDates,
+    ],
+    [
+      "a certificate not yet valid (Bun and Node)",
+      "No connection established. Last error: Error: certificate is not yet valid. Resolution note: ",
+      S.tlsCertificateDates,
+    ],
+    [
+      "no client certificate where the proxy requires one (Node; Bun says Failed to connect)",
+      "No connection established. Last error: 0002344DC0720000:error:0A00045C:SSL routines:ssl3_read_bytes:tlsv13 alert certificate required:../deps/openssl/openssl/ssl/record/rec_layer_s3.c:918:SSL alert number 116\n (2026-10-13T12:27:23.824Z). Resolution note: ",
+      S.tlsClientCertificateRequired,
+    ],
+    [
+      "a client certificate from a CA the proxy does not trust (Node; Bun says Failed to connect)",
+      "No connection established. Last error: 0082AEB216720000:error:0A000418:SSL routines:ssl3_read_bytes:tlsv1 alert unknown ca:../deps/openssl/openssl/ssl/record/rec_layer_s3.c:918:SSL alert number 48\n (2026-10-13T12:28:58.950Z). Resolution note: ",
+      S.tlsClientCertificateRefused,
+    ],
+    [
+      "alert 42, OpenSSL's reason string, written by hand",
+      "No connection established. Last error: error:0A000412:SSL routines::sslv3 alert bad certificate (2026-10-13T12:00:00.000Z). Resolution note: ",
+      S.tlsClientCertificateRefused,
+    ],
+    [
+      "plaintext to a port that answers HTTP/1.1 (Bun and Node)",
+      "No connection established. Last error: Protocol error (2026-10-13T12:28:58.029Z). Resolution note: ",
+      S.tlsPortExpected("spark.test", 15002),
+    ],
+  ];
+
+  test.each(MEASURED_TLS)("measured: %s is tls in every phase, a ConnectionError", (_what, text, sentence) => {
+    for (const phase of PHASES) {
+      const error = toSparkError(statusOf(14, text), context(phase));
+      expectCategory(error, "tls", sentence);
+      expect(toDatabaseError(error)).toBeInstanceOf(ConnectionError);
+    }
   });
 
   test("a token server without a token and with a wrong one, as captured", () => {
@@ -205,16 +276,34 @@ describe("the connect and transport rows (spec 3.3)", () => {
 
 describe("the run rows (spec 4.10)", () => {
   test("the keepalive drop, the ping GOAWAY and the receive cap by phase", () => {
-    expectCategory(
-      toSparkError(statusOf(14, "Connection dropped"), context("relation")),
-      "connection-dropped",
-      SPARK_ERROR_SENTENCES.connectionDropped,
-    );
-    expectCategory(
-      toSparkError(statusOf(8, "Bandwidth exhausted or memory limit exceeded"), context("relation")),
-      "ping-goaway",
-      SPARK_ERROR_SENTENCES.pingGoaway,
-    );
+    for (const phase of ["command", "relation"] as const) {
+      expectCategory(
+        toSparkError(statusOf(14, "Connection dropped"), context(phase)),
+        "connection-dropped",
+        SPARK_ERROR_SENTENCES.connectionDropped,
+      );
+      expectCategory(
+        toSparkError(statusOf(8, "Bandwidth exhausted or memory limit exceeded"), context(phase)),
+        "ping-goaway",
+        SPARK_ERROR_SENTENCES.pingGoaway,
+      );
+    }
+    // No statement runs in connect and control, so none was asked to stop.
+    for (const phase of ["connect", "control"] as const) {
+      expectCategory(
+        toSparkError(statusOf(14, "Connection dropped"), context(phase)),
+        "not-connected",
+        SPARK_ERROR_SENTENCES.notConnected("spark.test", 15002),
+      );
+      expectCategory(
+        toSparkError(statusOf(8, "Bandwidth exhausted or memory limit exceeded"), context(phase)),
+        "not-connected",
+        SPARK_ERROR_SENTENCES.notConnected("spark.test", 15002),
+      );
+      const cap = toSparkError(statusOf(8, "Received message larger than max (17000000 vs 16777216)"), context(phase));
+      expectCategory(cap, "receive-cap", SPARK_ERROR_SENTENCES.receiveCapControl);
+      expect(toDatabaseError(cap)).toBeInstanceOf(QueryError);
+    }
     expectCategory(
       toSparkError(statusOf(8, "Received message larger than max (17000000 vs 16777216)"), context("command")),
       "receive-cap",
@@ -327,7 +416,13 @@ describe("the run rows (spec 4.10)", () => {
       "cancelled",
       SPARK_ERROR_SENTENCES.cancelled,
     );
-    expectCategory(toSparkError(statusOf(1, "Cancelled on client"), context("relation")), "cancelled");
+    for (const phase of PHASES) {
+      expectCategory(
+        toSparkError(statusOf(1, "Cancelled on client"), context(phase)),
+        "cancelled",
+        SPARK_ERROR_SENTENCES.cancelled,
+      );
+    }
     expectCategory(
       toSparkError(capturedStatus("session-closed"), context("control")),
       "session-closed",
@@ -357,6 +452,29 @@ describe("the run rows (spec 4.10)", () => {
     );
     const bySqlState = statusOf(13, "stopped", details("x", { sqlState: "HY008" }));
     expectCategory(toSparkError(bySqlState, context("relation")), "cancelled");
+  });
+
+  test("any other CANCELLED text is a peer's reset, not the user's cancel", () => {
+    // Measured under Node: a peer's RST_STREAM CANCEL before its response headers (subchannel-call.js).
+    for (const phase of ["command", "relation"] as const) {
+      const reset = toSparkError(statusOf(1, "Call cancelled"), context(phase));
+      expectCategory(reset, "stream-failed", SPARK_ERROR_SENTENCES.streamFailed("Call cancelled"));
+      expect(toDatabaseError(reset)).toBeInstanceOf(ConnectionError);
+      expectCategory(
+        toSparkError(statusOf(1, ""), context(phase)),
+        "stream-failed",
+        "The connection to Spark failed while the statement ran. Studio asked Spark to stop it; run it again.",
+      );
+      // The client's text is matched exactly.
+      expectCategory(toSparkError(statusOf(1, "Cancelled on client, twice"), context(phase)), "stream-failed");
+    }
+    for (const phase of ["connect", "control"] as const) {
+      expectCategory(
+        toSparkError(statusOf(1, "Call cancelled"), context(phase)),
+        "not-connected",
+        SPARK_ERROR_SENTENCES.notConnected("spark.test", 15002),
+      );
+    }
   });
 
   test("a class from FetchErrorDetails decides when ErrorInfo has none, and ErrorInfo's wins when it has one", () => {
@@ -461,14 +579,81 @@ describe("Spark's own errors (spec 4.10 steps 1 to 4)", () => {
     expect(error.message).toBe(`failed\nCause: ${"x".repeat(1_024)}`);
   });
 
+  test("the cut counts code points, so it never leaves half of a surrogate pair", () => {
+    const smile = "\u{1F600}";
+    const cut = (cause: string) =>
+      toSparkError(statusOf(13, "failed", details("x", {})), context("command", { details: { cause } })).message;
+    expect(cut(`${"x".repeat(1_023)}${smile}tail`)).toBe(`failed\nCause: ${"x".repeat(1_023)}${smile}`);
+    expect(cut(`${"x".repeat(1_024)}${smile}`)).toBe(`failed\nCause: ${"x".repeat(1_024)}`);
+    expect(cut(`${smile.repeat(1_024)}`)).toBe(`failed\nCause: ${smile.repeat(1_024)}`);
+  });
+
   test("UNKNOWN with an empty text and no details is the empty-UNKNOWN sentence alone", () => {
     expectCategory(toSparkError(statusOf(2, ""), context("relation")), "spark", SPARK_ERROR_SENTENCES.unknownEmpty);
     expectCategory(toSparkError(statusOf(2, "\n"), context("relation")), "spark", SPARK_ERROR_SENTENCES.unknownEmpty);
     expectCategory(toSparkError(statusOf(2, "something"), context("relation")), "spark", "something");
     // With ErrorInfo, Spark did report something, so the sentence does not apply.
-    expect(toSparkError(statusOf(2, "", details("x", {})), context("relation")).message).not.toBe(
-      SPARK_ERROR_SENTENCES.unknownEmpty,
+    expectCategory(
+      toSparkError(statusOf(2, "", details("x", {})), context("relation")),
+      "spark",
+      SPARK_ERROR_SENTENCES.emptyStatus("UNKNOWN"),
     );
+  });
+
+  test("an empty status text is never an empty message, and never a leading blank line", () => {
+    const internal = toSparkError(statusOf(13, ""), context("relation"));
+    expectCategory(internal, "spark", SPARK_ERROR_SENTENCES.emptyStatus("INTERNAL"));
+    expect(toDatabaseError(internal).message).toBe(SPARK_ERROR_SENTENCES.emptyStatus("INTERNAL"));
+    expectCategory(
+      toSparkError(statusOf(13, " \n ", details("x", {})), context("command")),
+      "spark",
+      SPARK_ERROR_SENTENCES.emptyStatus("INTERNAL"),
+    );
+    expectCategory(
+      toSparkError(statusOf(9, ""), context("control")),
+      "spark",
+      SPARK_ERROR_SENTENCES.emptyStatus("FAILED_PRECONDITION"),
+    );
+    expectCategory(
+      toSparkError(statusOf(8, ""), context("command")),
+      "spark",
+      SPARK_ERROR_SENTENCES.emptyStatus("RESOURCE_EXHAUSTED"),
+    );
+    // A number outside grpc/grpc's table is named as the number.
+    expectCategory(
+      toSparkError(statusOf(99, ""), context("command")),
+      "spark",
+      SPARK_ERROR_SENTENCES.emptyStatus("99"),
+    );
+    // A cause is a line of its own, so the message starts with it.
+    expectCategory(
+      toSparkError(statusOf(13, "", details("x", {})), context("command", { details: { cause: "disk full" } })),
+      "spark",
+      "Cause: disk full",
+    );
+    // Studio's own sentences follow the first line.
+    expectCategory(
+      toSparkError(statusOf(13, "", details("x", { errorClass: "UNSUPPORTED_TIME_TYPE" })), context("relation")),
+      "spark",
+      `${SPARK_ERROR_SENTENCES.emptyStatus("INTERNAL")}\n${SPARK_ERROR_SENTENCES.timeTypeOff}`,
+    );
+    expectCategory(
+      toSparkError(statusOf(14, ""), context("relation")),
+      "stream-failed",
+      "The connection to Spark failed while the statement ran. Studio asked Spark to stop it; run it again.",
+    );
+    expectCategory(
+      toSparkError(statusOf(14, " \n"), context("command")),
+      "stream-failed",
+      "The connection to Spark failed while the statement ran. Studio asked Spark to stop it; run it again.",
+    );
+  });
+
+  test("a status-shaped value whose metadata cannot be read carries no ErrorInfo", () => {
+    for (const metadata of [{}, null, { get: () => undefined }, { get: () => ["text"] }, { get: () => "text" }]) {
+      const status = Object.assign(new Error("13 failed"), { code: 13, details: "failed", metadata });
+      expectCategory(toSparkError(status, context("command")), "spark", "failed");
+    }
   });
 });
 
@@ -513,6 +698,37 @@ describe("errorDetailsFromResponse (spec 4.10 step 2)", () => {
     expect(errorDetailsFromResponse({ errors: [fetchedError("a", 9, "")] })).toEqual({});
     expect(errorDetailsFromResponse({ errors: [fetchedError("a", 1), fetchedError("   ")] })).toEqual({});
     expect(errorDetailsFromResponse({ errors: [{ message: "a", cause_idx: 1 }, { cause_idx: null }] })).toEqual({});
+  });
+
+  test("an element that is not an object is no error: no root, and no cause", () => {
+    expect(errorDetailsFromResponse({ errors: [null] })).toStrictEqual({});
+    expect(errorDetailsFromResponse({ errors: ["root"] })).toStrictEqual({});
+    expect(errorDetailsFromResponse({ errors: [fetchedError("a", 1, "A_CLASS"), null] })).toStrictEqual({
+      errorClass: "A_CLASS",
+    });
+    expect(errorDetailsFromResponse({ errors: [fetchedError("a", 1), 7] })).toStrictEqual({});
+  });
+});
+
+describe("sparkVersionText: the server's version text, as the version sentences may quote it", () => {
+  test("a token inside a version text is withheld, and the withheld sentence is never cut", () => {
+    const text = sparkVersionText(`4.1.0-${TOKEN}`, FORMS);
+    expect(FORMS.some((form) => text.includes(form))).toBe(false);
+    expect(S.versionUnreadable(text)).not.toContain(TOKEN);
+    expect(text).toBe(serverText(`4.1.0-${TOKEN}`, FORMS));
+    expect([...text].length).toBeGreaterThan(64);
+  });
+
+  test("the text is trimmed, and a 200-character text is cut to 64 code points", () => {
+    expect(sparkVersionText(" 4.1.3\n", FORMS)).toBe("4.1.3");
+    expect(sparkVersionText("v".repeat(200), FORMS)).toBe("v".repeat(64));
+    expect(sparkVersionText("v".repeat(64), FORMS)).toBe("v".repeat(64));
+  });
+
+  test("a surrogate pair at the cut is kept whole or left out, never split", () => {
+    const smile = "\u{1F600}";
+    expect(sparkVersionText(`${"v".repeat(63)}${smile}${"v".repeat(10)}`, FORMS)).toBe(`${"v".repeat(63)}${smile}`);
+    expect(sparkVersionText(`${"v".repeat(64)}${smile}`, FORMS)).toBe("v".repeat(64));
   });
 });
 
@@ -578,6 +794,10 @@ describe("R5: a token in any server text never reaches a sentence", () => {
     expect(carries(toSparkError(statusOf(14, `upstream ${form}`), context("relation")).message)).toBe(false);
   });
 
+  test.each(holders)("in a peer's CANCELLED text (%s)", (form) => {
+    expect(carries(toSparkError(statusOf(1, `reset ${form}`), context("command")).message)).toBe(false);
+  });
+
   test.each(holders)("in a proxy's cut text (%s)", (form) => {
     const text = `Received RST_STREAM with code 2 triggered by internal client error: ${form}`;
     expect(carries(toSparkError(statusOf(13, text), context("relation")).message)).toBe(false);
@@ -615,7 +835,6 @@ describe("R5: a token in any server text never reaches a sentence", () => {
 });
 
 describe("every sentence in the spec's words (3.3, 4.5, 4.7, 4.10, 5.2, 5.4, 5.5)", () => {
-  const S = SPARK_ERROR_SENTENCES;
   const words: readonly (readonly [keyof typeof SPARK_ERROR_SENTENCES, string, string])[] = [
     [
       "notConnected",
@@ -630,12 +849,32 @@ describe("every sentence in the spec's words (3.3, 4.5, 4.7, 4.10, 5.2, 5.4, 5.5
     [
       "tlsPortExpected",
       S.tlsPortExpected("spark.test", 15002),
-      "spark.test:15002 expects TLS. Choose an SSL mode under SSL / TLS.",
+      "spark.test:15002 did not answer as a plaintext gRPC server: it expects TLS (choose an SSL mode under SSL / TLS), or it is not the Spark Connect port (15002 by default).",
+    ],
+    [
+      "tlsNameMismatch",
+      S.tlsNameMismatch("spark.test"),
+      "The server's certificate does not name spark.test. Set Host to a name or address the certificate lists.",
+    ],
+    [
+      "tlsCertificateDates",
+      S.tlsCertificateDates,
+      "The server's certificate has expired or is not yet valid. Renew the TLS proxy's certificate, or check this machine's clock.",
+    ],
+    [
+      "tlsClientCertificateRequired",
+      S.tlsClientCertificateRequired,
+      "The TLS proxy asked for a client certificate and did not get one it accepts. Add the client certificate and key under SSL / TLS (shown in verify-ca and verify-full).",
+    ],
+    [
+      "tlsClientCertificateRefused",
+      S.tlsClientCertificateRefused,
+      "The TLS proxy refused the client certificate under SSL / TLS: it must be issued by a CA the proxy trusts for clients.",
     ],
     [
       "tlsUntrusted",
       S.tlsUntrusted,
-      "The server's certificate is not signed by a CA Studio trusts. Paste the CA of the TLS proxy under SSL / TLS, or choose verify-ca or require.",
+      "The server's certificate is not signed by a CA Studio trusts. Paste the CA of the TLS proxy under SSL / TLS (verify-ca or verify-full), or choose require, which encrypts without verifying the certificate.",
     ],
     [
       "tokenMissing",
@@ -695,6 +934,11 @@ describe("every sentence in the spec's words (3.3, 4.5, 4.7, 4.10, 5.2, 5.4, 5.5
       "Spark answered this command in one message larger than Studio reads (16 MiB), and a command's answer cannot be split. Narrow it, for example with LIKE or IN.",
     ],
     [
+      "receiveCapControl",
+      S.receiveCapControl,
+      "Spark sent an answer larger than Studio reads in one message (16 MiB), so this request could not complete.",
+    ],
+    [
       "receiveCapRelation",
       S.receiveCapRelation,
       "Spark sent a result message larger than 16 MiB because result chunking is off in this session (spark.connect.session.resultChunking.maxChunkSize is 0 or less). Run SET spark.connect.session.resultChunking.maxChunkSize=4194304, or leave the setting out.",
@@ -746,6 +990,11 @@ describe("every sentence in the spec's words (3.3, 4.5, 4.7, 4.10, 5.2, 5.4, 5.5
       "Spark stopped this statement with an internal error and reported no reason (gRPC UNKNOWN). A statement nested thousands of levels deep is one known cause; the Spark driver log has the rest.",
     ],
     [
+      "emptyStatus",
+      S.emptyStatus("INTERNAL"),
+      "The server ended this call with gRPC INTERNAL and gave no reason. The Spark driver log, or the log of a proxy in front of Spark, has the rest.",
+    ],
+    [
       "compressed",
       S.compressed("zstd"),
       "Spark compressed this result (spark.sql.execution.arrow.compression.codec is zstd in this session), and Studio reads only uncompressed results. Run SET spark.sql.execution.arrow.compression.codec=none, or leave the setting out.",
@@ -774,6 +1023,12 @@ describe("every sentence in the spec's words (3.3, 4.5, 4.7, 4.10, 5.2, 5.4, 5.5
 
   test.each(words)("%s", (_key, actual, expected) => {
     expect(actual).toBe(expected);
+  });
+
+  test("streamFailed without a status text drops the parentheses", () => {
+    expect(S.streamFailed("")).toBe(
+      "The connection to Spark failed while the statement ran. Studio asked Spark to stop it; run it again.",
+    );
   });
 
   test("the record is frozen", () => {

@@ -34,6 +34,7 @@ import {
   SPARK_STATUS_DETAILS_VALUE_MAX_BYTES,
   SPARK_STREAM_MAX_RECEIVED_BYTES,
   SPARK_USER_CONTEXT,
+  SPARK_VERSION_TEXT_MAX_CHARS,
 } from "@/lib/db/providers/sql/spark/constants";
 import {
   parseNamespaceSpelling,
@@ -72,6 +73,7 @@ describe("the fixed values (PLAN-00 Global Constraints)", () => {
     expect(SPARK_INTROSPECT_IN_FLIGHT_MAX).toBe(8);
     expect(SPARK_ERROR_CAUSES_MAX).toBe(5);
     expect(SPARK_ERROR_CAUSE_MAX_CHARS).toBe(1_024);
+    expect(SPARK_VERSION_TEXT_MAX_CHARS).toBe(64);
     expect(SPARK_STATUS_DETAILS_MAX_BYTES).toBe(65_536);
     expect(SPARK_STATUS_DETAILS_MAX_ENTRIES).toBe(16);
     expect(SPARK_STATUS_DETAILS_VALUE_MAX_BYTES).toBe(8_192);

@@ -36,10 +36,11 @@ const HARNESS = "tests/live/spark-evidence.ts";
 const ADAPTER = `${SPARK}/grpc-client.ts`;
 const FAKE = "tests/helpers/spark-connect-server.ts";
 const CLIENT_TEST = "tests/unit/db/spark/grpc-client.test.ts";
+const TLS_HANDSHAKE_TEST = "tests/unit/db/spark/tls-handshake.test.ts";
 const SOURCE_FILE = /\.(c|m)?(t|j)sx?$/;
 
 // The named lists. Each grows in the task that adds its files (T4.2, T5.1, T5.5, T5.7, T12.2).
-const GRPC_IMPORTERS: readonly string[] = [HARNESS, FAKE, CLIENT_TEST];
+const GRPC_IMPORTERS: readonly string[] = [HARNESS, FAKE, CLIENT_TEST, TLS_HANDSHAKE_TEST];
 const PROTO_LOADER_IMPORTERS: readonly string[] = [ADAPTER, DESCRIPTOR, GENERATOR, DESCRIPTOR_TEST, HARNESS];
 const DESCRIPTOR_IMPORTERS: readonly string[] = [ADAPTER];
 const DESCRIPTOR_READERS: readonly string[] = [GENERATOR, DESCRIPTOR_TEST, THIS_FILE];

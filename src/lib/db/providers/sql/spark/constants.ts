@@ -77,6 +77,8 @@ export const SPARK_INTROSPECT_IN_FLIGHT_MAX = 8;
 /** FetchErrorDetails: one root, at most 5 causes of at most 1,024 characters (spec 4.10 step 2). */
 export const SPARK_ERROR_CAUSES_MAX = 5;
 export const SPARK_ERROR_CAUSE_MAX_CHARS = 1_024;
+/** The most of a server's version text a version sentence quotes, in code points (errors.ts sparkVersionText). */
+export const SPARK_VERSION_TEXT_MAX_CHARS = 64;
 /** grpc-status-details-bin: at most 64 KiB, 16 details, 8 KiB per map value (spec 4.10 step 1). */
 export const SPARK_STATUS_DETAILS_MAX_BYTES = 65_536;
 export const SPARK_STATUS_DETAILS_MAX_ENTRIES = 16;
