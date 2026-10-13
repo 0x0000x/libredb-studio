@@ -256,6 +256,13 @@ The metadata session is set up again once when the server closed it, and its rea
 When the repeated read meets a closed session again, or a statement's deadline passes before it is sent again, while it waits for the new session's setup or at the send itself, the read fails with `Studio's Spark session for the tree and the panels was closed by the server (it idled out or the server restarted), and a new one could not complete the read.`
 A release that cannot reach the server is logged and left to Spark's 60-minute idle timeout.
 
+Closing a connection, at a disconnect, when a second connect replaces or displaces it, or when its own connect fails, first closes its metadata slots and its sessions to new work, then stops its runs, releases its sessions and closes its channel.
+From the moment the close begins, no session setup sends a further step and no metadata read sends anything more.
+A statement then still waiting for a slot or for its session's setup, and every later one on that connection, ends with `The query was cancelled.`
+A tree or panel read that fails once its connection's close began ends with the same sentence, whatever its call met, so a channel the close shut never reads as a server that did not answer.
+A connect that a disconnect or a second connect cut ends with that sentence too and never records a reachability error; a second connect closes the connection of a connect still opening at once, and the displaced connect never replaces the last error of the connect that displaced it.
+`connect()` answers only once every connection it displaced or replaced is closed, and `disconnect()` only once every close in progress has ended, so no channel of the provider is left open.
+
 ## 5. How a statement runs
 
 Every statement is first sent as a command.
@@ -599,7 +606,7 @@ Each failure becomes one of the repository's error classes at the provider bound
 | `command-batch-bound` | Spark's own one-batch bound on a command answer | `QueryError` | `Spark answers a command in one Arrow batch, and this answer is larger than the batch size this server allows (spark.connect.grpc.arrow.maxBatchSize). Narrow it, for example with LIKE or IN.` |
 | `batch-too-large` | the stream bound before any batch arrived whole | `QueryError` | [section 6.3](#63-budgets) |
 | `deadline` | the query timeout, while the statement ran, before Studio could send it, or before Studio could send again a metadata statement sent once on a session the server closed | `QueryError` | [section 5](#5-how-a-statement-runs); for a statement sent again, the lost-session sentence of [section 4](#4-sessions-and-scripts) |
-| `cancelled` | Stop, a closed tab, Spark's `OPERATION_CANCELED`, or a statement that starts or waits once the connection's close began | `QueryCancelledError` | `The query was cancelled.` |
+| `cancelled` | Stop, a closed tab, Spark's `OPERATION_CANCELED` or SQL state `HY008`, a statement that runs, starts or waits once its connection's close began, a tree or panel read that fails once its connection's close began, or a connect that a disconnect or a second connect cut | `QueryCancelledError` | `The query was cancelled.` |
 | `session-closed`, `session-changed` | `INVALID_HANDLE.SESSION_CLOSED`, `SESSION_NOT_FOUND`, `SESSION_CHANGED` | `QueryError` | [section 4](#4-sessions-and-scripts) |
 | `unimplemented`, `version` | not a Spark Connect server, or below the floor | `ConnectionError` | [section 2.4](#24-test-connection) |
 | `unreadable` | a result Studio could not read | `QueryError` | `Spark sent a result Studio could not read (<what>), so it is not shown.` |
