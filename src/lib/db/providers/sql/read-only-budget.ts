@@ -41,3 +41,16 @@ export function measureResultBytes(rows: unknown[]): number {
     JSON.stringify(rows, (_key, value: unknown) => (typeof value === "bigint" ? value.toString() : value)),
   );
 }
+
+/**
+ * One row's share of the byte budget: the JSON size `measureResultBytes` would count
+ * for that row, taken per row because the MySQL profile reads its results as a
+ * stream and refuses on the row that crosses the budget rather than on a completed
+ * result. BigInt values count as their decimal text, the same exception
+ * `measureResultBytes` makes.
+ */
+export function measureRowBytes(row: unknown): number {
+  return Buffer.byteLength(
+    JSON.stringify(row, (_key, value: unknown) => (typeof value === "bigint" ? value.toString() : value)),
+  );
+}

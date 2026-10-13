@@ -1450,7 +1450,7 @@ MySQL deprecated the integer display width in 8.0.17 and stopped printing it in 
 Measured on MySQL 26.7.0: `INT` is `int`, `BIGINT(20)` is `bigint`, `TINYINT(1)` is `tinyint(1)` and `INT ZEROFILL` is `int(10) unsigned zerofill`; MariaDB 13.0.2 still prints every width, so its `INT` is `int(11)`.
 Per the 8.0.19 release notes, a table created on an earlier 8.0 keeps its width in `information_schema`, because the data dictionary is not rewritten, so `int(11)` is reachable on a current MySQL too.
 
-`tests/live/mysql-column-type.ts` ([§12.4](#124-optional-verifying-against-a-live-mysql-and-a-live-mariadb)) holds that claim against real servers: it replays the generated `CREATE TABLE` at the server that supplied its columns and requires an accept, and replays the family-only definition it replaces and requires a REFUSAL.
+`tests/live/mysql-column-type.ts` ([§13.4](#134-optional-verifying-against-a-live-mysql-and-a-live-mariadb)) holds that claim against real servers: it replays the generated `CREATE TABLE` at the server that supplied its columns and requires an accept, and replays the family-only definition it replaces and requires a REFUSAL.
 
 Two consequences for the schema diff, measured and accepted rather than repaired.
 `diffColumns()` compares `type`, and a snapshot taken before this change stored the family, so the same unchanged column now reads as its declaration: every column with a length, a precision and scale, a value list, or `unsigned` reports one spurious `Type changed: varchar → varchar(20)` and one `MODIFY COLUMN` that changes nothing.
@@ -2003,7 +2003,7 @@ front of a server — the mysql2 mock invented a `query` column for any statemen
 a broken read looked like a working one for as long as it was only mocked. The mysql2 mock in
 `mysql-provider.test.ts` now refuses `sql_text` the way a server does, one test asserts the provider
 never asks for it, and a construction in the mock's single call funnel records any fixture that
-answers such a statement instead of refusing it ([§12.1](#121-how-the-tests-work)).
+answers such a statement instead of refusing it ([§13.1](#131-how-the-tests-work)).
 
 **An empty list, not an "unavailable" marker, and the reason is that OFF does not raise.** A server
 with `@@performance_schema` = 0 keeps the digest table selectable and answers **0 rows** — measured
@@ -2375,9 +2375,212 @@ Native `mysql2` errors are mapped by the shared `mapDatabaseError()`
 
 ---
 
-## 12. Testing
+## 12. Agent read-only execution profile (#1612)
 
-### 12.1 How the tests work
+The agent programme (epic #325) never talks to the shared, writable provider.
+It acquires a **dedicated provider keyed by (connection id, execution profile)** via
+`acquireExecutionProfileProvider` ([factory.ts](../../src/lib/db/factory.ts)) and runs every statement
+through `queryReadOnly()` ([`mysql.ts`](../../src/lib/db/providers/sql/mysql.ts)).
+See [postgres.md §12](./postgres.md#12-agent-read-only-execution-profile-328) for the acquisition,
+credential and caching rules, which are provider-independent; this section is the MySQL half.
+
+Everything below was measured on **MySQL 26.7.0** (`mysql:latest`) and **MariaDB 13.0.2**
+(`mariadb:latest`, 13.0.2-MariaDB-ubu2604) against the `app` fixture of
+[docker/mysql-init](../../docker/mysql-init/01-object-fixture.sql) and
+[docker/mariadb-init](../../docker/mariadb-init/01-object-fixture.sql), through `mysql2/promise`
+3.24.4, as the account `libredb_agent` holding exactly the grants of
+[02-agent-principal.sql](../../docker/mysql-init/02-agent-principal.sql)
+([the MariaDB one](../../docker/mariadb-init/02-agent-principal.sql) is the same file with its own
+half of the measurements). Measurement date 2026-10-09, and the versions are recorded because
+everything in this section is a behaviour of the SERVER, not of the SQL standard.
+The review round of 2026-10-13 re-measured every layer on MySQL 26.7.0 and MariaDB 12.3.2 with
+[`tests/live/mysql-agent-profile.ts`](../../tests/live/mysql-agent-profile.ts), which drives the real
+provider against both servers; §13.4 says how to run it.
+
+### 12.1 The principal is the first layer, because a read-only transaction ends where DDL begins
+
+PostgreSQL opens `BEGIN READ ONLY` and the transaction itself refuses the write. MySQL and MariaDB
+HAVE that transaction — `START TRANSACTION READ ONLY` — and it refuses more than nothing: measured on
+both engines, `INSERT`, `UPDATE`, `DELETE`, `SELECT … FOR UPDATE` and `CREATE TEMPORARY TABLE` are
+all refused with **1792** `Cannot execute statement in a READ ONLY transaction`.
+
+It is not a boundary, because of what it does not refuse: **DDL, GRANT and `SET GLOBAL` each cause an
+implicit commit** (the MySQL manual's "Statements That Cause an Implicit Commit"), which ends the
+read-only transaction first, and the statement then runs. Measured as `root` on both engines: a
+`CREATE TABLE` sent inside `START TRANSACTION READ ONLY` answered normally and the table was there
+after the `ROLLBACK`. A profile that trusted the transaction alone would have run a write and called
+it bounded.
+
+So the ordering is the SQL Server one — the principal's permissions are the FIRST layer — with the
+transaction kept as the second, for the writes the grants alone would not stop on MariaDB: measured,
+MariaDB does not privilege-check `SELECT … FOR UPDATE` the way MySQL does (1142, `SELECT with locking
+clause command denied`); it ran for a plain SELECT-granted user, and it is the transaction that
+refuses it there, with 1792.
+
+Measured as `libredb_agent` (SELECT on `app.*`, nothing else) on both engines, every one of these was
+refused by the server with no help from this provider: `INSERT`, `CREATE TABLE`, `DROP`,
+`TRUNCATE` and `GRANT` with **1142** `…command denied to user`, and `SET GLOBAL` and
+`SELECT … INTO OUTFILE` with **1227** `Access denied`. `root` is the positive control on the same
+servers and the same statements: it did all of them, and `root` is therefore REFUSED by the profile —
+not by name, but because its grant line carries privileges past SELECT.
+
+The principal a target needs, and nothing beyond it:
+
+```sql
+CREATE USER 'libredb_agent'@'%' IDENTIFIED BY '<secret>';
+GRANT SELECT ON <database>.* TO 'libredb_agent'@'%';
+-- SHOW VIEW lets the estimating plan read through a view: without it EXPLAIN of a view
+-- is refused with 1345 on both engines. It writes nothing, and the profile admits it.
+GRANT SHOW VIEW ON <database>.* TO 'libredb_agent'@'%';
+-- A column-level grant, GRANT SELECT (col, ...) ON <database>.<table>, is admitted too:
+-- it is narrower than the table's SELECT, not wider.
+-- Prefer a database-level grant over GRANT SELECT ON *.*: the global form is admitted
+-- (it is still only SELECT) but it reads every database on the server, mysql.user's
+-- password hashes included.
+-- Grant nothing else. In particular do NOT add this principal to any role, do NOT
+-- grant EXECUTE (a DEFINER-right routine can write from inside a read), and do NOT
+-- let any line carry WITH GRANT OPTION (a session that can GRANT can widen what the
+-- next statement may do).
+```
+
+**What the profile refuses, and when.**
+The verification runs at the FIRST `queryReadOnly` call, not at `connect()`, and is shared by every call after it (`verifiedReadOnlyPool`).
+A provider opened under the profile also serves plan-mode grounding and the `operations` workflow, which call the provider's own schema and monitoring reads and send no statement of the model's.
+Verifying the principal at open refused both on any account that is not SELECT-only: measured in a browser on 2026-10-13, a plan run on a `root` connection answered "This run was given no inventory of this database", where the same run had been grounded before this profile existed.
+Every statement the profile sends still waits for the verification, so nothing the model wrote reaches an unverified session.
+The verification runs `SHOW GRANTS` — with no `FOR` clause, so the
+answer is the session-EFFECTIVE one, including activated roles (measured on 26.7.0: an active role, a default role, `activate_all_roles_on_login` and `mandatory_roles` each expanded into the privilege lines, and a granted but inactive role printed as a line with no `ON`, which the parser refuses) — and
+`assertAgentPrincipalIsUnprivileged` admits `USAGE`, `SELECT`, the column-level `SELECT (<columns>)` and `SHOW VIEW` alone. MariaDB appends
+`IDENTIFIED BY PASSWORD '<digest>'` to a grant line, measured, so that suffix is removed before the
+line is read; the digest never leaves the comparison. `PROXY` lines, dynamic-privilege lists, and any
+line the parser cannot read are refusals, because a line that is not understood is a privilege that
+is not ruled out, and a server that answers nothing at all is refused fail-closed the same way.
+
+The refusal is an `ExecutionProfileError` carrying `PROFILE_PRIVILEGES_TOO_BROAD`
+([errors.ts](../../src/lib/db/errors.ts)), thrown by `queryReadOnly` itself, so a caller branches on the code, never on a message.
+The agent runtime reads it as `agent-principal-refused` wherever it is thrown (`src/lib/agent/runtime.ts`).
+The probe runs once per open, so a principal granted new privileges afterwards keeps serving from the already-verified pool until the idle sweep or `removeProvider` evicts it, the same property the PostgreSQL and SQL Server probes have, and a refusal is the answer to every later call until then.
+
+### 12.2 One statement per call, on a pool the connection string cannot widen
+
+The single-statement rule is the server's, not a text split: the profile's own pool is built with
+`multipleStatements: false`, and a `;`-joined text is refused by the server with **1064** before
+anything runs. Measured, and measured again for the shape that made it load-bearing: through mysql2,
+a pasted connection string carrying `?multipleStatements=true` **beats a same-named option the pool
+was handed** — the `;`-joined text RAN with the option set to false — so `buildReadOnlyPoolConfig()`
+strips the parameter from the string rather than trusting the option to win.
+mysql2 also reads client flags from the string: measured 2026-10-13 on both engines, `?flags=MULTI_STATEMENTS` turned the capability back on under `multipleStatements: false`, and `SELECT 1; SELECT 2` answered two result sets.
+So the `flags` parameter is stripped too, and the capability is removed by the `flags: ["-MULTI_STATEMENTS"]` OPTION, which an option-level key wins over the string.
+The profile's pool is separate from the pool every other path shares for that reason and one more: each call pins a transaction and several session modes on the connection it holds, and closes it afterwards, traffic an editor's own statements never see.
+
+The catalog compositions of `composeCatalogRead("mysql", …)` and the profile compositions of
+`composeTableProfile("mysql", …)` ([composed-sql.ts](../../src/lib/agent/composed-sql.ts),
+[table-profile.ts](../../src/lib/agent/table-profile.ts)) run through this path, and every spelling
+in them was measured on both engines as `libredb_agent`. The one aggregate-order fact worth
+recording: MariaDB accepts `JSON_ARRAYAGG(… ORDER BY …)` and MySQL answers **1064** for the same
+text, so the column list is `GROUP_CONCAT(… ORDER BY … SEPARATOR ',')` bracketed by `CONCAT` — the
+one spelling of an ordered aggregate both engines take — and the session's
+`group_concat_max_len` (1024 by default on MySQL, measured) is raised by the profile to 4 MB for the
+call, because a ceiling hit there is a silent truncation.
+Every catalog kind aliases its columns to lower case, because MySQL answers an unaliased `information_schema` column in upper case (`TABLE_SCHEMA`) and MariaDB in lower case, and the column inventory qualifies its schema filter, because both views it joins carry `table_schema` and an unqualified one is refused with **1052** on both engines (measured; the first spelling was).
+
+### 12.3 The row bound is enforced while the rows arrive, the deadline is re-enforced by the provider, and the connection is closed after every call
+
+`sql_select_limit` is set to **one more than the row budget**, so the server stops the result there
+and the extra row is what the provider refuses on (a statement that returned exactly the budget is
+served). This is not a nicety: measured on this fixture, a 20-million-row recursive read under
+`sql_select_limit = 501` handed the client **501 rows and 0.2 MB of heap**, while the unbounded
+3-million-row form took **118.8 MB** — the 20-million form is the out-of-memory crash the SQL Server
+profile met, and no result-side cap can prevent it.
+
+`sql_select_limit` alone is not the bound, because a statement carrying its own `LIMIT` outranks the
+variable, exactly as an optimizer hint outranks the deadline variables below: `SELECT … CROSS JOIN …
+LIMIT 100000000` streams every row it names into the client regardless of what the variable says.
+So the result is also read as a **stream** — mysql2's callback `query(...)` without a callback, then
+`.stream()`, because a callback-handed `query(...)` buffers every row into the command's own arrays
+before any listener sees one — and the rows are counted as they arrive: the `maxResultRows + 1`-th
+row, or the first row that carries the bytes past `maxResultBytes`, is the refusal, answered with
+`KILL QUERY` from another session and a **destroyed** connection rather than a released one. A
+connection dropped mid-result is not one this profile can prove clean again, and the close below is
+then a second, idempotent destroy. The two
+layers are complementary: the variable stops the server's own production for a statement with no
+`LIMIT`, and the stream holds the line for one that carries a `LIMIT` past the budget.
+
+The deadline has a server-side half and a provider-owned half, because the server-side half is
+DEFEATABLE BY THE STATEMENT ITSELF, measured, both engines, both ways:
+
+- MySQL's `SET SESSION max_execution_time = 2000` killed a `SELECT SLEEP(10)` at 2 s — and
+  `SELECT /*+ MAX_EXECUTION_TIME(60000) */ SLEEP(6)` ran the FULL 6 s under the same session limit,
+  because the optimizer hint outranks the variable. The unit is MILLISECONDS.
+- MariaDB's `SET SESSION max_statement_time = 2` answered **1969** `Query was interrupted: execution
+  time limit` at 2 s — and the single-statement `SET STATEMENT max_statement_time = 20 FOR
+  SELECT SLEEP(8)` ran the full 8 s under the same session limit, because a SET STATEMENT prefix
+  outranks the variable and is ONE statement, so the single-statement rule does not refuse it. The
+  unit is **SECONDS** - measured, `max_statement_time = 3000` under a 3-second `SLEEP` let it run to
+  completion, because the value was three thousand seconds - so the profile converts, rounding up:
+  MariaDB 10.8+ accepts decimals (measured, `0.5` stopped a 2-second sleep at half a second) but the
+  family below it takes integers, and a sub-second budget's exact deadline is the KILL timer below
+  rather than this coarser layer.
+
+On both engines the variable is set **one second past the budget**, so the KILL timer always fires first.
+Measured on MySQL 26.7.0 with the two equal: the variable stopped `SELECT SLEEP(5)` at the timer's instant, `SLEEP` answered `1` rather than an error, the timer had not yet fired, and the call served that `1` as a result.
+The variable stays as the layer that stops a statement when the KILL cannot be sent.
+
+So the provider owns a timer that cannot be disarmed: at the budget it fires
+`KILL QUERY <threadId>` from ANOTHER session of the main pool — the same route `cancelQuery()` already
+takes, because a connection cannot kill its own running query. Measured on a cross join: the victim
+answered **1317** `ER_QUERY_INTERRUPTED` in 700 ms.
+That 1317, and the variables' own **3024** (MySQL) and **1969** (MariaDB), are all answered as the same deadline refusal, "exceeded the statement deadline of N ms": a model told only "Query was cancelled" has no reason to make its next statement cheaper.
+A 1317 the call did not cause is someone else's `KILL` and keeps its own meaning.
+`SLEEP()` is the one shape that answers a kill as a normal
+result — the value `1` — measured, so a query that resolved while its kill is in flight is refused
+rather than served, because a partial result with no error is the one shape this boundary must not
+hand to a model as an answer.
+
+**Nothing a call set survives it.**
+The session variables leak through mysql2's own `release()` — measured, the next borrower of the same pooled connection read the `sql_select_limit` and deadline the previous call had set — and so do the states no transaction contains: user variables, `GET_LOCK()` locks (which need no privilege), `HANDLER` state and temporary tables.
+So the connection is **closed** at the end of every call, served or refused, and never returned to the pool: the server rolls the read-only transaction back and drops every one of those with the session.
+COM_RESET_CONNECTION (`conn.reset()`) clears the same set and was the first spelling, but on MySQL it also put the session's character set back to the server's default (measured on 26.7.0), dropping the one the handshake negotiated, which on a server whose default is not `utf8mb4` would have read non-Latin text back as `?`.
+A closed connection has no such state to get wrong; the cost is one connection setup per statement, against a run's budget of a few dozen statements.
+
+### 12.4 The estimating plan is a statement prefix, and needs SHOW VIEW only to read through a view
+
+`composeEstimatingExplain("mysql", …)` prefixes `EXPLAIN FORMAT=JSON`, measured on both engines as
+`libredb_agent` with no grant beyond SELECT, INSIDE the profile's read-only transaction: the plan
+answers, and the two engines' JSON shapes differ (`query_plan` on MySQL, `query_block` on MariaDB)
+without either refusing the prefix.
+A statement that reads a VIEW is the exception: measured on 2026-10-13 on both engines, `EXPLAIN` of a view as a SELECT-only principal is refused with **1345** (`EXPLAIN/SHOW can not be issued; lacking privileges for underlying table`), which a live agent run met on the fixture's `order_summary`.
+`SHOW VIEW` lifts it, writes nothing (CREATE VIEW and ALTER VIEW still answer 1142), and is admitted by the profile, so the seeds and the recipe in §12.1 grant it.
+`EXPLAIN ANALYZE` is deliberately not composed — it EXECUTES the statement — and the plan runs inside
+the same transaction, row bound and deadline as the execution it estimates.
+
+### 12.5 What the profile does not bound, and which engines it refuses
+
+The read REACH is the grants', and that is the operator's choice: a principal holding SELECT on one
+database sees one database, and the catalogues that answer to `PUBLIC` (`information_schema` of its
+own grants) answer. No statement this repository composes reads another database, and the agent's
+own tools compose against the connection's database.
+
+The wire-compatible relatives are refused at the first read when they name themselves, because a mechanism
+measured on MySQL is not proven on any of them — Vitess, for one, refuses `KILL QUERY`:
+
+| Server | Named where | Under the profile |
+| :--- | :--- | :--- |
+| MySQL | `VERSION()` | admitted |
+| MariaDB | `VERSION()` (`MARIADB_VERSION` in [mysql.ts](../../src/lib/db/providers/sql/mysql.ts)) | admitted |
+| TiDB | `VERSION()`, `8.0.11-TiDB-v…` | refused: `PROFILE_UNSUPPORTED_TARGET` |
+| Vitess | `VERSION()`, `…-vitess…` | refused |
+| OceanBase | `VERSION()`, `…OceanBase…` | refused |
+| Apache Doris | `@@version_comment` | refused |
+| Percona Server | `@@version_comment`, `Percona Server` | refused (its own enforcement is unmeasured here) |
+| StarRocks, SingleStore | nowhere: both answer a plain MySQL `VERSION()` and comment | cannot be refused by name; the compatibility table in [§1.1](#11-mariadb-and-the-other-mysql-protocol-engines) records which is which |
+
+A server whose `VERSION()` answer could not be read is refused fail-closed the same way: an
+unidentified engine is an unproven boundary.
+
+## 13. Testing
+
+### 13.1 How the tests work
 
 Integration tests live in
 [`tests/integration/db/mysql-provider.test.ts`](../../tests/integration/db/mysql-provider.test.ts).
@@ -2457,7 +2660,7 @@ parameters), the Explain statement `mysqlJsonStrategy` builds, and the transacti
 > own bun process, so a single file is safe and so is the whole suite, which is the same command CI
 > runs. `bun run test:coverage` is that runner with coverage on. See [`CLAUDE.md`](../../CLAUDE.md).
 
-### 12.2 Coverage
+### 13.2 Coverage
 
 20+ describe blocks cover: validation (incl. connection-string bypass), connect/disconnect,
 capabilities, the object surface (columns/FKs/indexes, primary-key detection), health, maintenance (all
@@ -2468,6 +2671,21 @@ branch, `prepareQuery`, error mapping (`ER_ACCESS_DENIED`, `ECONNREFUSED`), the 
 literals, the wire protocol each statement takes, and wide integers (the pool option on both
 connection forms, and two ids differing only past 2^53 staying two values through `query()` and
 through the JSON the API response is made of).
+
+**The agent read-only profile ([§12](#12-agent-read-only-execution-profile-1612)) is its own block,
+driven by a session model rather than statement-keyed fixtures.** The mock's read-only connection
+INTERPRETS the session commands (`START TRANSACTION READ ONLY`, `SET SESSION`),
+and the statement under test is answered through a **streaming command on the callback core** —
+`query(...)` with no callback, then `.stream()` — the same shape the provider counts rows on, so the
+row-bound tests exercise the counting path rather than a buffered one. A destroyed connection rejects
+everything after it, and each session's ORDERED event log is what the tests assert: deleting the
+`START TRANSACTION READ ONLY` line in the provider fails the session-order test, which is the
+property that makes the transaction real rather than recorded. The refusal paths pinned beside it:
+a row past the budget (including a statement whose own `LIMIT 100000000` outranks
+`sql_select_limit` — refused on the row that crosses, killed, connection dropped), a byte past the
+byte budget, a deadline kill answered as the deadline (1317, 3024 and 1969 alike), a kill that lands while the query resolves, a named lock that dies with the closed connection, a write the server refuses with the connection still closed, the principal and engine verified once at the first read rather than at open, a write-capable account that still opens, a column-level SELECT admitted, and a `flags=MULTI_STATEMENTS` connection string held to one statement.
+The model cannot say what the servers do, which is why
+[`tests/live/mysql-agent-profile.ts`](../../tests/live/mysql-agent-profile.ts) exists (§13.4).
 
 utf8mb3 decoding ([§3.8](#38-on-a-server-that-sends-utf-8-under-a-utf8mb3-label-utf8mb3-columns-are-read-as-utf-8))
 is pinned in its own file,
@@ -2509,7 +2727,7 @@ nothing else, so a declaration that ignored the version string cannot produce tw
 declarations were then re-measured end to end against live containers, `mysql:latest` on 33106 and
 `mariadb:latest` on 33107, through the real `mysql2` driver.
 
-### 12.3 Run it
+### 13.3 Run it
 
 ```bash
 bun test tests/integration/db/mysql-provider.test.ts   # just this file (single process — safe)
@@ -2517,7 +2735,7 @@ bun run test                                            # the whole suite, one p
 bun run test:coverage                                   # CI coverage workflow: the same runner, with coverage
 ```
 
-### 12.4 Optional: verifying against a live MySQL, and a live MariaDB
+### 13.4 Optional: verifying against a live MySQL, and a live MariaDB
 
 The compose services carry the object-browser fixture ([§7.1](#71-the-object-surface-789)), so this
 is the way to get a server with one object of every declared kind on it:
@@ -2554,9 +2772,18 @@ LIBREDB_LIVE_MYSQL_URLS="mysql://root:root@127.0.0.1:3306/app,mysql://root:root@
   bun tests/live/mysql-column-defaults.ts
 ```
 
+The agent read-only profile ([§12](#12-agent-read-only-execution-profile-1612)) has its own live check.
+It drives the real provider as `root` (opened, then refused at the first read) and as the seeded `libredb_agent`: every catalog kind, every escape of #1612 with the database read back unchanged, the deadline against the statement's own override, the row bound against a statement's own `LIMIT` with a memory ceiling, a named lock and the character set across calls, and a `flags=MULTI_STATEMENTS` connection string.
+It creates and drops `app.live_profile_probe`, so point it at disposable servers:
+
+```bash
+LIBREDB_LIVE_MYSQL_ROOT_URLS="mysql://root:root@127.0.0.1:3306/app,mysql://root:root@127.0.0.1:3307/app" \
+  bun tests/live/mysql-agent-profile.ts
+```
+
 ---
 
-## 13. Usage examples
+## 14. Usage examples
 
 ```ts
 import { createDatabaseProvider } from '@/lib/db/factory';
@@ -2579,7 +2806,7 @@ Over the API: `POST /api/db/query`, `POST /api/db/transaction`, `POST /api/db/ca
 
 ---
 
-## 14. Known limitations & future work
+## 15. Known limitations & future work
 
 - **No server-side query timeout.** The pool ignores `queryTimeout`; a runaway query is not
   auto-killed (only explicit `cancelQuery()`/`KILL QUERY`). *Future:* derive a per-statement
@@ -2611,7 +2838,7 @@ Over the API: `POST /api/db/query`, `POST /api/db/transaction`, `POST /api/db/ca
 
 ---
 
-## 15. References
+## 16. References
 
 - Driver: [`mysql2`](https://github.com/sidorares/node-mysql2)
 - Source: [`src/lib/db/providers/sql/mysql.ts`](../../src/lib/db/providers/sql/mysql.ts)

@@ -167,6 +167,8 @@ const NAMED_CITATIONS = [
       "buildSSLConfig",
       "query",
       "cancelQuery",
+      "queryReadOnly",
+      "buildReadOnlyPoolConfig",
       "expireTransaction",
       "beginTransaction",
       "commitTransaction",

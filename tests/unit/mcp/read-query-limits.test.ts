@@ -64,10 +64,10 @@ describe("the texts", () => {
     expect(
       profileRefusalText(
         "The agent read-only execution profile requires a least-privilege PostgreSQL role; this role is unverified or too broad (is_superuser). A read-only transaction does not stop server-side file access or program execution.",
-        "PostgreSQL, SQLite, DuckDB and SQL Server",
+        "PostgreSQL, SQLite, DuckDB, SQL Server and MySQL",
       ),
     ).toBe(
-      "run_read_query cannot run on this connection: The agent read-only execution profile requires a least-privilege PostgreSQL role; this role is unverified or too broad (is_superuser). A read-only transaction does not stop server-side file access or program execution. It runs on PostgreSQL, SQLite, DuckDB and SQL Server.",
+      "run_read_query cannot run on this connection: The agent read-only execution profile requires a least-privilege PostgreSQL role; this role is unverified or too broad (is_superuser). A read-only transaction does not stop server-side file access or program execution. It runs on PostgreSQL, SQLite, DuckDB, SQL Server and MySQL.",
     );
   });
 });
