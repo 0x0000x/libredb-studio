@@ -116,22 +116,48 @@ function hasParts(data: ArrowColumnData, parts: readonly (readonly [string, Arro
   );
 }
 
+/** Whether `children` are named `names`, in order. */
+const namedAs = (children: readonly ArrowColumnData[], names: readonly string[]): boolean =>
+  names.every((name, index) => children[index].name === name);
+
+/**
+ * The names Spark's Arrow writer gives a struct's fields: both result paths write the Arrow schema with
+ * errorOnDuplicatedFieldNames = false, so ArrowUtils.deduplicateFieldNames numbers a name the struct holds more than
+ * once name_0, name_1 and on, in order, and keeps a name it holds once. The DataType keeps every name as the plan
+ * gives it, so struct(a.id, b.id) is id, id there and id_0, id_1 in the batch (4.1.3 and 4.2.0 alike).
+ */
+function arrowFieldNames(names: readonly string[]): string[] {
+  const counts = new Map<string, number>();
+  for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
+  const numbered = new Map<string, number>();
+  return names.map((name) => {
+    if (counts.get(name) === 1) return name;
+    const index = numbered.get(name) ?? 0;
+    numbered.set(name, index + 1);
+    return `${name}_${index}`;
+  });
+}
+
 /**
  * Whether `data` is laid out as `kind` reads it: its Arrow type; a decimal's scale, which places the point (the
- * precision does not); a struct's fields, by count and name; Spark's own two children of a VARIANT or a geospatial
- * value. A timestamp's zone is not held: it labels the same microseconds, and the kind decides whether the text
- * carries +00:00. Every child is held the same way when it is read, at every depth.
+ * precision does not); a struct's fields, by count, and by name as the kind names them or as Spark's Arrow writer
+ * numbers a repeated one (the command path's kind takes the names the batch carries, the relation path's the
+ * DataType's); Spark's own two children of a VARIANT or a geospatial value. A timestamp's zone is not held: it labels
+ * the same microseconds, and the kind decides whether the text carries +00:00. Every child is held the same way when
+ * it is read, at every depth.
  */
 function laidOutAs(kind: SparkValueKind, data: ArrowColumnData): boolean {
   if (data.type !== ARROW_TYPES[kind.type]) return false;
   switch (kind.type) {
     case "decimal":
       return data.scale === kind.scale;
-    case "struct":
+    case "struct": {
+      const names = kind.fields.map((field) => field.name);
       return (
-        data.children.length === kind.fields.length &&
-        kind.fields.every((field, index) => data.children[index].name === field.name)
+        data.children.length === names.length &&
+        (namedAs(data.children, names) || namedAs(data.children, arrowFieldNames(names)))
       );
+    }
     case "variant":
       return hasParts(data, VARIANT_PARTS);
     case "geometry":

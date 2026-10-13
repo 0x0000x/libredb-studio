@@ -629,6 +629,98 @@ describe("cellValue: a column whose Arrow data is not laid out as its kind", () 
     expect(cellValue(same, struct, 0)).toStrictEqual({ x: 1, y: 2 });
   });
 
+  // SELECT struct(a.id, b.id) AS st: the DataType keeps the names the plan gives (id, id), while Spark writes the Arrow
+  // schema of both result paths with errorOnDuplicatedFieldNames = false, so ArrowUtils.deduplicateFieldNames numbers a
+  // name the struct repeats (id_0, id_1, in order) and keeps a name it holds once (4.1.3 and 4.2.0 alike).
+  const proto = (kind: string, body: object = {}) => ({ kind, [kind]: body });
+  const protoStruct = (fields: readonly (readonly [string, object])[]) =>
+    proto("struct", { fields: fields.map(([name, data_type]) => ({ name, data_type, nullable: true })) });
+
+  test("a struct that repeats a field name reads on the relation path, under the names Spark's Arrow writer numbers", () => {
+    const pair = protoStruct([
+      ["id", proto("integer")],
+      ["id", proto("integer")],
+    ]);
+    const [st, sts] = columnsFromDataType(
+      protoStruct([
+        ["st", pair],
+        ["sts", proto("array", { element_type: pair, contains_null: true })],
+      ]),
+    );
+    const read = readIpcColumns(
+      columnsStream([
+        {
+          name: "st",
+          kind: "struct",
+          length: 1,
+          children: [
+            { name: "id_0", kind: "int32", values: [1] },
+            { name: "id_1", kind: "int32", values: [2] },
+          ],
+        },
+        {
+          name: "sts",
+          kind: "list",
+          offsets: [0, 2],
+          child: {
+            name: "element",
+            kind: "struct",
+            length: 2,
+            children: [
+              { name: "id_0", kind: "int32", values: [3, 5] },
+              { name: "id_1", kind: "int32", values: [4, 6] },
+            ],
+          },
+        },
+      ]),
+    );
+    expect(cellValue(st, read.columns[0], 0)).toStrictEqual({ id: 1, "id (2)": 2 });
+    expect(cellValue(sts, read.columns[1], 0)).toStrictEqual([
+      { id: 3, "id (2)": 4 },
+      { id: 5, "id (2)": 6 },
+    ]);
+  });
+
+  test("a numbered name the struct also declares keeps its own name, and repeats numbered otherwise are refused", () => {
+    const declared = (...names: string[]): SparkColumn => ({
+      name: "st",
+      spelling: `struct<${names.map((name) => `${name}:int`).join(",")}>`,
+      kind: { type: "struct", fields: names.map((name) => ({ name, kind: { type: "int" } as const })) },
+    });
+    const batch = (...names: string[]) =>
+      readIpcColumns(
+        columnsStream([
+          {
+            name: "st",
+            kind: "struct",
+            length: 1,
+            children: names.map((name, index) => ({ name, kind: "int32" as const, values: [index + 1] })),
+          },
+        ]),
+      );
+    // Spark writes struct<id,x,id,id_0> as [id_0, x, id_1, id_0]: x and id_0 occur once, so each keeps its name.
+    const written = batch("id_0", "x", "id_1", "id_0");
+    expect(cellValue(declared("id", "x", "id", "id_0"), written.columns[0], 0)).toStrictEqual({
+      id: 1,
+      x: 2,
+      "id (2)": 3,
+      id_0: 4,
+    });
+    // The command path's kind takes the names Spark wrote, which repeat id_0, so the same batch reads under them.
+    const [fromArrow] = columnsFromArrow(written);
+    expect(cellValue(fromArrow, written.columns[0], 0)).toStrictEqual({ id_0: 1, x: 2, id_1: 3, "id_0 (2)": 4 });
+    for (const names of [
+      ["id_1", "id_0"],
+      ["id_1", "id_2"],
+      ["id", "id_1"],
+      ["id_0", "id_0"],
+    ]) {
+      expect(refusal(() => cellValue(declared("id", "id"), batch(...names).columns[0], 0)).message).toBe(
+        layoutRefused("st"),
+      );
+    }
+  });
+
   test("a VARIANT or geospatial struct whose two children are not Spark's layout is refused", () => {
     // columnsFromArrow names the kind by the children's names and the tag; the children's types are held here.
     const variantOfText = readIpcColumns(
