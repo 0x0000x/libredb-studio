@@ -26,7 +26,7 @@
  * - the nested namespace walk: the session catalog's `SHOW NAMESPACES` answer rewritten to multi-part spellings,
  *   because no catalog of the open-source fixture nests.
  */
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AuthenticationError, ConnectionError, QueryError } from "@/lib/db/errors";
@@ -35,6 +35,7 @@ import type { SparkWireTransport } from "@/lib/db/providers/sql/spark/grpc-clien
 import { SparkProvider } from "@/lib/db/providers/sql/spark/index";
 import { SPARK_CUT_WARNINGS } from "@/lib/db/providers/sql/spark/result-stream";
 import type { DatabaseConnection } from "@/lib/types";
+import { assertObjectSurface } from "../../helpers/object-surface-conformance";
 import { readSparkCapture, type SparkCaptureVersion } from "../../helpers/spark-captures";
 import { type RecordedSparkTransport, recordedSparkTransport } from "../../helpers/spark-fixtures";
 import { columnsStream } from "../../helpers/spark-ipc";
@@ -215,6 +216,30 @@ for (const version of ["4.2.0", "4.1.3"] as const) {
       expect(provider.connectWarnings()).toEqual([
         { message: SPARK_ERROR_SENTENCES.tokenlessCaution("127.0.0.1", 15002) },
       ]);
+      await provider.disconnect();
+    });
+
+    test("connect with a catalog and a namespace: the metadata session runs SET CATALOG and USE NAMESPACE before its first read", async () => {
+      // SHOW CURRENT NAMESPACE is answered by use-namespace-current, recorded after a USE NAMESPACE. Masked, its
+      // request is connect-current-namespace's, so the two never share a transport: the first one listed would answer
+      // both.
+      const names: readonly SparkCaptureName[] = [
+        "connect-version",
+        "release-session",
+        "connect-session-setup",
+        "set-catalog",
+        "use-namespace",
+        "use-namespace-current",
+      ];
+      const transport = recorded(version, names);
+      const provider = new SparkProvider(
+        config({ database: "spark_catalog", schema: SPARK_SAMPLE_NAMESPACE }),
+        {},
+        { transport },
+      );
+      await provider.connect();
+      expect(provider.isConnected()).toBe(true);
+      expect(transport.served).toStrictEqual([...names]);
       await provider.disconnect();
     });
 
@@ -418,6 +443,33 @@ describe("replay on 4.2.0 only", () => {
     await provider.disconnect();
   });
 
+  test("the object surface meets the contract every provider's does, over the studio namespace", async () => {
+    const { provider } = await connected("4.2.0", [
+      "show-catalogs",
+      "config-catalog-keys",
+      "show-namespaces",
+      "show-tables",
+      "show-views",
+      "show-user-functions",
+      "describe-table",
+      "describe-table-struct30",
+      "describe-view",
+      "show-create-table",
+      "show-create-view",
+      "show-create-table-missing",
+      "show-create-table-missing-details",
+    ]);
+    await assertObjectSurface(provider, {
+      containers: [["spark_catalog"], ["studio_unloaded"]],
+      container: ["spark_catalog", SPARK_SAMPLE_NAMESPACE],
+      kinds: STUDIO_KINDS,
+      sampleObject: { path: ["spark_catalog", SPARK_SAMPLE_NAMESPACE, "every_type"], kind: "table" },
+      // Spark answers SHOW CREATE TABLE of it with [TABLE_OR_VIEW_NOT_FOUND] (show-create-table-missing).
+      absentSource: { path: ["spark_catalog", SPARK_SAMPLE_NAMESPACE, "no_such_table"], kind: "table" },
+    });
+    await provider.disconnect();
+  });
+
   test("BUILT: a nested namespace listing, the session catalog's SHOW NAMESPACES answer rewritten to multi-part spellings", async () => {
     const spellings = ["studio", "lake.raw", "lake.`x.y`"];
     const transport = withNamespaces(recorded("4.2.0", [...CONNECT, "show-namespaces"]), spellings);
@@ -440,6 +492,40 @@ describe("replay on 4.2.0 only", () => {
     await provider.disconnect();
   });
 
+  test("overview: the version, the spark.app. start time and the current namespace's table count, on the metadata session", async () => {
+    const { provider, transport } = await connected("4.2.0", [
+      "overview-app-conf",
+      "show-views-default",
+      "show-tables-default",
+    ]);
+    const before = transport.served.length;
+    // The clock stands 90 minutes after spark.app.startTime as overview-app-conf answers it.
+    setSystemTime(new Date(APP_START_MS + 90 * 60_000));
+    try {
+      expect(await provider.getOverview()).toStrictEqual({
+        version: "4.2.0",
+        uptime: "1.50h",
+        startTime: new Date(APP_START_MS),
+        maxConnections: 0,
+        databaseSize: "N/A",
+        tableCount: 0,
+        tableCountSampledFrom: "the tables of spark_catalog.default, the connection's current namespace",
+        indexCount: 0,
+      });
+    } finally {
+      setSystemTime();
+    }
+    // The table count lists the namespace SHOW CURRENT NAMESPACE answers, default on this server, which holds none.
+    expect(transport.served.slice(before)).toStrictEqual([
+      "connect-version",
+      "overview-app-conf",
+      "connect-current-namespace",
+      "show-views-default",
+      "show-tables-default",
+    ]);
+    await provider.disconnect();
+  });
+
   test("a released session answers SESSION_CLOSED and the metadata session is re-created", async () => {
     const { provider } = await connected("4.2.0", ["session-closed", "show-catalogs", "config-catalog-keys"]);
     await expect(provider.listContainers([])).resolves.toBeDefined();
@@ -458,4 +544,7 @@ describe("replay on 4.2.0 only", () => {
 });
 
 /** What the studio namespace holds (SPARK_SAMPLE_STATEMENTS): two tables, one view over one of them, one function. */
+const STUDIO_KINDS = { table: 2, view: 1, function: 1 };
 const STUDIO_COUNTS = { table: { count: 2 }, view: { count: 1 }, function: { count: 1 } };
+/** spark.app.startTime as overview-app-conf answers it, in epoch milliseconds. */
+const APP_START_MS = 1_791_889_584_013;
