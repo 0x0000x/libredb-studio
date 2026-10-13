@@ -688,9 +688,9 @@ async function runEntry(ctx: Context, entry: SparkCaptureEntry): Promise<void> {
 }
 
 /**
- * The surface each capture of `entry` holds in its header, by capture name, as runEntry writes it: the entry's surface,
- * followed by the step or the statement the capture holds where the entry writes more than one capture. `--surfaces`
- * rewrites the stored captures to these, so a changed surface needs no retake.
+ * The surface each capture of `entry` holds in its header, by capture name: the entry's surface, followed by the
+ * suffix, if any, that runEntry adds for the ExecutePlan step, the FetchErrorDetails call or the statement run before
+ * it that the capture holds. `--surfaces` rewrites the stored captures to these, so a changed surface needs no retake.
  */
 export function captureSurfaces(entry: SparkCaptureEntry): ReadonlyMap<SparkCaptureName, string> {
   const { action, surface } = entry;
