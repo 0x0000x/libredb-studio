@@ -63,7 +63,10 @@ function holdsExpectations(outcomes: readonly SparkRuntimeOutcome[]): void {
   expect(outcomes).toStrictEqual(Object.entries(expected).map(([name, outcome]) => ({ name, outcome })));
 }
 
-/** The rows with each TLS row's own port written as `<port>`, the one text that differs from run to run. */
+/**
+ * The rows with the number any outcome opens with written as `<port>` wherever it appears in that outcome: a TLS row
+ * opens with its own port, the one text that differs from run to run, and any other leading number is masked too.
+ */
 function withoutPorts(outcomes: readonly SparkRuntimeOutcome[]): SparkRuntimeOutcome[] {
   return outcomes.map(({ name, outcome }) => {
     const port = /^(\d+) /.exec(outcome)?.[1];
