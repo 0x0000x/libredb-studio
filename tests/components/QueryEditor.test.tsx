@@ -2594,6 +2594,38 @@ describe("QueryEditor", () => {
     );
   });
 
+  test("no Format button, Format SQL action or shortcut under supportsSqlFormat: false (Apache Spark, D14)", () => {
+    // Both sql-formatter modes rewrite valid Spark text (raw strings, backticks, nested comments), so the provider
+    // withholds Format for its tabs and the editor offers none.
+    mockSqlFormat.mockClear();
+    const props = createDefaultProps({
+      value: "SELECT r'C:\\' AS a",
+      language: "sql",
+      databaseType: "spark",
+      capabilities: { ...defaultCapabilities, supportsSqlFormat: false },
+    });
+    const { queryByText, queryByTestId } = render(React.createElement(QueryEditor, props));
+    expect(queryByText("Format")).toBeNull();
+    expect(capturedContextKeys["libredbCanFormatSql"]).toBe(false);
+    capturedSetValues = [];
+    act(() => {
+      capturedCommands[1].handler();
+    });
+    act(() => {
+      capturedActions.find((a) => a.id === "format-sql")!.run();
+    });
+    expect(mockSqlFormat).not.toHaveBeenCalled();
+    expect(capturedSetValues).toEqual([]);
+    expect((queryByTestId("mock-monaco-editor") as HTMLTextAreaElement).value).toBe("SELECT r'C:\\' AS a");
+  });
+
+  test("the control: with the field absent, an SQL tab keeps its Format button and Format SQL", () => {
+    const props = createDefaultProps({ language: "sql", capabilities: defaultCapabilities });
+    const { queryByText } = render(React.createElement(QueryEditor, props));
+    expect(queryByText("Format")).not.toBeNull();
+    expect(capturedContextKeys["libredbCanFormatSql"]).toBe(true);
+  });
+
   test("a JSON tab is not offered Format SQL, and its shortcut still formats JSON", () => {
     // The entry's label is fixed when it is registered, so on a MongoDB tab it read "Format SQL"
     // over the JSON formatter. The toolbar button and the shortcut are what format JSON there.

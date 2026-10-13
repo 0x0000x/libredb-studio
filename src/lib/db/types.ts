@@ -1087,6 +1087,12 @@ export interface ProviderCapabilities {
    */
   supportsColumnProfiling?: false;
   /**
+   * False where the shared SQL formatter rewrites this engine's valid text: the editor offers no Format for its tabs.
+   * Absent: the tab's language decides, as before.
+   * Only `false` is accepted, so the field can withhold Format and never grant it to a language without a formatter.
+   */
+  supportsSqlFormat?: false;
+  /**
    * Whether THIS PROVIDER implements the interactive transaction session that
    * `POST /api/db/transaction` drives — `beginTransaction()` / `commitTransaction()`
    * / `rollbackTransaction()` over one held connection. It is a statement about the

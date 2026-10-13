@@ -225,7 +225,8 @@ export const QueryEditor = forwardRef<QueryEditorRef, QueryEditorProps>(
     // button and the shortcut, and a PromQL, Redis or LibreDB tab has no formatter. It also asks
     // the dialect registry, as the toolbar does, so the entry is never offered where SQL's record
     // gives no formatter. Read at invocation time for the reason the explain gate above gives.
-    const canFormatSql = language === "sql" && formatterForLanguage(language) !== undefined;
+    const canFormatSql =
+      language === "sql" && capabilities?.supportsSqlFormat !== false && formatterForLanguage(language) !== undefined;
     const canFormatSqlRef = useRef(canFormatSql);
     const canFormatSqlKeyRef = useRef<Monaco.editor.IContextKey<boolean> | null>(null);
 
@@ -392,7 +393,9 @@ export const QueryEditor = forwardRef<QueryEditorRef, QueryEditorProps>(
 
     // The formatter of the tab's language, from its `DIALECT_EDITORS` record: SQL's, the JSON one MongoDB and
     // Kafka share, or none, in which case the toolbar draws no Format button and the shortcut does nothing.
-    const formatter = formatterForLanguage(language);
+    // A provider that declares `supportsSqlFormat: false` gets none either, so its tabs show no Format button and the
+    // shortcut does nothing.
+    const formatter = capabilities?.supportsSqlFormat === false ? undefined : formatterForLanguage(language);
 
     const handleFormat = () => {
       if (!editorRef.current) return;
