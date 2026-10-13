@@ -554,6 +554,20 @@ export interface AgentInventoryObject {
 }
 
 /**
+ * A container above the deepest level whose children a scoped walk could not list, where the scope reads nothing
+ * below it (`scopeReadsUnder` in `src/lib/db/container-walk.ts`), so the walk went on without it rather than losing
+ * the whole capture.
+ */
+export interface AgentUnlistedParent {
+  /** Its path, dotted as `unreadContainers.read` is. */
+  readonly path: string;
+  /** Its level's own word, singular: "Catalog", "Database". */
+  readonly label: string;
+  /** The provider's sentence for the failed listing, on one line and cut at 200 code points, the cut marked "...". */
+  readonly reason: string;
+}
+
+/**
  * A kind the engine declared, as the run's prose needs it.
  *
  * The `ObjectKindSpec` fields a renderer needs, plus the three facts that decide whether
@@ -632,6 +646,12 @@ export interface AgentInventory {
     readonly label: string;
     readonly labelPlural: string;
     readonly read: readonly string[];
+    /**
+     * Each parent the walk could not list and that the scope reads nothing below, in walk order. Its children were
+     * never listed, so none of them is in `count`, which is 0 where they are all the walk left out. Absent where
+     * every listing answered.
+     */
+    readonly unlistedParents?: readonly AgentUnlistedParent[];
   };
   /**
    * The container the session is IN, where the reading that produced this knew it (#789).

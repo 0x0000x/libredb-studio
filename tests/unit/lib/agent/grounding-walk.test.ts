@@ -1,7 +1,7 @@
 /**
  * The agent's grounding walk over a provider's object surface: the kinds whose names it withholds, the containers
- * a scoped walk leaves out, and a listing its provider capped, each as the walk records it and as both packers
- * tell a run.
+ * a scoped walk leaves out or cannot list, and a listing its provider capped, each as the walk records it and as both
+ * packers tell a run.
  *
  * The provider is a stub answering the four object methods, so each rule is pinned apart from any engine.
  */
@@ -12,6 +12,7 @@ import { AGENT_WORKFLOW_BUDGETS } from "@/lib/agent/execution-policy";
 import { AgentRepairLedger } from "@/lib/agent/repair-ledger";
 import type { AgentToolContext } from "@/lib/agent/tools";
 import type { AgentContextSnapshot } from "@/lib/agent/types";
+import { QueryError } from "@/lib/db/errors";
 import { ExecutionArtifactStore } from "@/lib/db/operations/artifacts";
 import { ExecutionBudgetTracker } from "@/lib/db/operations/budgets";
 import { createCanonicalOperationRegistry } from "@/lib/db/operations/descriptors";
@@ -426,6 +427,207 @@ describe("a scoped walk over two levels with no deepest default", () => {
     expect(harness.countObjects).not.toHaveBeenCalled();
     expect(snapshot.objects).toEqual([]);
     expect(snapshot.unreadContainers?.count).toBe(4);
+  });
+});
+
+describe("a scoped walk over two levels where a catalog's namespaces cannot be listed", () => {
+  const TABLE: ObjectKindSpec = { id: "table", role: "relation", label: "Table", labelPlural: "Tables" };
+  const twoLevels: Partial<ProviderCapabilities> = {
+    containerLevels: [
+      { id: "catalog", label: "Catalog", labelPlural: "Catalogs" },
+      { id: "schema", label: "Namespace", labelPlural: "Namespaces" },
+    ],
+  };
+  const scoped: Partial<ProviderCapabilities> = {
+    ...twoLevels,
+    agentWalkScope: { mode: "session-default", whenNoDefault: { walk: "parent-default-children" } },
+  };
+  /** The provider's sentence for a configured catalog it cannot load. */
+  const NOT_LOADED = "[CATALOG_NOT_FOUND] The catalog `studio_unloaded` cannot be loaded.";
+  const notLoaded = () => new QueryError(NOT_LOADED, "spark");
+
+  /**
+   * A tree shaped like Apache Spark's: the first catalog is the session's and its `default` namespace the session's
+   * namespace. A catalog mapped to an error raises it when its namespaces are listed.
+   */
+  const sparkShaped =
+    (tree: Readonly<Record<string, readonly string[] | Error>>) =>
+    (parent?: readonly string[]): readonly Container[] => {
+      const [session] = Object.keys(tree);
+      if (parent === undefined) {
+        return Object.keys(tree).map(
+          (name): Container =>
+            name === session
+              ? { path: [name], name, level: 0, isSessionDefault: true }
+              : { path: [name], name, level: 0 },
+        );
+      }
+      const listing = tree[parent[0]];
+      if (listing instanceof Error) throw listing;
+      return listing.map(
+        (name): Container =>
+          parent[0] === session && name === "default"
+            ? { path: [parent[0], name], name, level: 1, isSessionDefault: true }
+            : { path: [parent[0], name], name, level: 1 },
+      );
+    };
+  const walk = (tree: Readonly<Record<string, readonly string[] | Error>>, extra: Partial<ProviderCapabilities>) => ({
+    kinds: [TABLE],
+    containersUnder: sparkShaped(tree),
+    counts: () => ({ table: { count: 1 } }),
+    objects: (container: readonly string[], kind: string): readonly DatabaseObject[] => [
+      { path: [...container, "ORDERS"], name: "ORDERS", kind },
+    ],
+    extra,
+  });
+  /** The scope's note in a packing: every line that says what the walk read in. */
+  const scopeNotes = (packed: string): readonly string[] =>
+    packed.split("\n").filter((line) => line.includes("This inventory covers only what it read in"));
+
+  /** A capture that ended unavailable, as every failed listing ended one before a scope could leave it out. */
+  async function refusedCapture(options: Stub) {
+    const harness = stub(options);
+    const capture = await captureContextSnapshot(harness.context);
+    expect(capture).toStrictEqual({
+      kind: "unavailable",
+      reasonCode: "CATALOG_READ_REFUSED",
+      detail: expect.any(String),
+      modelText: expect.any(String),
+      charged: { statements: 1, elapsedMs: expect.any(Number) },
+    });
+    return { capture, harness };
+  }
+
+  test("every listing answering: the walk, its count and its note are exactly what they were", async () => {
+    const { snapshot, harness } = await captured(
+      walk({ spark_catalog: ["default", "staging"], studio_unloaded: ["raw"], warehouse: ["raw"] }, scoped),
+    );
+
+    expect(harness.listContainers.mock.calls).toStrictEqual([
+      [],
+      [["spark_catalog"]],
+      [["studio_unloaded"]],
+      [["warehouse"]],
+    ]);
+    expect(harness.countObjects.mock.calls).toStrictEqual([[["spark_catalog", "default"]]]);
+    expect(snapshot.objects.map((object) => object.path)).toStrictEqual([["spark_catalog", "default", "ORDERS"]]);
+    expect(snapshot.unreadContainers).toStrictEqual({
+      count: 3,
+      label: "Namespace",
+      labelPlural: "Namespaces",
+      read: ["spark_catalog.default"],
+    });
+    for (const packed of packings(snapshot)) {
+      expect(scopeNotes(packed)).toStrictEqual([
+        'Not read: 3 other Namespaces. This inventory covers only what it read in ("spark_catalog.default"), so an object in any other Namespace is not listed below. Do not read its absence as an absence in the database.',
+      ]);
+    }
+  });
+
+  test("a catalog the scope does not read is named as not read with the provider's sentence, and the walk goes on", async () => {
+    const { snapshot, harness } = await captured(
+      walk({ spark_catalog: ["default", "staging"], studio_unloaded: notLoaded(), warehouse: ["raw"] }, scoped),
+    );
+
+    expect(harness.listContainers.mock.calls).toStrictEqual([
+      [],
+      [["spark_catalog"]],
+      [["studio_unloaded"]],
+      [["warehouse"]],
+    ]);
+    expect(harness.countObjects.mock.calls).toStrictEqual([[["spark_catalog", "default"]]]);
+    expect(harness.listObjects.mock.calls).toStrictEqual([[["spark_catalog", "default"], "table"]]);
+    expect(snapshot.objects.map((object) => object.path)).toStrictEqual([["spark_catalog", "default", "ORDERS"]]);
+    expect(snapshot.unreadContainers).toStrictEqual({
+      count: 2,
+      label: "Namespace",
+      labelPlural: "Namespaces",
+      read: ["spark_catalog.default"],
+      unlistedParents: [{ path: "studio_unloaded", label: "Catalog", reason: NOT_LOADED }],
+    });
+    for (const packed of packings(snapshot)) {
+      expect(scopeNotes(packed)).toStrictEqual([
+        'Not read: 2 other Namespaces. The Catalog "studio_unloaded" was not read: listing its Namespaces failed with "[CATALOG_NOT_FOUND] The catalog `studio_unloaded` cannot be loaded.". This inventory covers only what it read in ("spark_catalog.default"), so an object in any other Namespace is not listed below. Do not read its absence as an absence in the database.',
+      ]);
+    }
+  });
+
+  test("where the failed catalog is all the walk left out, the note names it alone", async () => {
+    const { snapshot } = await captured(walk({ spark_catalog: ["default"], studio_unloaded: notLoaded() }, scoped));
+
+    expect(snapshot.unreadContainers).toStrictEqual({
+      count: 0,
+      label: "Namespace",
+      labelPlural: "Namespaces",
+      read: ["spark_catalog.default"],
+      unlistedParents: [{ path: "studio_unloaded", label: "Catalog", reason: NOT_LOADED }],
+    });
+    for (const packed of packings(snapshot)) {
+      expect(scopeNotes(packed)).toStrictEqual([
+        'The Catalog "studio_unloaded" was not read: listing its Namespaces failed with "[CATALOG_NOT_FOUND] The catalog `studio_unloaded` cannot be loaded.". This inventory covers only what it read in ("spark_catalog.default"), so an object in any other Namespace is not listed below. Do not read its absence as an absence in the database.',
+      ]);
+    }
+  });
+
+  test("each failed catalog is named in walk order, its sentence on one line and cut at 200 code points", async () => {
+    const { snapshot } = await captured(
+      walk(
+        {
+          spark_catalog: ["default"],
+          lakehouse: new QueryError(
+            `\n  Spark could not load the catalog.\n\tCaused by:   ${"x".repeat(300)}`,
+            "spark",
+          ),
+          // A character outside the Basic Multilingual Plane is two UTF-16 units: the cut keeps it whole.
+          studio_unloaded: new QueryError(`${"a".repeat(199)}${"\u{1D538}".repeat(3)}`, "spark"),
+        },
+        scoped,
+      ),
+    );
+
+    expect(snapshot.unreadContainers?.unlistedParents).toStrictEqual([
+      {
+        path: "lakehouse",
+        label: "Catalog",
+        reason: `${"Spark could not load the catalog. Caused by: ".padEnd(200, "x")}...`,
+      },
+      { path: "studio_unloaded", label: "Catalog", reason: `${"a".repeat(199)}\u{1D538}...` },
+    ]);
+  });
+
+  test("the session's catalog failing to list ends the capture, as before", async () => {
+    const { capture, harness } = await refusedCapture(walk({ spark_catalog: notLoaded(), warehouse: ["raw"] }, scoped));
+
+    expect(capture.kind === "unavailable" && capture.detail.includes(NOT_LOADED)).toBe(true);
+    expect(harness.listContainers.mock.calls).toStrictEqual([[], [["spark_catalog"]]]);
+    expect(harness.countObjects).not.toHaveBeenCalled();
+  });
+
+  test("a catalog on the path of a container the scope names failing to list ends the capture, as before", async () => {
+    const { harness } = await refusedCapture(
+      walk(
+        { spark_catalog: ["default"], warehouse: notLoaded() },
+        { ...twoLevels, agentWalkScope: { mode: "session-default", alsoWalk: [["warehouse", "raw"]] } },
+      ),
+    );
+
+    expect(harness.countObjects).not.toHaveBeenCalled();
+  });
+
+  test("with no scope, any catalog failing to list ends the capture, as before", async () => {
+    const { harness } = await refusedCapture(
+      walk({ spark_catalog: ["default"], studio_unloaded: notLoaded() }, twoLevels),
+    );
+
+    expect(harness.countObjects).not.toHaveBeenCalled();
+  });
+
+  test("a failure that is not the provider's answer ends the capture whatever the scope", async () => {
+    const { harness } = await refusedCapture(
+      walk({ spark_catalog: ["default"], studio_unloaded: new TypeError("listing is not iterable") }, scoped),
+    );
+
+    expect(harness.countObjects).not.toHaveBeenCalled();
   });
 });
 
