@@ -50,8 +50,9 @@ import { chatToolCallStream, type FetchDouble } from "./fixtures/agent-transport
  *    `tests/integration/db/postgres-provider.test.ts` established: `mock.module("pg")`
  *    in front of a stateful in-process server double, so `PostgresProvider` runs
  *    unmodified — its `BEGIN READ ONLY` envelope, its extended-protocol statement, its
- *    `ROLLBACK`/`DISCARD ALL`. CI runs no PostgreSQL service (`docs/BACKLOG.md` A5),
- *    and that is recorded rather than papered over. Be exact about the split: what is
+ *    `ROLLBACK`/`DISCARD ALL`. The test jobs run no PostgreSQL service; the profile
+ *    meets a real server only in `tests/live/postgres-read-only-live.ts`, which the
+ *    functional-smoke job runs, and that is recorded rather than papered over. Be exact about the split: what is
  *    REAL on this side is the PROVIDER and its envelope; the catalog rows, the result
  *    rows AND the `relation "ordrs" does not exist` refusal are all scripted, written
  *    to PostgreSQL's own wording and SQLSTATE. Only the SQLite half gets a failure text

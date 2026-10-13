@@ -96,7 +96,9 @@ its `.loop/PROGRESS.md` entry and its commit; a trace line is not evidence that 
    (format · lint · typecheck · knip · test:coverage + coverage:check · build), per task,
    before every commit.
 2. **Functional** — `scripts/functional-smoke.sh`: boot the built app, create a real
-   PostgreSQL connection through the UI, run a SQL query, assert the rows render. Mandatory
+   PostgreSQL connection through the UI, run a SQL query, assert the rows render. Before that it
+   runs `tests/live/postgres-read-only-live.ts`, the agent read-only profile against a real
+   PostgreSQL, which CI runs as its own step in the same job. Mandatory
    before a milestone may complete. (CI covers the same flow by running the underlying spec,
    `e2e/functional-smoke.spec.ts`, in its own bare-runner job `Functional Smoke (PostgreSQL, RabbitMQ)`
    — the containerised E2E job excludes it with `--grep-invert "Functional smoke"` because it

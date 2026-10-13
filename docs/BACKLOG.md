@@ -40,7 +40,7 @@ None of it is a GitHub issue.
 - [Security Phase 2 deferrals](#security-phase-2-deferrals) — C3–C11 · 6
 - [Security Phase 3 deferrals](#security-phase-3-deferrals) — K4-K8 · 5
 - [Security scanner triage](#security-scanner-triage) — SCAN1-SCAN2 · 2
-- [Agent M1 deferrals (#328)](#agent-m1-deferrals-328) — A2–A8 · 6
+- [Agent M1 deferrals (#328)](#agent-m1-deferrals-328) — A2–A8 · 5
 - [Agent M2 deferrals (#329)](#agent-m2-deferrals-329) — B2-B110 · 46
 - [Passkey deferrals (#785)](#passkey-deferrals-785) — PK1-PK9 · 8
 - [MCP server deferrals (#246)](#mcp-server-deferrals-246) — MCP1-MCP3 · 3
@@ -6404,27 +6404,6 @@ and both of those read SQL — defense in depth, not a boundary:
 **Done when:** out-of-scope reads are refused by something that does not read SQL — a per-target grant
 set generated for the agent role, an allowlisted directory for SQLite, or an authorizer both adapters
 expose.
-
-### A5. The PostgreSQL profile's regression tests model the server rather than run one
-
-`tests/integration/db/postgres-provider.test.ts` proves the read-only profile against a stateful
-hand-written engine mock. Every rule it models was verified against a live PostgreSQL 18 while the
-profile was built — read-only transaction rejection by engine state, the extended-protocol refusal of
-multi-command strings, `SET TRANSACTION READ WRITE` really relaxing the transaction, advisory locks
-surviving rollback — and the mock encodes them faithfully enough that bypass attempts fail on real
-modeled behaviour (a write actually landing) rather than on protocol metadata.
-
-What it cannot catch is a regression on the other side of the seam: a driver change, a server version
-that behaves differently, or a `pg` option that stops meaning what it meant. The assertions would stay
-green because the mock, not the server, defines the semantics.
-
-The integration suites are mock-based by convention and CI runs no database service. The only real
-engine in the pipeline is the throwaway PostgreSQL container behind
-`loop/scripts/functional-smoke.sh`.
-
-**Done when:** a container-backed test proves, against a supported PostgreSQL, that a direct write and
-a multi-command escape are rejected through the profile under the resolved role. Cheapest path is
-extending the functional-smoke container, not adding a service to every CI test job.
 
 ### A6. SQL Server's agent plan cannot be weighed, because the editor has no strategy to key it to
 
