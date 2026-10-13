@@ -223,6 +223,16 @@ export interface SqlGrammar {
    */
   readonly doubleQuoteBackslashEscapes?: boolean;
   /**
+   * Whether `r'...'`, `R'...'`, `r"..."` and `R"..."` are string literals that take no escapes and end at the first
+   * quote of their own kind, line feeds included; absent means false. Only where the `r` does not continue a word:
+   * the engine's lexer takes the longest token, so `abr'x'` is a name followed by a string.
+   *
+   * It is a fact the text cannot settle: `r'C:\'` is a closed literal where the form exists and an escaping literal
+   * that never closes where it does not, so a `;` or a `DROP` written after it is code under one reading and string
+   * text under the other.
+   */
+  readonly rawStrings?: boolean;
+  /**
    * How a script is cut into the units the engine receives (E2E pass of 2026-10-03/04,
    * #1312). Before this fact existed every code `;` was a boundary in every dialect, so a
    * PL/SQL procedure, a SQLite trigger and a T-SQL batch were each cut at their inner `;`

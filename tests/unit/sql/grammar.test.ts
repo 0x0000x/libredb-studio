@@ -658,6 +658,18 @@ describe("dollarTags and doubleQuoteBackslashEscapes", () => {
   );
 });
 
+// Two forms only Spark's lexer has, each absent (false) on every other row: raw strings (`rawStrings`) and optimizer
+// hints lexed as code (`hintsAreCode`).
+describe("rawStrings and hintsAreCode", () => {
+  test("the compatibility default declares neither", () => {
+    expect(DEFAULT_SQL_GRAMMAR.rawStrings).toBeUndefined();
+  });
+
+  test.each(Object.keys(GRAMMAR_COVERAGE) as DatabaseType[])("%s declares neither", (type) => {
+    expect(resolveSqlGrammar(type).rawStrings).toBeUndefined();
+  });
+});
+
 describe("every database type has a recorded grammar decision", () => {
   test.each(Object.entries(GRAMMAR_COVERAGE))("%s is %s", (type, expected) => {
     const isDefault = resolveSqlGrammar(type as DatabaseType) === DEFAULT_SQL_GRAMMAR;

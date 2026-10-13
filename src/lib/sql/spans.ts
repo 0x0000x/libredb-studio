@@ -370,8 +370,8 @@ function readAlternateQuoted(sql: string, index: number, tagLength: number): Sql
  * Whether the character before `index` continues a word, i.e. `index` is inside
  * one.
  *
- * Only the alternate-quote tag needs this: it is the one span whose first
- * character is also an identifier character. Oracle's lexer reads a name greedily,
+ * Only the alternate-quote tag and the raw-string prefix need this: they are the
+ * spans that open on an identifier character. Oracle's lexer reads a name greedily,
  * so `freq'x'` there is a name followed by an ordinary string, and without the
  * check the two kinds of reader in this folder would disagree about such text as
  * well - the ones that read whole words step over the name and never ask here,
@@ -482,10 +482,10 @@ function measureDollarTag(sql: string, index: number): number {
  * Omitting it is a real answer, not a missing one: it means "no dialect was
  * named", and the compatibility default applies.
  *
- * Pass the whole statement, not a suffix of it: the alternate-quote branch looks at
- * the character BEFORE `index` to tell a tag from the tail of a name, so a slice
- * that cuts a name in half can answer differently than the same text in place. A
- * PREFIX slice is safe, which is what the callers here take (`sql.slice(0, end)`).
+ * Pass the whole statement, not a suffix of it: the alternate-quote and raw-string
+ * branches look at the character BEFORE `index` to tell an opener from the tail of a name,
+ * so a slice that cuts a name in half can answer differently than the same text in
+ * place. A PREFIX slice is safe, which is what the callers here take (`sql.slice(0, end)`).
  */
 export function readSqlSpan(sql: string, index: number, grammar: SqlGrammar = DEFAULT_SQL_GRAMMAR): SqlSpan | null {
   const ch = sql[index];
@@ -558,6 +558,18 @@ export function readSqlSpan(sql: string, index: number, grammar: SqlGrammar = DE
   if (grammar.alternateQuoting) {
     const tagLength = measureAlternateQuoteTag(sql, index);
     if (tagLength > 0 && !continuesWord(sql, index)) return readAlternateQuoted(sql, index, tagLength);
+  }
+
+  // Spark writes a literal that takes no escapes as `r'C:\'` (also `R` and `"`), and it ends at the first quote of its
+  // own kind. Read as an escaping literal, `r'C:\'` never closes, so a `;` and a write after it would hide inside one
+  // run; the grammar record answers it (`rawStrings`), and only where the `r` starts a token.
+  if (grammar.rawStrings && (ch === "r" || ch === "R") && !continuesWord(sql, index)) {
+    const quote = sql[index + 1];
+    if (quote === "'" || quote === '"') {
+      const close = sql.indexOf(quote, index + 2);
+      if (close === -1) return { kind: "string", end: sql.length, terminated: false };
+      return { kind: "string", end: close + 1, terminated: true };
+    }
   }
 
   const literalBackslash = grammar.backslashAlwaysEscapes ? "escapes" : "ambiguous";

@@ -992,3 +992,53 @@ describe("hasUnterminatedSpan: a dialect where a backslash always escapes", () =
     expect(hasUnterminatedSpan(sql, DEFAULT_SQL_GRAMMAR)).toBe(true);
   });
 });
+
+// `rawStrings` (Spark's row): `r'…'`, `R'…'`, `r"…"` and `R"…"` are string literals that take no escapes and end at
+// the first quote of their own kind, line feeds included, wherever the `r` does not continue a word.
+describe("readSqlSpan: raw strings", () => {
+  const RAW: SqlGrammar = { ...DEFAULT_SQL_GRAMMAR, backslashAlwaysEscapes: true, rawStrings: true };
+  const ESCAPING: SqlGrammar = { ...DEFAULT_SQL_GRAMMAR, backslashAlwaysEscapes: true };
+
+  test.each<[string, string]>([
+    ["r'C:\\' AS a", "string|r'C:\\'"],
+    ["R'a\\nb' x", "string|R'a\\nb'"],
+    ['r"x\\" y', 'string|r"x\\"'],
+    ['R"it\'s" z', 'string|R"it\'s"'],
+  ])("%j opens a raw string that ends at the first quote of its own kind", (sql, expected) => {
+    expect(spanOf(sql, 0, RAW)).toBe(expected);
+  });
+
+  test("a line feed inside a raw string is text, so the literal runs past it", () => {
+    expect(readSqlSpan("r'a\nb' x", 0, RAW)).toEqual({ kind: "string", end: 6, terminated: true });
+  });
+
+  test("a doubled quote is no escape: the first quote closes the literal", () => {
+    expect(spanOf("r'a''b'", 0, RAW)).toBe("string|r'a'");
+  });
+
+  test("a raw string with no closing quote is unterminated", () => {
+    expect(readSqlSpan("r'abc", 0, RAW)).toEqual({ kind: "string", end: 5, terminated: false });
+  });
+
+  test("an `r` that continues a word opens nothing, and the quote after it is an ordinary escaping string", () => {
+    expect(readSqlSpan("abr'x'", 2, RAW)).toBeNull();
+    expect(readSqlSpan("a1r'x'", 2, RAW)).toBeNull();
+    expect(readSqlSpan("a$r'x'", 2, RAW)).toBeNull();
+    expect(spanOf("abr'x\\'y'", 3, RAW)).toBe("string|'x\\'y'");
+  });
+
+  test("an `r` that no quote follows is code", () => {
+    expect(readSqlSpan("rx'a'", 0, RAW)).toBeNull();
+    expect(readSqlSpan("r", 0, RAW)).toBeNull();
+  });
+
+  test("absent: the `r` is code and the quote after it opens an escaping literal that never closes", () => {
+    expect(readSqlSpan("r'C:\\' AS a", 0, ESCAPING)).toBeNull();
+    expect(readSqlSpan("r'C:\\' AS a", 1, ESCAPING)).toMatchObject({ kind: "string", terminated: false });
+  });
+
+  test("hasUnterminatedSpan resolves the text only where the dialect declares the fact", () => {
+    expect(hasUnterminatedSpan("SELECT r'C:\\' AS a", RAW)).toBe(false);
+    expect(hasUnterminatedSpan("SELECT r'C:\\' AS a", ESCAPING)).toBe(true);
+  });
+});
