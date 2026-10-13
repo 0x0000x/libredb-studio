@@ -125,6 +125,8 @@ export const SPARK_ERROR_SENTENCES = Object.freeze({
     `Spark sends this result in Arrow batches of about ${mib} MiB, more than Studio reads for one statement (32 MiB), so no row is shown. Add a smaller LIMIT, or select fewer or narrower columns.`,
   deadline: (timeoutMs: number) =>
     `The statement ran past the connection's query timeout (${timeoutMs} ms); Studio asked Spark to stop it.`,
+  deadlineBeforeSend: (timeoutMs: number) =>
+    `The statement was not sent: the connection's query timeout (${timeoutMs} ms) passed before Studio could send it.`,
   cancelled: "The query was cancelled.",
   sessionChanged: "The Spark server restarted during this request, and the session it held is gone. Run it again.",
   sessionClosed:

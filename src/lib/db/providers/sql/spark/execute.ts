@@ -129,7 +129,7 @@ export class SparkRuns {
       // The setup is the scope's one memoized promise, so it carries no run signal.
       const session = await input.session();
       run.session = session;
-      this.assertMaySend(run, input.deadline);
+      this.assertMaySend(run, input.deadline, SPARK_ERROR_SENTENCES.deadlineBeforeSend);
       release = this.deps.heartbeat.hold(session);
       const call: SparkWireCall = {
         metadata: this.deps.metadata,
@@ -149,7 +149,7 @@ export class SparkRuns {
         interrupt = result.cut !== null;
         return result;
       }
-      this.assertMaySend(run, input.deadline);
+      this.assertMaySend(run, input.deadline, SPARK_ERROR_SENTENCES.deadline);
       phase = "relation";
       const second = this.observed(
         this.deps
@@ -183,17 +183,17 @@ export class SparkRuns {
   }
 
   /**
-   * Stop: false for an unknown or finished run. A run that has sent no ExecutePlan is marked, which is all it needs,
-   * and answers true at once. Any other is sent its Interrupt, and its signal is aborted one turn later without
-   * waiting for the Interrupt's answer, so the Interrupt still leaves ahead of the stream's reset on the shared
-   * connection. Stop then waits for the Interrupt's answer and for the run to settle, within SPARK_CONTROL_DEADLINE_MS
-   * of the Stop, and answers true when the run settled as cancelled by then.
+   * Stop: false for an unknown or finished run. A run whose session is still in setup is marked, which is all it
+   * needs, and answers true at once. A run that has its session but sent no ExecutePlan was already refused before
+   * sending one and is ending, a statement session's release first, so Stop waits for the outcome it settles with.
+   * Any other run is stopped by `stop`, and Stop waits for that and for the run to settle. Either way Stop waits at
+   * most SPARK_CONTROL_DEADLINE_MS from the Stop, and answers true when the run settled as cancelled by then.
    */
   async cancel(queryId: string): Promise<boolean> {
     const run = this.byQuery.get(queryId);
     if (run === undefined) return false;
     run.cancelled = true;
-    if (!run.executing) return true;
+    if (run.session === undefined) return true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<void>((resolve) => {
       timer = setTimeout(resolve, SPARK_CONTROL_DEADLINE_MS);
@@ -202,23 +202,22 @@ export class SparkRuns {
     const settled = run.settled.then((value) => {
       outcome = value;
     });
-    // interrupt() never rejects, so an Interrupt that fails after the abort leaves nothing unhandled.
-    const interrupted = this.interrupt(run);
-    await nextTurn();
-    run.controller.abort();
-    await Promise.race([Promise.all([interrupted, settled]), timeout]);
+    const stopped = run.executing ? this.stop(run) : undefined;
+    await Promise.race([Promise.all([stopped, settled]), timeout]);
     clearTimeout(timer);
     return outcome === "cancelled";
   }
 
-  /** Stop for every run, without waiting for any to settle. */
+  /**
+   * Stop for every run: each is marked, and each that has sent an ExecutePlan is stopped by `stop`, as cancel() stops
+   * it. Answers once every Interrupt answered or failed, without waiting for any run to settle.
+   */
   async cancelAll(): Promise<void> {
     await Promise.all(
       [...this.active].map(async (run) => {
         run.cancelled = true;
         if (!run.executing) return;
-        await this.interrupt(run);
-        run.controller.abort();
+        await this.stop(run);
       }),
     );
   }
@@ -265,6 +264,19 @@ export class SparkRuns {
   }
 
   /**
+   * Hands the run's Interrupt to the channel and aborts its signal one turn later without waiting for the Interrupt's
+   * answer, so the Interrupt still leaves ahead of the stream's reset on the shared connection; answers once the
+   * Interrupt answered or failed. interrupt() never rejects, so an Interrupt that fails after the abort leaves nothing
+   * unhandled.
+   */
+  private async stop(run: Run): Promise<void> {
+    const interrupted = this.interrupt(run);
+    await nextTurn();
+    run.controller.abort();
+    await interrupted;
+  }
+
+  /**
    * At most one Interrupt per run; one that fails changes nothing, since the run's own outcome stands, and the returned
    * promise never rejects.
    */
@@ -279,14 +291,13 @@ export class SparkRuns {
   }
 
   /**
-   * Before each ExecutePlan: a run marked cancelled ends cancelled, and one whose deadline has passed ends at it,
-   * either way without sending it.
+   * Before each ExecutePlan: a run marked cancelled ends cancelled, and one whose deadline has passed ends at it with
+   * `sentence`, either way without sending it. Before the first step nothing has reached Spark, so its sentence says
+   * the statement was not sent; between the steps the run's Interrupt follows, as the deadline sentence says.
    */
-  private assertMaySend(run: Run, deadline: Date): void {
+  private assertMaySend(run: Run, deadline: Date, sentence: (timeoutMs: number) => string): void {
     if (run.cancelled) throw cancelledError();
-    if (Date.now() >= deadline.getTime()) {
-      throw new SparkError("deadline", SPARK_ERROR_SENTENCES.deadline(this.deps.timeoutMs));
-    }
+    if (Date.now() >= deadline.getTime()) throw new SparkError("deadline", sentence(this.deps.timeoutMs));
   }
 
   /**

@@ -2,24 +2,27 @@
  * One run over the fake Spark Connect server: the two steps, each carrying the run's deadline, its one signal, the
  * connection's metadata and the 32 MiB stream bound, with every response's server-side id observed on the run's
  * session; the inline answer, an empty one included, and every column under a unique name as an own property; the
- * deadline as a QueryError after an Interrupt that reaches the fake after the deadline passed, and a deadline already
- * passed before a step sending that step nothing; Stop before and after the first ExecutePlan, which aborts the run's
- * stream without waiting for the Interrupt's answer while the Interrupt still leaves first on the shared connection
- * under Node; a Spark error with one FetchErrorDetails before the statement session's release, and a fetch that fails
- * leaving the ErrorInfo message as it is; every exit before Spark ended the stream, each refusal of a result and a
- * server-side id that changed on an open stream among them, sending one Interrupt by the run's tag, none when Spark
- * ended it (a Spark error, a closed or changed session, a session released under the run), and an Interrupt that fails
- * changing nothing; the heartbeat; no reattach option; a SET that changes only its own scope; and concurrent scopes
- * that share no session, heartbeat hold, tag or Interrupt.
+ * deadline as a QueryError after an Interrupt that reaches the fake after the deadline passed, one that passes while
+ * the session is in setup ending the run as not sent, and one that passes between the steps sending the second step
+ * nothing; Stop before and after the first ExecutePlan, which aborts the run's stream without waiting for the
+ * Interrupt's answer while the Interrupt still leaves first on the shared connection under Node, and answers within
+ * one control window of the Stop; Stop on a run already refused at its deadline, which answers from that outcome;
+ * cancelAll, which stops every run as Stop does; a Spark error with one FetchErrorDetails before the statement
+ * session's release, and a fetch that fails leaving the ErrorInfo message as it is; every exit before Spark ended
+ * the stream, each refusal of a result and a server-side id that changed on an open stream among them, sending one
+ * Interrupt by the run's tag, none when Spark ended it (a Spark error, a closed or changed session, a session
+ * released under the run), and an Interrupt that fails changing nothing; the heartbeat; no reattach option; a SET
+ * that changes only its own scope; and concurrent scopes that share no session, heartbeat hold, tag or Interrupt.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, jest, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { QueryError } from "@/lib/db/errors";
 import { buildSparkConnectionOptions } from "@/lib/db/providers/sql/spark/connection-options";
-import { SPARK_SESSION_CONF } from "@/lib/db/providers/sql/spark/constants";
-import { SPARK_ERROR_SENTENCES, SparkError } from "@/lib/db/providers/sql/spark/errors";
+import { SPARK_CONTROL_DEADLINE_MS, SPARK_SESSION_CONF } from "@/lib/db/providers/sql/spark/constants";
+import { SPARK_ERROR_SENTENCES, SparkError, toDatabaseError } from "@/lib/db/providers/sql/spark/errors";
 import { SparkRuns } from "@/lib/db/providers/sql/spark/execute";
 import { grpcWireTransport, type SparkWireCall, type SparkWireChannel } from "@/lib/db/providers/sql/spark/grpc-client";
 import { SparkHeartbeat } from "@/lib/db/providers/sql/spark/heartbeat";
@@ -136,6 +139,11 @@ async function waitFor(condition: () => boolean): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
+/** One turn of the event loop, by which every settled promise has run its handlers; Bun's fake timers leave it real. */
+const turn = () =>
+  new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
 
 /** The fake's channel, except that each RPC of `refused` fails before it is sent; `asked` records each refused call. */
 function refusing(refused: readonly string[]): { readonly wire: SparkWireChannel; readonly asked: string[] } {
@@ -176,20 +184,24 @@ function schemaless(): SparkWireChannel {
   };
 }
 
-/** The fake's channel, with each FetchErrorDetails held until the test opens it; `fetching` settles once one waits. */
-function heldFetch(): { readonly wire: SparkWireChannel; readonly fetching: Promise<void>; readonly open: () => void } {
+/** The fake's channel, with each unary `held` call waiting until the test opens it; `waiting` settles once one does. */
+function heldUnary(held: string): {
+  readonly wire: SparkWireChannel;
+  readonly waiting: Promise<void>;
+  readonly open: () => void;
+} {
   let open: () => void = () => undefined;
   const gate = new Promise<void>((resolve) => {
     open = resolve;
   });
-  let waiting: () => void = () => undefined;
-  const fetching = new Promise<void>((resolve) => {
-    waiting = resolve;
+  let reached: () => void = () => undefined;
+  const waiting = new Promise<void>((resolve) => {
+    reached = resolve;
   });
   const wire: SparkWireChannel = {
     unary: async (rpc, request, call) => {
-      if (rpc === "FetchErrorDetails") {
-        waiting();
+      if (rpc === held) {
+        reached();
         await gate;
       }
       return channel.unary(rpc, request, call);
@@ -197,7 +209,7 @@ function heldFetch(): { readonly wire: SparkWireChannel; readonly fetching: Prom
     executePlan: (request, call, limits) => channel.executePlan(request, call, limits),
     close: () => undefined,
   };
-  return { wire, fetching, open };
+  return { wire, waiting, open };
 }
 
 /** The fake's channel, recording the call and the limits each ExecutePlan is opened with. */
@@ -431,8 +443,9 @@ function world(wire: SparkWireChannel = channel, metadata: Readonly<Record<strin
     runSetup: async () => {
       throw new Error("these tests set no catalog and no namespace");
     },
+    // Through the run's channel, so a test can hold the release of a statement session.
     release: async (session) => {
-      await channel.unary("ReleaseSession", releaseSessionRequest(session), control());
+      await wire.unary("ReleaseSession", releaseSessionRequest(session), control());
     },
   };
   const sessions = new SparkSessions(deps, {});
@@ -590,13 +603,28 @@ describe("the deadline and Stop", () => {
     await sessions.releaseAll();
   });
 
-  test("a deadline already passed when the session is ready sends no ExecutePlan and no Interrupt", async () => {
+  test("a deadline that passes while the session is still in setup ends the run as not sent: no ExecutePlan and no Interrupt", async () => {
     const { sessions, runs } = world();
-    const error = await failure(
-      runs.run({ sql: "CREATE TABLE x", session: () => sessions.forScope("dp"), deadline: new Date(Date.now() - 1) }),
-    );
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const deadline = soon(50);
+    const running = runs.run({
+      sql: "CREATE TABLE x",
+      session: async () => {
+        await gate;
+        return sessions.forScope("dp");
+      },
+      deadline,
+    });
+    // The setup outlives the deadline, so only a check made once the session is ready can refuse the statement.
+    await waitFor(() => Date.now() >= deadline.getTime());
+    open();
+    const error = await failure(running);
     expect(error.category).toBe("deadline");
-    expect(error.message).toBe(SPARK_ERROR_SENTENCES.deadline(5_000));
+    expect(error.message).toBe(SPARK_ERROR_SENTENCES.deadlineBeforeSend(5_000));
+    expect(toDatabaseError(error)).toBeInstanceOf(QueryError);
     expect(plans()).toHaveLength(0);
     expect(interrupts()).toHaveLength(0);
     expect(runs.runsInFlight()).toBe(0);
@@ -670,6 +698,39 @@ describe("the deadline and Stop", () => {
     await sessions.releaseAll();
   });
 
+  test("with its Interrupt unanswered, Stop answers SPARK_CONTROL_DEADLINE_MS after the Stop, not after the abort or the run's end", async () => {
+    const held = heldInterrupt();
+    const { sessions, runs } = world(held.wire);
+    const running = settle(
+      runs.run({ sql: "SLOW", queryId: "qw", session: () => sessions.forScope("w"), deadline: soon() }),
+    );
+    await waitFor(() => plans().length === 2);
+    let answered: boolean | undefined;
+    // Bun's fake timers hold setTimeout and Date.now, not setImmediate, so the run's one turn to the abort stays real.
+    jest.useFakeTimers();
+    try {
+      const stopping = runs.cancel("qw").then((value) => {
+        answered = value;
+      });
+      // Four seconds pass before the abort, so a window counted from the abort or the run's end would close later.
+      jest.advanceTimersByTime(4_000);
+      expect((await running).error?.category).toBe("cancelled");
+      jest.advanceTimersByTime(SPARK_CONTROL_DEADLINE_MS - 4_000 - 1);
+      await turn();
+      expect(answered).toBeUndefined();
+      jest.advanceTimersByTime(1);
+      await turn();
+      expect(answered).toBe(true);
+      await stopping;
+    } finally {
+      jest.useRealTimers();
+    }
+    held.letGo("send");
+    await waitFor(() => interrupts().length === 1);
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    await sessions.releaseAll();
+  });
+
   test("an Interrupt that fails after the abort changes nothing: Stop answers true and no rejection goes unhandled", async () => {
     const unhandled: unknown[] = [];
     const record = (reason: unknown) => {
@@ -739,6 +800,72 @@ describe("the deadline and Stop", () => {
     await sessions.releaseAll();
   });
 
+  test("Stop while a run refused at its deadline releases its statement session waits for the run's end and answers false", async () => {
+    const release = heldUnary("ReleaseSession");
+    const { sessions, runs } = world(release.wire);
+    const running = settle(
+      runs.run({
+        sql: "CREATE TABLE x",
+        queryId: "qr",
+        session: () => sessions.forScope(undefined),
+        deadline: new Date(Date.now() - 1),
+      }),
+    );
+    await release.waiting;
+    let answered: boolean | undefined;
+    const stopping = runs.cancel("qr").then((value) => {
+      answered = value;
+      return value;
+    });
+    // The run's outcome is not settled while its release is held, so Stop has nothing to answer from yet.
+    await turn();
+    expect(answered).toBeUndefined();
+    release.open();
+    expect(await stopping).toBe(false);
+    const error = (await running).error;
+    expect(error?.category).toBe("deadline");
+    expect(error?.message).toBe(SPARK_ERROR_SENTENCES.deadlineBeforeSend(5_000));
+    expect(plans()).toHaveLength(0);
+    expect(interrupts()).toHaveLength(0);
+    expect(fake.log.entries.filter((entry) => entry.rpc === "ReleaseSession")).toHaveLength(1);
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
+  test("Stop on a run refused at its deadline whose release never answers answers false SPARK_CONTROL_DEADLINE_MS after the Stop", async () => {
+    const release = heldUnary("ReleaseSession");
+    const { sessions, runs } = world(release.wire);
+    const running = settle(
+      runs.run({
+        sql: "CREATE TABLE x",
+        queryId: "qt",
+        session: () => sessions.forScope(undefined),
+        deadline: new Date(Date.now() - 1),
+      }),
+    );
+    await release.waiting;
+    let answered: boolean | undefined;
+    jest.useFakeTimers();
+    try {
+      const stopping = runs.cancel("qt").then((value) => {
+        answered = value;
+      });
+      jest.advanceTimersByTime(SPARK_CONTROL_DEADLINE_MS - 1);
+      await turn();
+      expect(answered).toBeUndefined();
+      jest.advanceTimersByTime(1);
+      await turn();
+      expect(answered).toBe(false);
+      await stopping;
+    } finally {
+      jest.useRealTimers();
+    }
+    release.open();
+    expect((await running).error?.category).toBe("deadline");
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
   test("cancelAll stops every run, and runsInFlight counts them", async () => {
     const { sessions, runs } = world();
     const one = settle(runs.run({ sql: "SLOW", session: () => sessions.forScope("x1"), deadline: soon() }));
@@ -754,6 +881,53 @@ describe("the deadline and Stop", () => {
     expect(runs.runsInFlight()).toBe(0);
     await sessions.releaseAll();
   });
+
+  test.each(["send", "fail"] as const)(
+    "cancelAll aborts each run one turn after its Interrupt without waiting for the answers, then awaits them (%s)",
+    async (how) => {
+      const unhandled: unknown[] = [];
+      const record = (reason: unknown) => {
+        unhandled.push(reason);
+      };
+      process.on("unhandledRejection", record);
+      try {
+        const held = heldInterrupt();
+        const { sessions, runs } = world(held.wire);
+        let ended = 0;
+        const end = () => {
+          ended += 1;
+        };
+        const one = settle(runs.run({ sql: "SLOW", session: () => sessions.forScope("y1"), deadline: soon() })).finally(
+          end,
+        );
+        const two = settle(
+          runs.run({ sql: "SLOW", queryId: "y2", session: () => sessions.forScope("y2"), deadline: soon() }),
+        ).finally(end);
+        await waitFor(() => plans().length === 4);
+        let stopped = false;
+        const stopping = runs.cancelAll().then(() => {
+          stopped = true;
+        });
+        // Both runs end while their Interrupts are held: no abort waited for an Interrupt's answer.
+        await waitFor(() => ended === 2);
+        expect((await one).error?.category).toBe("cancelled");
+        expect((await two).error?.category).toBe("cancelled");
+        expect(held.order).toStrictEqual(["Interrupt", "Interrupt", "abort", "abort"]);
+        expect(stopped).toBe(false);
+        held.letGo(how);
+        await stopping;
+        const tags = [...new Set(plans().map((entry) => entry.tags[0]))].sort();
+        expect(interrupts().map(tagOf).sort()).toStrictEqual(how === "send" ? tags : []);
+        // A rejection that no handler took is reported once the turn that raised it is over.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(unhandled).toStrictEqual([]);
+        expect(runs.runsInFlight()).toBe(0);
+        await sessions.releaseAll();
+      } finally {
+        process.off("unhandledRejection", record);
+      }
+    },
+  );
 });
 
 describe("Stop in a Node child, the production runtime", () => {
@@ -807,7 +981,7 @@ describe("errors", () => {
   });
 
   test("a Stop that comes while a Spark error is decoded leaves that error, and answers false", async () => {
-    const { wire, fetching, open } = heldFetch();
+    const { wire, waiting: fetching, open } = heldUnary("FetchErrorDetails");
     const { sessions, runs } = world(wire);
     const running = settle(
       runs.run({ sql: "BAD", queryId: "qe", session: () => sessions.forScope("e1"), deadline: soon() }),

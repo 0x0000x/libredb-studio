@@ -958,6 +958,11 @@ describe("every sentence in the spec's words (3.3, 4.5, 4.7, 4.10, 5.2, 5.4, 5.5
       S.deadline(60_000),
       "The statement ran past the connection's query timeout (60000 ms); Studio asked Spark to stop it.",
     ],
+    [
+      "deadlineBeforeSend",
+      S.deadlineBeforeSend(60_000),
+      "The statement was not sent: the connection's query timeout (60000 ms) passed before Studio could send it.",
+    ],
     ["cancelled", S.cancelled, "The query was cancelled."],
     [
       "sessionChanged",
