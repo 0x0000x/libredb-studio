@@ -641,10 +641,18 @@ describe("dollarTags and doubleQuoteBackslashEscapes", () => {
     expect(DEFAULT_SQL_GRAMMAR.doubleQuoteBackslashEscapes).toBeUndefined();
   });
 
-  test.each(Object.keys(GRAMMAR_COVERAGE) as DatabaseType[])("%s declares neither", (type) => {
-    expect(resolveSqlGrammar(type).dollarTags).toBeUndefined();
-    expect(resolveSqlGrammar(type).doubleQuoteBackslashEscapes).toBeUndefined();
+  test("snowflake declares both false", () => {
+    expect(resolveSqlGrammar("snowflake").dollarTags).toBe(false);
+    expect(resolveSqlGrammar("snowflake").doubleQuoteBackslashEscapes).toBe(false);
   });
+
+  test.each((Object.keys(GRAMMAR_COVERAGE) as DatabaseType[]).filter((type) => type !== "snowflake"))(
+    "%s declares neither",
+    (type) => {
+      expect(resolveSqlGrammar(type).dollarTags).toBeUndefined();
+      expect(resolveSqlGrammar(type).doubleQuoteBackslashEscapes).toBeUndefined();
+    },
+  );
 });
 
 describe("every database type has a recorded grammar decision", () => {

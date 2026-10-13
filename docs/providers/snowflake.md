@@ -277,6 +277,8 @@ $$;
 The confirmation gate asks before such a block runs ([section 9](#9-the-confirmation-gate)).
 A bare block, as Snowsight runs it, fails at its first fragment with Snowflake's own syntax error, and Studio adds `A Snowflake Scripting block runs through the SQL API only inside EXECUTE IMMEDIATE $$ ... $$.`
 The editor splits a script with Snowflake's grammar, `//` comments included, and sends each statement as its own request with a statement count of 1.
+In that grammar `$` is a name character and only `$$` opens a string, as Snowflake's reference gives it, so a `$t$` run is code and `a$b$c` is one name, as the trial capture measured.
+A backslash inside `"..."` is part of the name, so `"a\b"` names the column `a\b`.
 
 ## 5. What runs on a warehouse
 
@@ -486,10 +488,10 @@ The gate is a browser confirmation, not a boundary: it asks before a statement r
 On top of the shared destructive keywords it asks for these Snowflake forms, at the top level and inside a block.
 Forms that replace, overwrite, unload or delete: `CREATE OR REPLACE`, `CREATE OR ALTER` (which drops the columns its new definition leaves out), `INSERT OVERWRITE`, `MERGE`, `COPY`, `REMOVE` and `RM`.
 Forms that run text or work the gate cannot read: `EXECUTE IMMEDIATE`, `EXECUTE TASK`, `EXECUTE ALERT`, `EXECUTE NOTEBOOK`, `EXECUTE JOB SERVICE`, `EXECUTE DBT PROJECT` and `CALL`.
-Forms that spend credits on their own, once or on a schedule: `CREATE WAREHOUSE`, `CREATE TASK`, `CREATE ALERT`, `CREATE COMPUTE POOL`, `CREATE SERVICE`, `CREATE DYNAMIC TABLE`, `CREATE TRANSIENT DYNAMIC TABLE`, `CREATE MATERIALIZED VIEW`, `CREATE SECURE MATERIALIZED VIEW` and `CREATE PIPE`.
-Forms that change who gets in or what leaves the account: `CREATE USER`, `CREATE ROLE`, `CREATE NETWORK POLICY`, `CREATE NETWORK RULE`, `CREATE EXTERNAL ACCESS INTEGRATION`, `CREATE API INTEGRATION` and `CREATE REPLICATION GROUP`.
+Forms that spend credits on their own, once or on a schedule: `CREATE WAREHOUSE`, `CREATE TASK`, `CREATE ALERT`, `CREATE COMPUTE POOL`, `CREATE SERVICE`, `CREATE DYNAMIC TABLE`, `CREATE TRANSIENT DYNAMIC TABLE`, `CREATE MATERIALIZED VIEW`, `CREATE SECURE MATERIALIZED VIEW`, `CREATE PIPE`, `CREATE DYNAMIC ICEBERG TABLE` and `CREATE CORTEX SEARCH SERVICE`.
+Forms that change who gets in or what leaves the account: `CREATE USER`, `CREATE ROLE`, `CREATE NETWORK POLICY`, `CREATE NETWORK RULE`, `CREATE EXTERNAL ACCESS INTEGRATION`, `CREATE API INTEGRATION`, `CREATE REPLICATION GROUP` and `CREATE FAILOVER GROUP`.
 It also asks wherever `AS PROCEDURE` (an anonymous procedure) or an identifier starting `SYSTEM$` appears in a statement's code, a quoted `"SYSTEM$..."` name included when it is called as a function.
-Still unconfirmed: every Snowflake form not named above, among them `CREATE STORAGE INTEGRATION`, `CREATE FAILOVER GROUP` and `CREATE SHARE`; a statement whose effect hides behind an `IDENTIFIER()` target; and whatever a procedure created earlier does when a statement that does not name it reaches it.
+Still unconfirmed: every Snowflake form not named above, among them `CREATE STORAGE INTEGRATION` and `CREATE SHARE`; a statement whose effect hides behind an `IDENTIFIER()` target; and whatever a procedure created earlier does when a statement that does not name it reaches it.
 
 ## 10. Security
 
