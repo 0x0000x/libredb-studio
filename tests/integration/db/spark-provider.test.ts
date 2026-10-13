@@ -368,6 +368,13 @@ describe("replay on 4.2.0 only", () => {
     ]);
     await provider.endOpenQueryTransaction("scope-script");
     expect(transport.served.slice(before + 4)).toStrictEqual(["release-session"]);
+    // The match masks session ids, so the ids the provider chose are read from `sessions`: the setup, both statements'
+    // steps and the release carry the scope's one id, and the metadata session the connect set up carries another.
+    const scope = transport.sessions[before];
+    const metadata = transport.sessions[transport.served.indexOf("connect-current-namespace")];
+    expect(transport.sessions.slice(before)).toStrictEqual([scope, scope, scope, scope, scope]);
+    expect([scope, metadata]).toStrictEqual([expect.stringMatching(UUID), expect.stringMatching(UUID)]);
+    expect(scope).not.toBe(metadata);
     await provider.disconnect();
   });
 
@@ -603,6 +610,8 @@ describe("replay on 4.2.0 only", () => {
   });
 });
 
+/** A session id as the provider chooses it: a random UUID. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 /** What the studio namespace holds (SPARK_SAMPLE_STATEMENTS): two tables, one view over one of them, one function. */
 const STUDIO_KINDS = { table: 2, view: 1, function: 1 };
 const STUDIO_COUNTS = { table: { count: 2 }, view: { count: 1 }, function: { count: 1 } };

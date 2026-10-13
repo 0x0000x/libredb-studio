@@ -8,7 +8,8 @@
  * The answer gets the request's own ids written into its echo fields, and one server-side session id per session, the
  * one BUILT step every case shares. A request no capture matches fails the call, naming the RPC and the request, and is
  * kept in `missed`: the provider swallows some failed calls, so the replay holds that list empty at the end of every
- * case. `served` lists the captures that answered, in order.
+ * case. `served` lists the captures that answered, in order, and `sessions` the session id each of those requests
+ * carried, which the match masks.
  */
 import {
   sparkDefinition,
@@ -128,6 +129,11 @@ export interface RecordedSparkTransport extends SparkWireTransport {
   /** The captures that answered, in order. */
   readonly served: readonly SparkCaptureName[];
   /**
+   * The session id each request `served` lists carried, in the same order, as the provider chose it. The match masks
+   * it, so this list is how a case tells which of the provider's sessions sent a request.
+   */
+  readonly sessions: readonly unknown[];
+  /**
    * Every request no capture answered, as its RPC and its masked request, in order. A provider that swallows a failed
    * call, as it does a failed Interrupt or FetchErrorDetails, leaves the case green, so a case reads this list too.
    */
@@ -148,6 +154,7 @@ export function recordedSparkTransport(
     return { name, capture, rpc, key: keyOf(rpc, withBuffers(capture.$captured.request) as object) };
   });
   const served: SparkCaptureName[] = [];
+  const sessions: unknown[] = [];
   const missed: string[] = [];
   const spent = new Set<(typeof captures)[number]>();
   // Each capture comes from its own run, so each holds another server-side id; one server keeps one id per session
@@ -169,6 +176,7 @@ export function recordedSparkTransport(
     }
     if (options.once?.includes(found.name)) spent.add(found);
     served.push(found.name);
+    sessions.push((request as Record<string, unknown>).session_id);
     return found.capture;
   };
   const transport: SparkWireTransport = () => {
@@ -212,5 +220,5 @@ export function recordedSparkTransport(
     };
     return channel;
   };
-  return Object.assign(transport, { served, missed });
+  return Object.assign(transport, { served, sessions, missed });
 }
