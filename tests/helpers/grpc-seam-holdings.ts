@@ -64,6 +64,7 @@ export const GRPC_SEAM_HOLDINGS: Readonly<Record<string, GrpcSeamHolding>> = {
       /^src\/lib\/db\/providers\/sql\/spark\//,
       /^scripts\/generate-spark-descriptor\.mjs$/,
       /^tests\/unit\/db\/spark\//,
+      /^tests\/helpers\/spark-/,
     ],
     transportImporters: [],
     providerDirectory: "src/lib/db/providers/sql/spark",
