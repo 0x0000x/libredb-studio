@@ -1,12 +1,12 @@
 /**
  * Every failure of the Apache Spark provider: its category, its sentence, and the mapping onto the repository's error
- * classes at the provider boundary (spec 4.10, 3.3; the Snowflake pattern of toDatabaseError).
+ * classes at the provider boundary (the Snowflake pattern of toDatabaseError).
  *
  * Every server text passes `serverText` with the connection's secret forms before it reaches a sentence, so the token
- * is never echoed (spec 6.2), and a text is cut only after that pass, so no cut leaves part of a token behind, and by
- * code points, so no cut leaves half of a surrogate pair. A value that is not a gRPC status is never quoted at all: a
- * local error of the client can repeat a header value. The ErrorInfo of a Spark error is read by status-details.ts, a
- * bounded decoder. Pure: no I/O, no logger.
+ * is never echoed, and a text is cut only after that pass, so no cut leaves part of a token behind, and by code points,
+ * so no cut leaves half of a surrogate pair. A value that is not a gRPC status is never quoted at all: a local error of
+ * the client can repeat a header value. The ErrorInfo of a Spark error is read by status-details.ts, a bounded decoder.
+ * Pure: no I/O, no logger.
  */
 import {
   AuthenticationError,
@@ -58,7 +58,7 @@ export interface SparkErrorConnection {
   readonly secretForms: readonly string[];
 }
 
-/** What a FetchErrorDetails answer adds to a Spark error (spec 4.10 step 2). */
+/** What a FetchErrorDetails answer adds to a Spark error. */
 export interface SparkErrorDetails {
   readonly errorClass?: string;
   readonly cause?: string;
@@ -72,7 +72,7 @@ export interface SparkErrorContext {
   readonly details?: SparkErrorDetails;
 }
 
-/** Every sentence a user reads from the Spark provider, in the words of spec 3.3, 4.5, 4.7, 4.10, 5.2, 5.4 and 5.5. */
+/** The sentences of the provider's failures and connect warnings; docs/providers/spark.md quotes each word for word. */
 export const SPARK_ERROR_SENTENCES = Object.freeze({
   notConnected: (host: string, port: number) =>
     `No Spark Connect server answered at ${host}:${port}. Start it with sbin/start-connect-server.sh, or check Host and Port (15002 by default).`,
@@ -264,8 +264,8 @@ function sparkMessage(status: GrpcStatusLike, info: SparkErrorInfo | undefined, 
 }
 
 /**
- * The category and sentence of any failure the provider meets (spec 4.10). A `SparkError` is returned unchanged. The
- * one throw is a caller's defect: a statement's deadline without `context.timeoutMs`, whose sentence names it.
+ * The category and sentence of any failure the provider meets. A `SparkError` is returned unchanged. The one throw is a
+ * caller's defect: a statement's deadline without `context.timeoutMs`, whose sentence names it.
  */
 export function toSparkError(error: unknown, context: SparkErrorContext): SparkError {
   if (error instanceof SparkError) return error;
@@ -351,9 +351,9 @@ export function toSparkError(error: unknown, context: SparkErrorContext): SparkE
       return inStatementOr(streamFailed);
   }
   const info = errorInfoOf(error);
-  // A proxy's answer carries no ErrorInfo; tested before the spark row, which also claims INTERNAL (D03-C34, C35).
+  // A proxy's answer carries no ErrorInfo; tested before the spark row, which also claims INTERNAL.
   if (info === undefined && PROXY_ANSWER.test(details)) return inStatementOr(streamFailed);
-  // Spark's own bound on a command answer: one Arrow batch (D03-C38).
+  // Spark's own bound on a command answer: one Arrow batch (captured as command-over-batch-bound).
   if (
     context.phase === "command" &&
     info?.reason === "java.lang.AssertionError" &&
@@ -384,8 +384,8 @@ interface FetchedError {
 
 /**
  * The FetchErrorDetails answer's root class and innermost cause, trimmed, at most `SPARK_ERROR_CAUSES_MAX` causes
- * walked (spec 4.10 step 2); never a stack frame. The cause is kept whole: `toSparkError` cuts it to
- * `SPARK_ERROR_CAUSE_MAX_CHARS` after `serverText` has read all of it.
+ * walked; never a stack frame. The cause is kept whole: `toSparkError` cuts it to `SPARK_ERROR_CAUSE_MAX_CHARS` after
+ * `serverText` has read all of it.
  */
 export function errorDetailsFromResponse(response: object): SparkErrorDetails {
   const { root_error_idx: rootIndex, errors } = response as {
@@ -427,7 +427,7 @@ export function sparkVersionText(raw: string, secretForms: readonly string[]): s
   return text === trimmed ? firstCodePoints(text, SPARK_VERSION_TEXT_MAX_CHARS) : text;
 }
 
-/** The repository's error class for a failure, at the provider boundary (spec 4.10, the Class column). */
+/** The repository's error class for a failure, at the provider boundary. */
 export function toDatabaseError(error: unknown, sql?: string): Error {
   if (!(error instanceof SparkError))
     return error instanceof Error ? error : new QueryError(String(error), "spark", sql);

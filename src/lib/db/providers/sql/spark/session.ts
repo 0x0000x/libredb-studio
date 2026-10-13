@@ -1,7 +1,7 @@
 /**
- * The session registry of D4 (spec 4.5): one Spark session per request scope, a statement session for a call with no
- * scope, and the provider's metadata session, which never receives user text. No two requests share a session, so no
- * Studio user sees another's SET, USE or temp view (spec 6.9).
+ * The session registry: one Spark session per request scope, a statement session for a call with no scope, and the
+ * provider's metadata session, which never receives user text. No two requests share a session, so no Studio user sees
+ * another's SET, USE or temp view.
  *
  * Every new session is set up once, as a memoized promise: Config set of SPARK_SESSION_CONF (and, on the metadata
  * session, SPARK_METADATA_SESSION_CONF in the same call), SET CATALOG as a string literal, USE NAMESPACE with every part
@@ -26,7 +26,7 @@ export interface SparkSessionHandle extends SparkSessionRef {
 /**
  * Built by index.ts over the channel. The registry holds no error context and maps no failure: a setup failure reaches
  * the statement or the read that needed the session unchanged. So `configSet` and `runSetup` reject only with a
- * SparkError, mapped by toSparkError with the phase control (spec 4.10).
+ * SparkError, mapped by toSparkError with the phase control.
  */
 export interface SparkSessionDeps {
   /** Config set on `session`; answers the server_side_session_id of the answer. */
@@ -37,7 +37,7 @@ export interface SparkSessionDeps {
   release(session: SparkSessionRef): Promise<void>;
 }
 
-/** The connection's Catalog and Namespace, which every new session is set to (spec 4.5 steps 2 and 3). */
+/** The connection's Catalog and Namespace, which every new session is set to after its Config set. */
 export interface SparkSessionPlace {
   readonly catalog?: string;
   readonly namespace?: readonly string[];
@@ -243,7 +243,7 @@ export class SparkSessions {
     try {
       await this.deps.release(handle);
     } catch {
-      // The statement's result is already decided, and Spark drops the session after its idle timeout (spec 4.5).
+      // The statement's result is already decided, and Spark drops the session after its idle timeout.
     }
   }
 }

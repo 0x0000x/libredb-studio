@@ -902,7 +902,7 @@ export class SparkProvider extends SQLBaseProvider {
     return [];
   }
 
-  /** Spark has no indexes. */
+  /** No Spark SQL statement lists indexes. */
   public async getIndexStats(): Promise<IndexStats[]> {
     this.ensureConnected();
     return [];
