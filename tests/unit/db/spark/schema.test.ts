@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { readdirSync } from "node:fs";
 import { captureBytes, readSparkCapture, type SparkCaptureVersion } from "../../../helpers/spark-captures";
 import { columnsStream, type SparkIpcColumn } from "../../../helpers/spark-ipc";
+import type { SparkCaptureName } from "../../../live/spark-evidence-plan";
 import { type ArrowColumnData, readIpcColumns } from "@/lib/db/providers/sql/spark/arrow";
 import { SPARK_ERROR_SENTENCES, SparkError } from "@/lib/db/providers/sql/spark/errors";
 import {
@@ -208,6 +210,8 @@ describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
       t("char"),
       t("var_char"),
       t("struct"),
+      t("geometry"),
+      t("geography"),
     ];
     expect(left.map((dataType) => one(dataType).spelling)).toStrictEqual([
       "decimal(10,0)",
@@ -225,6 +229,8 @@ describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
       "char(0)",
       "varchar(0)",
       "struct<>",
+      "geometry(0)",
+      "geography(0)",
     ]);
     expect(one(t("struct")).kind).toStrictEqual({ type: "struct", fields: [] });
     expect(one(t("decimal", { scale: 3 })).kind).toStrictEqual({ type: "decimal", precision: 10, scale: 0 });
@@ -232,6 +238,11 @@ describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
       type: "day-time-interval",
       fields: { start: "MINUTE", end: "MINUTE" },
     });
+    expect(one(t("geometry")).kind).toStrictEqual({ type: "geometry", srid: 0 });
+    // A field the proto gives no name reads with the empty name, as proto3 reads an unset string.
+    expect(columnsFromDataType(t("struct", { fields: [{ data_type: t("integer") }] }))).toStrictEqual([
+      { name: "", spelling: "int", kind: { type: "int" } },
+    ]);
   });
 
   test("a type with no parameters is one frozen node, so no caller can change it for a later result", () => {
@@ -257,13 +268,15 @@ describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
     ]);
   });
 
-  test("a decimal outside precision 1 to 38, scale -38 to the precision, is refused as unreadable", () => {
+  test("a decimal outside precision 1 to 38, scale -38 to the precision, or of a fractional precision or scale, is refused as unreadable", () => {
     const decimal = (precision: number, scale: number) => struct([["d", t("decimal", { precision, scale })]]);
     for (const [precision, scale] of [
       [0, 0],
       [39, 0],
       [38, 39],
       [10, -39],
+      [10.5, 2],
+      [10, 2.5],
     ] as const) {
       expect(refusalOf(() => columnsFromDataType(decimal(precision, scale)))).toStrictEqual(
         unreadable(`a result column of the Spark type decimal(${precision},${scale})`),
@@ -278,7 +291,7 @@ describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
     }
   });
 
-  test("an interval field index outside its unit list or a start after the end is refused once, at schema time", () => {
+  test("an interval field index outside its unit list, fractional, or a start after the end is refused once, at schema time", () => {
     const interval = (kind: string, start_field: number, end_field: number) =>
       struct([["i", t(kind, { start_field, end_field })]]);
     for (const [kind, start, end] of [
@@ -287,6 +300,8 @@ describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
       ["day_time_interval", -1, 3],
       ["year_month_interval", 1, 0],
       ["year_month_interval", 0, 2],
+      ["day_time_interval", 1.5, 3],
+      ["year_month_interval", 0, 0.5],
     ] as const) {
       expect(refusalOf(() => columnsFromDataType(interval(kind, start, end)))).toStrictEqual(
         unreadable(`an interval column whose fields run from ${start} to ${end}`),
@@ -316,6 +331,11 @@ describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
       unreadable("a result schema nested deeper than 64 levels"),
     );
     expect(refusalOf(() => columnsFromDataType(wide(10_001)))).toStrictEqual(
+      unreadable("a result schema with more than 10,000 fields"),
+    );
+    // A struct this wide is refused before any of its fields is read, so a first field of an unknown type is not what
+    // refuses it.
+    expect(refusalOf(() => columnsFromDataType(wide(10_001, () => t("unparsed"))))).toStrictEqual(
       unreadable("a result schema with more than 10,000 fields"),
     );
     // Every type node counts, nested ones included: 5,000 arrays of int are 10,000 fields.
@@ -661,13 +681,145 @@ describe("the two schemas of the relation path", () => {
     expect(() =>
       assertSchemasAgree(
         a,
-        columnsFromDataType(
-          struct([
-            ["x", t("string")],
-            ["y", t("string")],
-          ]),
-        ),
+        fromStream([
+          { name: "x", kind: "int32", values: [1] },
+          { name: "y", kind: "int64", values: [BigInt(1)] },
+        ]),
       ),
     ).not.toThrow();
+  });
+
+  test("a column whose Arrow type is not its declared one, at any depth, is refused as unreadable", () => {
+    const int32 = (name: string): SparkIpcColumn => ({ name, kind: "int32", values: [1] });
+    const binary = (name: string): SparkIpcColumn => ({ name, kind: "binary", values: [new Uint8Array(0)] });
+    const structOf = (...children: SparkIpcColumn[]): SparkIpcColumn => ({
+      name: "c",
+      kind: "struct",
+      length: 1,
+      children,
+    });
+    const stringToInt: SparkIpcColumn = {
+      name: "c",
+      kind: "map",
+      offsets: [0, 0],
+      keys: { name: "key", kind: "utf8", values: [] },
+      items: { name: "value", kind: "int32", values: [] },
+    };
+    const cases: readonly (readonly [object, SparkIpcColumn])[] = [
+      // A scale the batch does not carry would show every value at another magnitude; a precision is held alike.
+      [t("decimal", { precision: 10, scale: 2 }), { name: "c", kind: "decimal", precision: 10, scale: 0, values: [] }],
+      [t("decimal", { precision: 10, scale: 2 }), { name: "c", kind: "decimal", precision: 12, scale: 2, values: [] }],
+      [t("long"), int32("c")],
+      [
+        struct([
+          ["a", t("integer")],
+          ["b", t("integer")],
+        ]),
+        structOf(int32("a")),
+      ],
+      [struct([["a", t("integer")]]), structOf(int32("b"))],
+      [struct([["a", t("integer")]]), structOf({ name: "a", kind: "utf8", values: ["x"] })],
+      // A variant read from a struct without Spark's variant tag, and the tagged layout read where a struct is declared.
+      [t("variant"), structOf(binary("value"), binary("metadata"))],
+      [
+        struct([
+          ["value", t("binary")],
+          ["metadata", t("binary")],
+        ]),
+        structOf(binary("value"), { ...binary("metadata"), metadata: { variant: "true" } }),
+      ],
+      [
+        t("array", { element_type: t("integer") }),
+        { name: "c", kind: "list", offsets: [0, 0], child: { name: "element", kind: "int64", values: [] } },
+      ],
+      [t("array", { element_type: t("integer") }), int32("c")],
+      [t("map", { key_type: t("integer"), value_type: t("integer") }), stringToInt],
+      [t("map", { key_type: t("string"), value_type: t("string") }), stringToInt],
+    ];
+    for (const [declared, batch] of cases) {
+      expect(refusalOf(() => assertSchemasAgree([one(declared)], fromStream([batch])))).toStrictEqual(
+        unreadable("a result whose schema and batches name different columns"),
+      );
+    }
+  });
+
+  test("interval fields, time precision and srid are not compared, at any depth, since Spark's two readings differ on them", () => {
+    const hour = t("day_time_interval", { start_field: 1, end_field: 1 });
+    const declared = columnsFromDataType(
+      struct([
+        ["h", hour],
+        ["y", t("year_month_interval", { start_field: 0, end_field: 0 })],
+        ["tm", t("time", { precision: 3 })],
+        ["g", t("geometry", { srid: 4326 })],
+        ["a", t("array", { element_type: struct([["h", hour]]) })],
+      ]),
+    );
+    const arrow = fromStream([
+      { name: "h", kind: "duration-us", values: [BigInt(1)] },
+      { name: "y", kind: "interval-ym", values: [1] },
+      { name: "tm", kind: "time64-ns", values: [BigInt(0)] },
+      {
+        name: "g",
+        kind: "struct",
+        length: 1,
+        children: [
+          { name: "srid", kind: "int32", values: [0] },
+          { name: "wkb", kind: "binary", values: [new Uint8Array(0)], metadata: { geometry: "true", srid: "0" } },
+        ],
+      },
+      {
+        name: "a",
+        kind: "list",
+        offsets: [0, 1],
+        child: {
+          name: "element",
+          kind: "struct",
+          length: 1,
+          children: [{ name: "h", kind: "duration-us", values: [BigInt(1)] }],
+        },
+      },
+    ]);
+    // Each column's two kinds differ, in its interval fields, its time precision or its srid, and only there.
+    declared.forEach((column, index) => expect(column.kind).not.toStrictEqual(arrow[index].kind));
+    expect(() => assertSchemasAgree(declared, arrow)).not.toThrow();
+  });
+
+  test("every captured relation answer of both versions agrees with each of its batches, kinds included", () => {
+    // Studio refuses these batches before it reads a type (ipc-guard.ts), so no schema of theirs is compared.
+    const refused: ReadonlySet<string> = new Set(["compressed-lz4", "compressed-zstd", "large-var-types-refused"]);
+    const compared: string[] = [];
+    for (const version of ["4.2.0", "4.1.3"] as const satisfies readonly SparkCaptureVersion[]) {
+      for (const file of readdirSync(new URL(`../../../fixtures/spark/${version}/`, import.meta.url)).sort()) {
+        const name = file.replace(/\.json$/, "") as SparkCaptureName;
+        const capture = readSparkCapture(version, name);
+        const answers: unknown[] = capture.outcome === "pass" && Array.isArray(capture.payload) ? capture.payload : [];
+        const schema = answers.find(
+          (response) => typeof response === "object" && response !== null && (response as { schema?: unknown }).schema,
+        ) as { schema: object } | undefined;
+        const batches = answers.filter(
+          (response) => typeof response === "object" && response !== null && "arrow_batch" in response,
+        ) as { arrow_batch: { data: unknown } }[];
+        if (schema === undefined || batches.length === 0) continue;
+        const declared = columnsFromDataType(schema.schema);
+        for (const batch of batches) {
+          const bytes = captureBytes(batch.arrow_batch.data);
+          if (refused.has(name)) expect(() => readIpcColumns(bytes)).toThrow(SparkError);
+          else assertSchemasAgree(declared, columnsFromArrow(readIpcColumns(bytes)));
+        }
+        if (!refused.has(name)) compared.push(`${version}/${name}`);
+      }
+    }
+    expect(compared).toStrictEqual([
+      "4.2.0/batch-rows",
+      "4.2.0/every-type-relation",
+      "4.2.0/negative-scale-decimal",
+      "4.2.0/proxy-silent-timeout",
+      "4.2.0/row-budget-cut",
+      "4.2.0/substitution-off",
+      "4.2.0/temp-view-script",
+      "4.1.3/batch-rows",
+      "4.1.3/every-type-relation",
+      "4.1.3/negative-scale-decimal",
+    ]);
   });
 });

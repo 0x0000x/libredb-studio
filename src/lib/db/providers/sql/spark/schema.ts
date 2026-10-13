@@ -6,7 +6,8 @@
  * the SQL export hands to FROM_JSON. The relation path reads the `DataType` proto Spark sends first, as Spark's own
  * client reads it (DataTypeProtoConverter), held to the 64 levels, the 10,000 fields and the decimal bound the IPC
  * schema is held to (5.5); the command path, which sends no `DataType`, reads the Arrow types as Spark reads them
- * back (ArrowUtils). On the relation path the two must name the same columns (5.1). Pure: no I/O, no logger.
+ * back (ArrowUtils). On the relation path the two must name the same columns (5.1), of the same type at every depth.
+ * Pure: no I/O, no logger.
  */
 import type { ArrowColumnData, ArrowColumns } from "./arrow";
 import { SPARK_SCHEMA_MAX_DEPTH, SPARK_SCHEMA_MAX_FIELDS } from "./constants";
@@ -389,11 +390,43 @@ export function columnsFromArrow(columns: ArrowColumns): SparkColumn[] {
   return columns.columns.map((column) => columnOf(column.name, (out) => arrowTyped(column, out)));
 }
 
-/** On the relation path the `DataType` schema and the Arrow batch must name the same columns (spec 5.1). */
+/**
+ * Whether a batch holds a column's values as its `DataType` declares them, values.ts reading each cell by the declared
+ * kind: the same type at every depth, a decimal's precision and scale, and a struct's field count and names. Interval
+ * fields, time precision and srid are left out: Spark's two readings of its own answers differ on them (Arrow carries
+ * no interval fields, and one Time64 unit for every time precision), or values.ts does not read them from the kind.
+ */
+function sameKind(declared: SparkValueKind, read: SparkValueKind): boolean {
+  switch (declared.type) {
+    case "decimal":
+      return read.type === "decimal" && declared.precision === read.precision && declared.scale === read.scale;
+    case "array":
+      return read.type === "array" && sameKind(declared.element, read.element);
+    case "map":
+      return read.type === "map" && sameKind(declared.key, read.key) && sameKind(declared.value, read.value);
+    case "struct":
+      return (
+        read.type === "struct" &&
+        declared.fields.length === read.fields.length &&
+        declared.fields.every(
+          (field, index) => field.name === read.fields[index].name && sameKind(field.kind, read.fields[index].kind),
+        )
+      );
+    default:
+      return declared.type === read.type;
+  }
+}
+
+/**
+ * On the relation path the `DataType` schema and the Arrow batch must name the same columns (spec 5.1), each of the
+ * same kind (sameKind), so no cell is read by a kind its batch does not hold.
+ */
 export function assertSchemasAgree(fromDataType: readonly SparkColumn[], fromArrow: readonly SparkColumn[]): void {
   if (
     fromDataType.length !== fromArrow.length ||
-    fromDataType.some((column, index) => column.name !== fromArrow[index].name)
+    fromDataType.some(
+      (column, index) => column.name !== fromArrow[index].name || !sameKind(column.kind, fromArrow[index].kind),
+    )
   ) {
     unreadable("a result whose schema and batches name different columns");
   }
