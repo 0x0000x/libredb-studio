@@ -19,12 +19,19 @@ describe("parseSparkVersion", () => {
     }
   });
 
-  test.each(["", "4.1", "v4.1.0", " 4.1.0", "four.one.zero", "4..1.0", "1234567890.1.0"])(
-    "refuses %p as unreadable",
-    (text) => {
-      expect(parseSparkVersion(text)).toBeUndefined();
-    },
-  );
+  test.each([
+    "",
+    "4.1",
+    "v4.1.0",
+    " 4.1.0",
+    "four.one.zero",
+    "4..1.0",
+    "1234567890.1.0",
+    "4.1234567890.0",
+    "4.1.1234567890",
+  ])("refuses %p as unreadable, never cut to its first nine digits", (text) => {
+    expect(parseSparkVersion(text)).toBeUndefined();
+  });
 });
 
 describe("meetsSparkFloor", () => {
