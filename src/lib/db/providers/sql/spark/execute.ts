@@ -84,6 +84,10 @@ interface Run {
   cancelled: boolean;
   executing: boolean;
   interrupted: boolean;
+  /** The run's Interrupt is sent and has not answered or failed yet. */
+  interrupting: boolean;
+  /** The run reached its end and settles; it stays registered while its Interrupt is unanswered. */
+  ended: boolean;
   /** The run refused a response of a stream Spark had not ended, so its operation may still be running. */
   openStreamRefused: boolean;
   session: SparkSessionHandle | undefined;
@@ -177,17 +181,21 @@ export class SparkRuns {
       if (interrupt) await this.interrupt(run);
       run.controller.abort();
       if (run.session?.kind === "statement") await this.deps.sessions.endStatementSession(run.session);
-      this.unregister(run);
+      run.ended = true;
+      // A Stop's Interrupt that has not answered yet keeps the run registered; interrupt() unregisters it then.
+      if (!run.interrupting) this.unregister(run);
       run.settle(outcome);
     }
   }
 
   /**
-   * Stop: false for an unknown or finished run. A run whose session is still in setup is marked, which is all it
-   * needs, and answers true at once. A run that has its session but sent no ExecutePlan was already refused before
-   * sending one and is ending, a statement session's release first, so Stop waits for the outcome it settles with.
-   * Any other run is stopped by `stop`, and Stop waits for that and for the run to settle. Either way Stop waits at
-   * most SPARK_CONTROL_DEADLINE_MS from the Stop, and answers true when the run settled as cancelled by then.
+   * Stop: false for an unknown or finished run, finished meaning that it settled and that its Interrupt, if it sent
+   * one, answered or failed; a run that settled while its Interrupt is unanswered is still reached, and is sent no
+   * second Interrupt. A run whose session is still in setup is marked, which is all it needs, and answers true at
+   * once. A run that has its session but sent no ExecutePlan was already refused before sending one and is ending, a
+   * statement session's release first, so Stop waits for the outcome it settles with. Any other run is stopped by
+   * `stop`, and Stop waits for that and for the run to settle. Either way Stop waits at most SPARK_CONTROL_DEADLINE_MS
+   * from the Stop, and answers true when the run settled as cancelled by then.
    */
   async cancel(queryId: string): Promise<boolean> {
     const run = this.byQuery.get(queryId);
@@ -222,7 +230,7 @@ export class SparkRuns {
     );
   }
 
-  /** Runs registered and not yet settled. */
+  /** Runs registered: each from its start until it settled and its Interrupt, if it sent one, answered or failed. */
   runsInFlight(): number {
     return this.active.size;
   }
@@ -241,6 +249,8 @@ export class SparkRuns {
       cancelled: false,
       executing: false,
       interrupted: false,
+      interrupting: false,
+      ended: false,
       openStreamRefused: false,
       session: undefined,
     };
@@ -278,15 +288,20 @@ export class SparkRuns {
 
   /**
    * At most one Interrupt per run; one that fails changes nothing, since the run's own outcome stands, and the returned
-   * promise never rejects.
+   * promise never rejects. A run that settled while its Interrupt was on its way is unregistered once it answered or
+   * failed.
    */
   private async interrupt(run: Run): Promise<void> {
     if (run.interrupted || run.session === undefined) return;
     run.interrupted = true;
+    run.interrupting = true;
     try {
       await this.deps.channel().unary("Interrupt", interruptByTagRequest(run.session, run.tag), this.control());
     } catch {
       return;
+    } finally {
+      run.interrupting = false;
+      if (run.ended) this.unregister(run);
     }
   }
 

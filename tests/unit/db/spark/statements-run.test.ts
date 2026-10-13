@@ -969,6 +969,32 @@ describe("the deadline and Stop", () => {
       }
     },
   );
+
+  test("a run ended under cancelAll stays in flight until its Interrupt answered, and a Stop then answers true and sends no second Interrupt", async () => {
+    const held = heldInterrupt();
+    const { sessions, runs } = world(held.wire);
+    let ended = false;
+    const running = settle(
+      runs.run({ sql: "SLOW", queryId: "qs", session: () => sessions.forScope("s"), deadline: soon() }),
+    ).finally(() => {
+      ended = true;
+    });
+    await waitFor(() => plans().length === 2);
+    const stopping = runs.cancelAll();
+    // The run ends while cancelAll's Interrupt is held, so cancelAll is still stopping it.
+    await waitFor(() => ended);
+    expect((await running).error?.category).toBe("cancelled");
+    expect(runs.runsInFlight()).toBe(1);
+    expect(await runs.cancel("qs")).toBe(true);
+    expect(held.order).toStrictEqual(["Interrupt", "turn", "abort"]);
+    held.letGo("send");
+    await stopping;
+    expect(runs.runsInFlight()).toBe(0);
+    expect(await runs.cancel("qs")).toBe(false);
+    expect(interrupts()).toHaveLength(1);
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    await sessions.releaseAll();
+  });
 });
 
 describe("Stop in a Node child, the production runtime", () => {
