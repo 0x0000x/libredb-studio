@@ -2,6 +2,7 @@ import "../setup";
 import { describe, test, expect } from "bun:test";
 import type * as Monaco from "monaco-editor";
 import { SHIPPED_DATABASE_TYPES } from "@/lib/db/compatibility";
+import type { DatabaseType } from "@/lib/types";
 import {
   SQL_KEYWORDS,
   SQL_FUNCTIONS,
@@ -42,6 +43,7 @@ function createMockMonaco() {
         Snippet: 27,
         Class: 5,
         Field: 3,
+        Variable: 4,
       },
       CompletionItemInsertTextRule: {
         InsertAsSnippet: 4,
@@ -69,6 +71,7 @@ function createMockModel(lineContent: string, fullText?: string) {
     // The whole document, with the cursor on its first line: every model here is one line long.
     getValue: () => fullText || lineContent,
     getOffsetAt: (position: { column: number }) => position.column - 1,
+    getVersionId: () => 1,
   } as unknown as Monaco.editor.ITextModel;
 }
 
@@ -466,7 +469,10 @@ describe("General completions", () => {
     const position = createPosition(1, 2);
     const result = provider.provideCompletionItems(model, position);
 
-    const tableSugg = result.suggestions.find((s) => s.label === "users");
+    // Tables are not offered where only a column can stand, so their rank is read at a FROM.
+    const tableSugg = provider
+      .provideCompletionItems(createMockModel("SELECT x FROM u"), createPosition(1, 16))
+      .suggestions.find((s) => s.label === "users");
     expect(tableSugg?.detail).toBe("Table (100 rows)");
   });
 
@@ -499,7 +505,10 @@ describe("General completions", () => {
 
     const keywordSugg = result.suggestions.find((s) => s.label === "SELECT");
     const functionSugg = result.suggestions.find((s) => s.label === "COUNT");
-    const tableSugg = result.suggestions.find((s) => s.label === "users");
+    // Tables are not offered where only a column can stand, so their rank is read at a FROM.
+    const tableSugg = provider
+      .provideCompletionItems(createMockModel("SELECT x FROM u"), createPosition(1, 16))
+      .suggestions.find((s) => s.label === "users");
     const snippetSugg = result.suggestions.find((s) => (s as { detail: string }).detail === "SQL Snippet");
     const columnSugg = result.suggestions.find(
       (s) => s.label === "id" && (s as { detail: string }).detail?.startsWith("Column"),
@@ -875,33 +884,393 @@ describe("Completion addresses outside the default container (#1397)", () => {
 describe("Qualified table labels", () => {
   const tableItems = (labelQualified?: boolean) =>
     ["ds_a", "ds_b"].map((ds) => ({
-      label: "dim_keywords",
-      labelLower: "dim_keywords",
+      label: "products",
+      labelLower: "products",
       columnNames: "id",
       container: [ds],
-      segment: "dim_keywords",
+      segment: "products",
       qualify: true,
       ...(labelQualified === undefined ? {} : { labelQualified }),
     }));
   const tablesAt = (items: ReturnType<typeof tableItems>) => {
     const monaco = createMockMonaco();
     registerSQLCompletionProvider(monaco, createSchemaCache({ tableItems: items }), "bigquery");
-    const line = "SELECT * FROM dim";
+    const line = "SELECT * FROM prod";
     return monaco
       ._getProvider()!
       .provideCompletionItems(createMockModel(line), createPosition(1, line.length + 1))
-      .suggestions.filter((item) => item.insertText.endsWith("dim_keywords"));
+      .suggestions.filter((item) => item.insertText.endsWith("products"));
   };
 
   test("a qualified suggestion is labelled with its address and filters on its name", () => {
     const items = tablesAt(tableItems(true));
-    expect(items.map((item) => item.label)).toEqual(["ds_a.dim_keywords", "ds_b.dim_keywords"]);
-    expect(items.map((item) => item.filterText)).toEqual(["dim_keywords", "dim_keywords"]);
+    expect(items.map((item) => item.label)).toEqual(["ds_a.products", "ds_b.products"]);
+    expect(items.map((item) => item.filterText)).toEqual(["products", "products"]);
   });
 
   test("without the flag the label stays the bare name", () => {
     const items = tablesAt(tableItems());
-    expect(items.map((item) => item.label)).toEqual(["dim_keywords", "dim_keywords"]);
+    expect(items.map((item) => item.label)).toEqual(["products", "products"]);
     expect(items.every((item) => item.filterText === undefined)).toBe(true);
+  });
+});
+
+describe("Clause-aware suggestions", () => {
+  const at = (text: string) => {
+    const monaco = createMockMonaco();
+    registerSQLCompletionProvider(monaco, createSchemaCache());
+    const model = createMockModel(text);
+    return monaco._getProvider()!.provideCompletionItems(model, createPosition(1, text.length + 1)).suggestions;
+  };
+  const isTable = (s: { detail?: string }) => s.detail?.startsWith("Table") === true;
+  const isColumn = (s: { detail?: string }) => s.detail?.startsWith("Column") === true;
+
+  test("a SELECT list offers columns, and tables only until the statement names a source", () => {
+    const suggestions = at("SELECT ");
+    expect(suggestions.some(isColumn)).toBe(true);
+    expect(suggestions.some(isTable)).toBe(true);
+    expect(at("SELECT id FROM users WHERE id IN (SELECT ").some(isTable)).toBe(false);
+  });
+
+  test("a FROM or JOIN position offers tables and no columns", () => {
+    for (const text of ["SELECT id FROM ", "SELECT id FROM users u JOIN ", "SELECT id FROM a, "]) {
+      const suggestions = at(text);
+      expect(suggestions.some(isTable)).toBe(true);
+      expect(suggestions.some(isColumn)).toBe(false);
+    }
+  });
+
+  test("WHERE and ON go back to columns", () => {
+    for (const text of [
+      "SELECT id FROM users WHERE ",
+      "SELECT 1 FROM a JOIN b ON ",
+      "SELECT 1 FROM a JOIN b x ON ",
+      "SELECT 1 FROM a JOIN (SELECT id FROM b) x ON ",
+      "MERGE INTO a USING b ON ",
+      "INSERT INTO users (id) VALUES (1) ON DUPLICATE KEY UPDATE id = ",
+    ]) {
+      expect(at(text).some(isTable)).toBe(false);
+    }
+  });
+
+  test("an ON that names an object offers tables", () => {
+    for (const text of [
+      "CREATE INDEX i ON ",
+      "GRANT SELECT ON ",
+      "CREATE TRIGGER trg BEFORE INSERT ON ",
+      "CREATE POLICY p ON ",
+      "CREATE TRIGGER trg AFTER UPDATE ON us",
+    ]) {
+      const suggestions = at(text);
+      expect(suggestions.some(isTable)).toBe(true);
+      expect(suggestions.some(isColumn)).toBe(false);
+    }
+    const indexed = columnsAt("CREATE INDEX i ON users (");
+    expect(indexed).toContain("email");
+    expect(indexed).not.toContain("total");
+  });
+
+  test("DISTINCT ON, a qualified keyword-named column and a partly typed ON word are no table position", () => {
+    for (const [text, cursor] of [
+      ["SELECT DISTINCT ON  FROM users", "SELECT DISTINCT ON ".length],
+      ["SELECT t.table,  FROM users t", "SELECT t.table, ".length],
+      ["INSERT INTO users (id) VALUES (1) ON CONFL", undefined],
+      ["CREATE TABLE t (a int REFERENCES users (id) ON DEL", undefined],
+      ["ALTER TABLE t ADD FOREIGN KEY (a) REFERENCES users (id) ON DEL", undefined],
+    ] as const) {
+      expect(labelsAt(text, cursor).some((s) => s.table)).toBe(false);
+    }
+  });
+
+  test("a model's blanked text is reused for the same version", () => {
+    const monaco = createMockMonaco();
+    registerSQLCompletionProvider(monaco, createSchemaCache());
+    const model = createMockModel("SELECT * FROM users WHERE ");
+    const provider = monaco._getProvider()!;
+    const first = provider.provideCompletionItems(model, createPosition(1, 27)).suggestions.length;
+    expect(provider.provideCompletionItems(model, createPosition(1, 27)).suggestions.length).toBe(first);
+  });
+
+  test("an open column or definition list after INTO/TABLE offers columns, not tables", () => {
+    for (const text of ["INSERT INTO users (a, ", "CREATE TABLE t (id int, "]) {
+      const suggestions = at(text);
+      expect(suggestions.some(isColumn)).toBe(true);
+      expect(suggestions.some(isTable)).toBe(false);
+    }
+  });
+
+  test("INTO, UPDATE and a closed list still name tables", () => {
+    for (const text of ["INSERT INTO ", "UPDATE ", "INSERT INTO t (a) "]) {
+      const suggestions = at(text);
+      expect(suggestions.some(isTable)).toBe(true);
+      expect(suggestions.some(isColumn)).toBe(false);
+    }
+  });
+
+  const labelsAt = (text: string, cursor = text.length, dialect?: DatabaseType) => {
+    const monaco = createMockMonaco();
+    registerSQLCompletionProvider(monaco, createSchemaCache(), dialect);
+    return monaco
+      ._getProvider()!
+      .provideCompletionItems(createMockModel(text, text), createPosition(1, cursor + 1))
+      .suggestions.map((s) => ({ label: s.label as string, table: isTable(s), column: isColumn(s) }));
+  };
+  const columnsAt = (text: string, cursor?: number, dialect?: DatabaseType) =>
+    labelsAt(text, cursor, dialect)
+      .filter((s) => s.column)
+      .map((s) => s.label);
+
+  test("a clause inside a subquery that closed before the cursor governs nothing", () => {
+    const suggestions = at("SELECT * FROM users WHERE id IN (SELECT id FROM orders) AND ");
+    expect(suggestions.some(isColumn)).toBe(true);
+    expect(suggestions.some(isTable)).toBe(false);
+  });
+
+  test("a keyword inside a string or a comment is no clause", () => {
+    for (const text of [
+      "SELECT * FROM users WHERE name = 'from' ",
+      "SELECT * FROM users WHERE id /* from */ ",
+      "SELECT * FROM users WHERE id -- from x\n",
+    ]) {
+      const suggestions = labelsAt(text);
+      expect(suggestions.some((s) => s.column)).toBe(true);
+      expect(suggestions.some((s) => s.table)).toBe(false);
+    }
+  });
+
+  test("a dollar-quoted keyword is no clause on PostgreSQL", () => {
+    expect(labelsAt("SELECT * FROM users WHERE $$from$$ ", undefined, "postgres").some((s) => s.table)).toBe(false);
+    expect(labelsAt("SELECT * FROM users WHERE $$from$$ ", undefined, "postgres").some((s) => s.column)).toBe(true);
+  });
+
+  test("a `;` inside a string does not end the statement", () => {
+    const columns = columnsAt("SELECT * FROM orders WHERE note = ';' AND ");
+    expect(columns).toContain("user_id");
+    expect(columns).not.toContain("email");
+  });
+
+  test("a paren inside a string does not close a definition list", () => {
+    const suggestions = labelsAt("CREATE TABLE t (note text default ')', ");
+    expect(suggestions.some((s) => s.column)).toBe(true);
+    expect(suggestions.some((s) => s.table)).toBe(false);
+  });
+
+  test("an open column list right after INTO offers columns", () => {
+    const suggestions = at("INSERT INTO users (");
+    expect(suggestions.some(isColumn)).toBe(true);
+    expect(suggestions.some(isTable)).toBe(false);
+  });
+
+  test("a source the schema cannot shape (a table function) widens the columns to every known one", () => {
+    const text = "SELECT  FROM generate_series(1, 3) g JOIN orders";
+    const columns = columnsAt(text, "SELECT ".length);
+    expect(columns).toContain("email");
+    expect(columns).toContain("total");
+  });
+
+  test("a qualified reference does not fall back to another container's bare name", () => {
+    const columns = columnsAt("SELECT * FROM other_ds.users WHERE ");
+    expect(columns).toContain("total");
+    expect(columns).toContain("email");
+  });
+
+  test("known references still scope the columns, on every dialect", () => {
+    for (const dialect of [undefined, "postgres", "mysql"] as const) {
+      const users = columnsAt("SELECT * FROM users WHERE ", undefined, dialect);
+      expect(users).toContain("email");
+      expect(users).not.toContain("total");
+      const products = columnsAt("SELECT * FROM public.products WHERE ", undefined, dialect);
+      expect(products).toContain("price");
+      expect(products).not.toContain("email");
+    }
+  });
+
+  describe.each(["postgres", "mysql"] as const)("on %s", (dialect) => {
+    const tables = (text: string) => labelsAt(text, undefined, dialect).filter((s) => s.table);
+
+    test("a SELECT list offers tables until a source is named, and a table name typed there completes its columns after the dot", () => {
+      expect(tables("SELECT us").map((s) => s.label)).toContain("users");
+      const named = labelsAt("SELECT  FROM users", "SELECT ".length, dialect);
+      expect(named.filter((s) => s.table)).toEqual([]);
+      expect(named.some((s) => s.label === "users")).toBe(true);
+      expect(labelsAt("SELECT users.", undefined, dialect).map((s) => s.label)).toEqual(["id", "name", "email"]);
+    });
+
+    test("FROM and JOIN offer tables and no columns", () => {
+      for (const text of ["SELECT * FROM ", "SELECT * FROM users u JOIN "]) {
+        expect(tables(text).length).toBeGreaterThan(0);
+        expect(columnsAt(text, undefined, dialect)).toEqual([]);
+      }
+    });
+
+    test("columns are scoped to the FROM and JOIN tables", () => {
+      const columns = columnsAt("SELECT * FROM users u JOIN orders o ON ", undefined, dialect);
+      expect(columns).toEqual(expect.arrayContaining(["id", "name", "email", "user_id", "total"]));
+      expect(columns).not.toContain("price");
+    });
+
+    test("an unclosed column list after INSERT INTO offers the columns, and no table", () => {
+      for (const text of ["INSERT INTO users (", "INSERT INTO users (id, "]) {
+        expect(columnsAt(text, undefined, dialect).length).toBeGreaterThan(0);
+        expect(tables(text)).toEqual([]);
+      }
+    });
+  });
+});
+
+describe("Statement scope in completion", () => {
+  const at = (text: string, cursor = text.length, dialect?: DatabaseType) => {
+    const monaco = createMockMonaco();
+    registerSQLCompletionProvider(monaco, createSchemaCache(), dialect);
+    const line = text.slice(0, cursor);
+    return monaco
+      ._getProvider()!
+      .provideCompletionItems(createMockModel(line, text), createPosition(1, cursor + 1))
+      .suggestions.map((s) => ({
+        label: s.label as string,
+        kind: s.kind,
+        detail: (s as { detail?: string }).detail ?? "",
+      }));
+  };
+  const columns = (text: string, cursor?: number) =>
+    at(text, cursor)
+      .filter((s) => s.detail.startsWith("Column"))
+      .map((s) => s.label);
+  const cursorAfter = (text: string, marker: string) => text.lastIndexOf(marker) + marker.length;
+
+  test("an INSERT column list and an UPDATE SET offer only the target's columns", () => {
+    expect(columns("INSERT INTO orders (")).toEqual(expect.arrayContaining(["user_id", "total"]));
+    expect(columns("INSERT INTO orders (")).not.toContain("email");
+    expect(columns("UPDATE users SET ")).toContain("email");
+    expect(columns("UPDATE users SET ")).not.toContain("total");
+  });
+
+  test("a column position offers the statement's aliases and unaliased table names", () => {
+    const text = "SELECT  FROM users u JOIN orders";
+    const qualifiers = at(text, "SELECT ".length).filter((s) => s.kind === 4);
+    expect(qualifiers.map((s) => [s.label, s.detail])).toEqual([
+      ["u", "Alias of users"],
+      ["orders", "Source orders"],
+    ]);
+  });
+
+  test("a qualifier names a CTE or a subquery too, and its dot completes the derived columns", () => {
+    const sub = "SELECT s. FROM (SELECT id, total AS t FROM orders) s";
+    expect(at(sub, "SELECT s.".length).map((s) => s.label)).toEqual(["id", "t"]);
+    const cte = "WITH c AS (SELECT email FROM users) SELECT c. FROM c";
+    expect(at(cte, cursorAfter(cte, "SELECT c.")).map((s) => s.label)).toEqual(["email"]);
+    expect(
+      at(cte.replace("c.", "  "), cursorAfter(cte, "SELECT ")).some((s) => s.label === "c" && s.detail === "CTE"),
+    ).toBe(true);
+  });
+
+  test("an alias's dot reads the qualified table it stands for", () => {
+    const text = "SELECT p. FROM public.products p";
+    expect(at(text, "SELECT p.".length).map((s) => s.label)).toEqual(["id", "price"]);
+  });
+
+  test("a column shared by several sources lists them all", () => {
+    const id = at("SELECT * FROM users JOIN orders ON ").find((s) => s.label === "id")!;
+    expect(id.detail).toBe("Column (integer) · users, orders");
+  });
+
+  test("a CTE is offered where a table is, and its columns where a column is", () => {
+    const from = at("WITH c AS (SELECT 1 AS n) SELECT * FROM ");
+    expect(from.find((s) => s.label === "c")?.detail).toBe("CTE");
+    expect(columns("WITH c AS (SELECT email AS mail FROM users) SELECT * FROM c WHERE ")).toEqual(["mail"]);
+  });
+
+  test("a subquery's tables are out of scope outside it, and in scope with the enclosing ones inside it", () => {
+    const text = "SELECT  FROM users WHERE id IN (SELECT user_id FROM orders WHERE )";
+    const outer = columns(text, "SELECT ".length);
+    expect(outer).toContain("email");
+    expect(outer).not.toContain("total");
+    const inner = columns(text, text.length - 1);
+    expect(inner).toEqual(expect.arrayContaining(["total", "email"]));
+  });
+
+  test("a JOIN ... USING list offers the columns the joined sources share", () => {
+    expect(columns("SELECT * FROM users JOIN orders USING (")).toEqual(["id"]);
+  });
+
+  test("right after FROM only tables are offered; after a table name keywords return, functions do not", () => {
+    const slot = at("SELECT * FROM ");
+    expect(slot.some((s) => s.detail === "SQL Keyword" || s.detail === "SQL Snippet")).toBe(false);
+    expect(slot.some((s) => s.kind === 1)).toBe(false);
+    const after = at("SELECT * FROM users ");
+    expect(after.some((s) => s.label === "WHERE")).toBe(true);
+    expect(after.some((s) => s.kind === 1)).toBe(false);
+  });
+
+  test("UPDATE after ON, FOR or KEY is no table position", () => {
+    for (const text of [
+      "INSERT INTO orders (id) VALUES (1) ON DUPLICATE KEY UPDATE total = 1, ",
+      "CREATE TABLE t (id int, updated_at timestamp ON UPDATE ",
+    ]) {
+      const suggestions = at(text);
+      expect(suggestions.some((s) => s.detail.startsWith("Column"))).toBe(true);
+      expect(suggestions.some((s) => s.detail.startsWith("Table"))).toBe(false);
+    }
+  });
+
+  test("a FROM inside a function call, and a table function's arguments, are no table position", () => {
+    for (const text of ["SELECT * FROM users WHERE EXTRACT(YEAR FROM ", "SELECT * FROM generate_series(1, "]) {
+      const suggestions = at(text);
+      expect(suggestions.some((s) => s.detail.startsWith("Column"))).toBe(true);
+      expect(suggestions.some((s) => s.label === "COUNT")).toBe(true);
+      expect(suggestions.some((s) => s.detail.startsWith("Table"))).toBe(false);
+    }
+  });
+
+  test("a derived source whose select list names nothing widens the columns", () => {
+    const text = "SELECT  FROM (SELECT total * 2 FROM orders) s";
+    expect(columns(text, "SELECT ".length)).toEqual(expect.arrayContaining(["email", "total"]));
+  });
+
+  test("a quoted CTE or alias name is inserted quoted", () => {
+    const monaco = createMockMonaco();
+    registerSQLCompletionProvider(monaco, createSchemaCache(), "postgres");
+    const provider = monaco._getProvider()!;
+    const insertsAt = (text: string, cursor = text.length) =>
+      provider
+        .provideCompletionItems(createMockModel(text.slice(0, cursor), text), createPosition(1, cursor + 1))
+        .suggestions.filter((s) => s.label === "my cte")
+        .map((s) => s.insertText);
+    expect(insertsAt('WITH "my cte" AS (SELECT id FROM users) SELECT * FROM ')).toEqual(['"my cte"']);
+    const text = 'WITH "my cte" AS (SELECT id FROM users) SELECT  FROM "my cte"';
+    expect(insertsAt(text, text.indexOf("SELECT  ") + "SELECT ".length)).toContain('"my cte"');
+  });
+
+  test("a name two sources spell in different case is one column with both owners", () => {
+    const text = "SELECT  FROM (SELECT ID FROM users) a, (SELECT id FROM users) b";
+    const hits = at(text, "SELECT ".length).filter(
+      (s) => s.label.toLowerCase() === "id" && s.detail.startsWith("Column"),
+    );
+    expect(hits).toHaveLength(1);
+    expect(hits[0].detail).toContain("a, b");
+  });
+
+  test("the dot path reads no alias from another statement, and a cursor at 0 is harmless", () => {
+    expect(at("SELECT * FROM users x; SELECT x.")).toEqual([]);
+    expect(at("SELECT * FROM users x WHERE x.").map((s) => s.label)).toContain("email");
+    expect(() => at(";SELECT", 0)).not.toThrow();
+  });
+
+  test("a long chain of self-joining CTEs resolves in linear time", () => {
+    // Doubling per link would never finish at 40; the loose bound only guards against that.
+    const ctes = Array.from({ length: 40 }, (_, i) =>
+      i === 0 ? "c0 AS (SELECT id FROM users)" : `c${i} AS (SELECT * FROM c${i - 1} a JOIN c${i - 1} b ON true)`,
+    );
+    const text = `WITH ${ctes.join(", ")} SELECT * FROM c39 WHERE `;
+    const started = performance.now();
+    expect(columns(text)).toContain("id");
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
+  test("a CTE after CREATE VIEW ... AS or inside a subquery scopes the columns like a leading one", () => {
+    expect(columns("CREATE VIEW v AS WITH c AS (SELECT email FROM users) SELECT * FROM c WHERE ")).toEqual(["email"]);
+    const text = "SELECT * FROM (WITH c AS (SELECT total FROM orders) SELECT * FROM c WHERE ) s";
+    expect(columns(text, text.length - 3)).toEqual(["total"]);
+    expect(at("CREATE VIEW v AS WITH c AS (SELECT 1 AS n) SELECT * FROM ").some((s) => s.label === "c")).toBe(true);
   });
 });

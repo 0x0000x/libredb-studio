@@ -3455,4 +3455,38 @@ describe("QueryEditor completion addresses (#1397)", () => {
     ]);
     expect(registeredTables({ schemaContext: schema }).some((item) => item.labelQualified)).toBe(false);
   });
+
+  describe("bare table name in the column cache", () => {
+    const dup = JSON.stringify([
+      { name: "orders", path: ["sales", "orders"], columns: [{ name: "sale_id", type: "int" }] },
+      { name: "orders", path: ["archive", "orders"], columns: [{ name: "old_id", type: "int" }] },
+    ]);
+    function columnMap(props: Partial<Parameters<typeof QueryEditor>[0]>) {
+      mockUseMonacoReturn = { Range: class {} };
+      mockRegisterSQLCompletionProvider.mockClear();
+      try {
+        const { unmount } = render(React.createElement(QueryEditor, createDefaultProps(props)));
+        const calls = mockRegisterSQLCompletionProvider.mock.calls as unknown as [unknown, SchemaCompletionCache][];
+        unmount();
+        return calls[calls.length - 1][1].columnMap;
+      } finally {
+        mockUseMonacoReturn = null;
+      }
+    }
+
+    test("goes to the default container's table even when listed after another", () => {
+      const map = columnMap({ schemaContext: dup, defaultContainer: ["archive"] });
+      expect(map.get("orders")![0].label).toBe("old_id");
+      expect(map.get("sales.orders")![0].label).toBe("sale_id");
+      expect(map.get("archive.orders")![0].label).toBe("old_id");
+    });
+
+    test("keeps the default container's table when another is listed after it", () => {
+      expect(columnMap({ schemaContext: dup, defaultContainer: ["sales"] }).get("orders")![0].label).toBe("sale_id");
+    });
+
+    test("with no default the first listed wins", () => {
+      expect(columnMap({ schemaContext: dup }).get("orders")![0].label).toBe("sale_id");
+    });
+  });
 });

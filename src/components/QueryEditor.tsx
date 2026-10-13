@@ -368,7 +368,11 @@ export const QueryEditor = forwardRef<QueryEditorRef, QueryEditorProps>(
             allColumns.set(col.name, colItem);
           }
         });
-        columnMap.set(tableLower, tableColumns);
+        // A bare name belongs to the default container's table; otherwise the first one listed.
+        const inDefault = defaultKey !== undefined && JSON.stringify(container) === defaultKey;
+        if (inDefault || !columnMap.has(tableLower)) columnMap.set(tableLower, tableColumns);
+        // Also by full path, so `dataset.table` finds this table when other datasets reuse its name.
+        if (path && path.length > 1) columnMap.set(path.join(".").toLowerCase(), tableColumns);
       });
 
       return {
