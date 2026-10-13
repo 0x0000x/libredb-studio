@@ -6,8 +6,9 @@
  * both sides.
  *
  * The answer gets the request's own ids written into its echo fields, and one server-side session id per session, the
- * one BUILT step every case shares. A request no capture matches fails the test, naming the RPC and the request;
- * `served` lists the captures that answered, in order.
+ * one BUILT step every case shares. A request no capture matches fails the call, naming the RPC and the request, and is
+ * kept in `missed`: the provider swallows some failed calls, so the replay holds that list empty at the end of every
+ * case. `served` lists the captures that answered, in order.
  */
 import {
   sparkDefinition,
@@ -123,16 +124,27 @@ function failure(capture: Extract<SparkCapture, { outcome: "error" }>): Error {
   });
 }
 
+export interface RecordedSparkTransport extends SparkWireTransport {
+  /** The captures that answered, in order. */
+  readonly served: readonly SparkCaptureName[];
+  /**
+   * Every request no capture answered, as its RPC and its masked request, in order. A provider that swallows a failed
+   * call, as it does a failed Interrupt or FetchErrorDetails, leaves the case green, so a case reads this list too.
+   */
+  readonly missed: readonly string[];
+}
+
 export function recordedSparkTransport(
   version: SparkCaptureVersion,
   names: readonly SparkCaptureName[],
-): SparkWireTransport & { readonly served: readonly SparkCaptureName[] } {
+): RecordedSparkTransport {
   const captures = names.map((name) => {
     const capture = readSparkCapture(version, name);
     const rpc = capture.$captured.rpc.slice("SparkConnectService/".length);
     return { name, capture, rpc, key: keyOf(rpc, withBuffers(capture.$captured.request) as object) };
   });
   const served: SparkCaptureName[] = [];
+  const missed: string[] = [];
   // Each capture comes from its own run, so each holds another server-side id; one server keeps one id per session
   // for the session's life, and the provider reads a changed id as a restarted server. The replay therefore answers
   // a session's every call with the first server-side id it served that session (BUILT, with the client ids).
@@ -146,7 +158,10 @@ export function recordedSparkTransport(
   const find = (rpc: string, request: object) => {
     const key = keyOf(rpc, request);
     const found = captures.find((candidate) => candidate.rpc === rpc && candidate.key === key);
-    if (found === undefined) throw new Error(`No ${version} capture of [${names.join(", ")}] answers ${rpc} ${key}`);
+    if (found === undefined) {
+      missed.push(`${rpc} ${key}`);
+      throw new Error(`No ${version} capture of [${names.join(", ")}] answers ${rpc} ${key}`);
+    }
     served.push(found.name);
     return found.capture;
   };
@@ -191,5 +206,5 @@ export function recordedSparkTransport(
     };
     return channel;
   };
-  return Object.assign(transport, { served });
+  return Object.assign(transport, { served, missed });
 }

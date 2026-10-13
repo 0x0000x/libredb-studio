@@ -1,11 +1,12 @@
 /**
- * Apache Spark provider, end to end over answers Spark gave (spec 10.3, D16c).
+ * Apache Spark provider, end to end over answers Spark gave.
  *
  * The real SparkProvider runs: connection options, sessions, the two-step statement run, the result stream and its
  * budgets, the Arrow decoder, the error table, the object surface and the monitoring reads. Only the wire is
  * replaced, by the recorded transport of `tests/helpers/spark-fixtures.ts`, handed through the constructor's third
- * argument; `grpc-client.ts` itself is proven against the fake server (10.1, 10.2). A call is matched by its RPC and
- * its decoded request, and a request no capture matches fails the test by name: no answer is invented.
+ * argument; `grpc-client.ts` itself is proven against a fake server in `tests/unit/db/spark/grpc-client.test.ts`. A
+ * call is matched by its RPC and its decoded request, and a request no capture matches fails the case by name, from
+ * the transport's missed list when the provider swallowed the failed call: no answer is invented.
  *
  * The captures were taken by `tests/live/spark-evidence.ts` on 2026-10-13, under bun, from two servers:
  * - `apache/spark:4.2.0@sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89`, whose AnalyzePlan
@@ -25,7 +26,7 @@
  * - the nested namespace walk: the session catalog's `SHOW NAMESPACES` answer rewritten to multi-part spellings,
  *   because no catalog of the open-source fixture nests.
  */
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AuthenticationError, ConnectionError, QueryError } from "@/lib/db/errors";
@@ -35,7 +36,7 @@ import { SparkProvider } from "@/lib/db/providers/sql/spark/index";
 import { SPARK_CUT_WARNINGS } from "@/lib/db/providers/sql/spark/result-stream";
 import type { DatabaseConnection } from "@/lib/types";
 import { readSparkCapture, type SparkCaptureVersion } from "../../helpers/spark-captures";
-import { recordedSparkTransport } from "../../helpers/spark-fixtures";
+import { type RecordedSparkTransport, recordedSparkTransport } from "../../helpers/spark-fixtures";
 import { columnsStream } from "../../helpers/spark-ipc";
 import {
   SPARK_CAPTURE_CATALOG,
@@ -67,6 +68,21 @@ function beforeSql(name: SparkCaptureName): string {
   return sql;
 }
 
+/** Every recorded transport the running case made. */
+const made: RecordedSparkTransport[] = [];
+
+function recorded(...args: Parameters<typeof recordedSparkTransport>): RecordedSparkTransport {
+  const transport = recordedSparkTransport(...args);
+  made.push(transport);
+  return transport;
+}
+
+afterEach(() => {
+  // A request no capture answered fails the case, a call whose failure the provider swallowed included: no case
+  // expects a miss.
+  expect(made.splice(0).flatMap((transport) => transport.missed)).toStrictEqual([]);
+});
+
 const FIXTURES = join(import.meta.dir, "..", "..", "fixtures", "spark");
 const EVERY_TYPE_SELECT = SPARK_EVERY_TYPE_SELECT;
 const EXPLAIN_STATEMENT = actionSql("explain-formatted");
@@ -91,12 +107,7 @@ const CONNECT: readonly SparkCaptureName[] = [
   "connect-session-setup",
   "connect-current-namespace",
 ];
-/** The capture that answers a refusal's Interrupt by tag, recorded on 4.2.0 only. */
-const INTERRUPT: Readonly<Record<SparkCaptureVersion, readonly SparkCaptureName[]>> = {
-  "4.2.0": ["cancel-interrupt"],
-  "4.1.3": [],
-};
-/** A statement's own session: its Config set of the seven pairs, the setup every request session sends first (4.5). */
+/** A statement's own session: its Config set of the seven pairs, the setup every request session sends first. */
 const STATEMENT_SESSION: readonly SparkCaptureName[] = ["request-session-setup"];
 
 const config = (extra: Partial<DatabaseConnection> = {}): DatabaseConnection =>
@@ -114,13 +125,10 @@ async function connected(
   names: readonly SparkCaptureName[],
   extra: Partial<DatabaseConnection> = {},
 ) {
-  const provider = new SparkProvider(
-    config(extra),
-    {},
-    { transport: recordedSparkTransport(version, [...CONNECT, ...STATEMENT_SESSION, ...names]) },
-  );
+  const transport = recorded(version, [...CONNECT, ...STATEMENT_SESSION, ...names]);
+  const provider = new SparkProvider(config(extra), {}, { transport });
   await provider.connect();
-  return provider;
+  return { provider, transport };
 }
 
 /** A recorded transport whose AnalyzePlan version answer is rewritten (BUILT): the only way to replay an old server. */
@@ -202,7 +210,7 @@ describe("provenance", () => {
 for (const version of ["4.2.0", "4.1.3"] as const) {
   describe(`replay on ${version}`, () => {
     test("connect: version, session setup, current catalog and namespace, the tokenless caution", async () => {
-      const provider = await connected(version, []);
+      const { provider } = await connected(version, []);
       expect(provider.isConnected()).toBe(true);
       expect(provider.connectWarnings()).toEqual([
         { message: SPARK_ERROR_SENTENCES.tokenlessCaution("127.0.0.1", 15002) },
@@ -211,13 +219,12 @@ for (const version of ["4.2.0", "4.1.3"] as const) {
     });
 
     test("a statement that turns large types on, then a SELECT of a string: both refused with the large-types sentence", async () => {
-      const provider = await connected(version, [
+      const { provider } = await connected(version, [
         "large-var-types-set",
         "large-var-types-refused-command",
         "large-var-types-refused",
-        // The Interrupt each refusal sends reads, masked, as the one cancel-interrupt captured (4.2.0 only); on 4.1.3
-        // it finds no capture and the provider swallows that failure, as it swallows any failed Interrupt (T7.3).
-        ...INTERRUPT[version],
+        // The Interrupt each refusal sends: a masked Interrupt by tag reads as the one cancel-interrupt captured.
+        "cancel-interrupt",
       ]);
       // The SET's own inline answer arrives as LargeUtf8 (large-var-types-set, both versions; D03-C19).
       await expect(provider.query(LARGE_TYPES_SET, undefined, undefined, "s-large")).rejects.toThrow(
@@ -230,7 +237,7 @@ for (const version of ["4.2.0", "4.1.3"] as const) {
     });
 
     test("the every-type SELECT through both steps: 34 columns decoded and JSON-safe", async () => {
-      const provider = await connected(version, ["every-type-command", "every-type-relation"]);
+      const { provider } = await connected(version, ["every-type-command", "every-type-relation"]);
       const captured = readSparkCapture(version, "every-type-command").$captured.request as {
         readonly plan: {
           readonly command: { readonly sql_command: { readonly input: { readonly sql: { readonly query: string } } } };
@@ -243,21 +250,26 @@ for (const version of ["4.2.0", "4.1.3"] as const) {
       await provider.disconnect();
     });
 
-    test("TIME is refused with Studio's sentence after Spark's text", async () => {
-      const provider = await connected(version, ["time-type-refused-command", "time-type-refused"]);
+    test("TIME is refused with Studio's sentence after Spark's text, its details fetched by the failure's errorId", async () => {
+      const { provider, transport } = await connected(version, [
+        "time-type-refused-command",
+        "time-type-refused",
+        "time-type-refused-details",
+      ]);
       await expect(provider.query(TIME_STATEMENT)).rejects.toThrow(SPARK_ERROR_SENTENCES.timeTypeOff);
+      expect(transport.served.filter((name) => name.endsWith("-details"))).toStrictEqual(["time-type-refused-details"]);
       await provider.disconnect();
     });
 
     test("SHOW TABLES answers inline with no Spark job", async () => {
-      const provider = await connected(version, ["show-tables-inline"]);
+      const { provider } = await connected(version, ["show-tables-inline"]);
       const result = await provider.query(SHOW_TABLES_STATEMENT);
       expect(result.fields).toEqual(["namespace", "tableName", "isTemporary"]);
       await provider.disconnect();
     });
 
     test("Explain: EXPLAIN FORMATTED text becomes the plan tree", async () => {
-      const provider = await connected(version, ["explain-formatted"]);
+      const { provider } = await connected(version, ["explain-formatted"]);
       const result = await provider.query(EXPLAIN_STATEMENT);
       expect(String(Object.values(result.rows[0])[0])).toContain("== Physical Plan ==");
       await provider.disconnect();
@@ -267,18 +279,18 @@ for (const version of ["4.2.0", "4.1.3"] as const) {
 
 describe("replay on 4.2.0 only", () => {
   test("no token and a wrong token are refused with the two sentences of 3.3", async () => {
-    const none = new SparkProvider(config(), {}, { transport: recordedSparkTransport("4.2.0", ["auth-no-token"]) });
+    const none = new SparkProvider(config(), {}, { transport: recorded("4.2.0", ["auth-no-token"]) });
     await expect(none.connect()).rejects.toBeInstanceOf(AuthenticationError);
     const wrong = new SparkProvider(
       config({ password: "not-the-token" }),
       {},
-      { transport: recordedSparkTransport("4.2.0", ["auth-wrong-token"]) },
+      { transport: recorded("4.2.0", ["auth-wrong-token"]) },
     );
     await expect(wrong.connect()).rejects.toThrow(SPARK_ERROR_SENTENCES.tokenWrong);
   });
 
   test("a FROM-led result of 100,001 rows is cut by the row budget, with its warning and one Interrupt", async () => {
-    const transport = recordedSparkTransport("4.2.0", [
+    const transport = recorded("4.2.0", [
       ...CONNECT,
       ...STATEMENT_SESSION,
       "row-budget-cut-command",
@@ -291,30 +303,32 @@ describe("replay on 4.2.0 only", () => {
     expect(result.rows).toHaveLength(100_000);
     expect(result.pagination?.wasLimited).toBe(true);
     expect(result.warnings).toEqual([{ message: SPARK_CUT_WARNINGS.rows }]);
-    // interrupt() swallows a failed call (T7.3), so only `served` shows the Interrupt matched its capture.
+    // interrupt() swallows a failed call, so `served` shows the one Interrupt its capture answered.
     expect(transport.served.filter((name) => name === "cancel-interrupt")).toEqual(["cancel-interrupt"]);
     await provider.disconnect();
   });
 
   test("a script in one scope: a temp view one statement makes, the next reads", async () => {
-    const provider = await connected("4.2.0", ["temp-view-create", "temp-view-script-command", "temp-view-script"]);
+    const { provider } = await connected("4.2.0", ["temp-view-create", "temp-view-script-command", "temp-view-script"]);
     // oxlint-disable-next-line no-await-in-loop -- the script's statements run in order in one scope.
     for (const statement of TEMP_VIEW_SCRIPT) await provider.query(statement, undefined, undefined, "scope-script");
     await provider.endOpenQueryTransaction("scope-script");
     await provider.disconnect();
   });
 
-  test("errors: a syntax error with ErrorInfo and one FetchErrorDetails, a missing table, a permission refusal's cause, maxResultSize", async () => {
-    const transport = recordedSparkTransport("4.2.0", [
+  test("errors: a syntax error with ErrorInfo, a missing table, a permission refusal's cause and maxResultSize, each with its FetchErrorDetails", async () => {
+    const transport = recorded("4.2.0", [
       ...CONNECT,
       ...STATEMENT_SESSION,
       "error-syntax",
       "error-syntax-details",
       "error-missing-table",
+      "error-missing-table-details",
       "error-permission-denied",
       "error-permission-denied-details",
       "error-max-result-size-command",
       "error-max-result-size",
+      "error-max-result-size-details",
     ]);
     const provider = new SparkProvider(config(), {}, { transport });
     await provider.connect();
@@ -322,16 +336,18 @@ describe("replay on 4.2.0 only", () => {
     await expect(provider.query(MISSING_TABLE_STATEMENT)).rejects.toBeInstanceOf(QueryError);
     await expect(provider.query(PERMISSION_STATEMENT)).rejects.toThrow("Permission denied");
     await expect(provider.query(MAX_RESULT_STATEMENT)).rejects.toThrow(SPARK_ERROR_SENTENCES.maxResultSize);
-    // Each FetchErrorDetails carried the errorId of the failure it details, so its capture answered it.
-    expect(transport.served.filter((name) => name.endsWith("-details"))).toEqual([
+    // Each FetchErrorDetails carried its failure's errorId, so the details captured in that failure's run answered it.
+    expect(transport.served.filter((name) => name.endsWith("-details"))).toStrictEqual([
       "error-syntax-details",
+      "error-missing-table-details",
       "error-permission-denied-details",
+      "error-max-result-size-details",
     ]);
     await provider.disconnect();
   });
 
   test("substitution off: SELECT '${x}' after SET x=1 returns the text as written (D7)", async () => {
-    const provider = await connected("4.2.0", ["substitution-set", "substitution-off-command", "substitution-off"]);
+    const { provider } = await connected("4.2.0", ["substitution-set", "substitution-off-command", "substitution-off"]);
     await provider.query(SUBSTITUTION_SET, undefined, undefined, "scope-subst");
     const result = await provider.query(SUBSTITUTION_SELECT, undefined, undefined, "scope-subst");
     expect(result.rows).toEqual([{ v: "${x}" }]);
@@ -339,7 +355,7 @@ describe("replay on 4.2.0 only", () => {
   });
 
   test("a session SET of the codec to zstd, then the next result refused naming the codec (5.4)", async () => {
-    const provider = await connected("4.2.0", [
+    const { provider } = await connected("4.2.0", [
       "compressed-zstd-set",
       "compressed-zstd-command",
       "compressed-zstd",
@@ -357,7 +373,7 @@ describe("replay on 4.2.0 only", () => {
   });
 
   test("the tree over the studio namespace's captures: catalogs, namespaces, objects, DESCRIBE and SHOW CREATE", async () => {
-    const provider = await connected("4.2.0", [
+    const { provider } = await connected("4.2.0", [
       "show-catalogs",
       "config-catalog-keys",
       "show-namespaces",
@@ -404,7 +420,7 @@ describe("replay on 4.2.0 only", () => {
 
   test("BUILT: a nested namespace listing, the session catalog's SHOW NAMESPACES answer rewritten to multi-part spellings", async () => {
     const spellings = ["studio", "lake.raw", "lake.`x.y`"];
-    const transport = withNamespaces(recordedSparkTransport("4.2.0", [...CONNECT, "show-namespaces"]), spellings);
+    const transport = withNamespaces(recorded("4.2.0", [...CONNECT, "show-namespaces"]), spellings);
     const provider = new SparkProvider(config(), {}, { transport });
     await provider.connect();
     const namespaces = await provider.listContainers(["spark_catalog"]);
@@ -415,7 +431,7 @@ describe("replay on 4.2.0 only", () => {
   });
 
   test("health: one AnalyzePlan version read on the metadata session", async () => {
-    const transport = recordedSparkTransport("4.2.0", CONNECT);
+    const transport = recorded("4.2.0", CONNECT);
     const provider = new SparkProvider(config(), {}, { transport });
     await provider.connect();
     const before = transport.served.length;
@@ -425,18 +441,14 @@ describe("replay on 4.2.0 only", () => {
   });
 
   test("a released session answers SESSION_CLOSED and the metadata session is re-created", async () => {
-    const provider = await connected("4.2.0", ["session-closed", "show-catalogs", "config-catalog-keys"]);
+    const { provider } = await connected("4.2.0", ["session-closed", "show-catalogs", "config-catalog-keys"]);
     await expect(provider.listContainers([])).resolves.toBeDefined();
     await provider.disconnect();
   });
 
   test("BUILT: the version refusal, the 4.2.0 version answer rewritten to 3.5.9 and 4.0.4", async () => {
     for (const old of ["3.5.9", "4.0.4"]) {
-      const provider = new SparkProvider(
-        config(),
-        {},
-        { transport: withVersion(recordedSparkTransport("4.2.0", CONNECT), old) },
-      );
+      const provider = new SparkProvider(config(), {}, { transport: withVersion(recorded("4.2.0", CONNECT), old) });
       // oxlint-disable-next-line no-await-in-loop -- one connect at a time on one provider.
       await expect(provider.connect()).rejects.toThrow(SPARK_ERROR_SENTENCES.versionTooOld(old));
       // oxlint-disable-next-line no-await-in-loop -- one connect at a time on one provider.
