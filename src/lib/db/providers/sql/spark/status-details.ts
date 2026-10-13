@@ -1,10 +1,10 @@
 /**
- * A bounded hand decoder of the `grpc-status-details-bin` trailer Spark attaches to an error (spec 4.10 step 1):
+ * A bounded hand decoder of the `grpc-status-details-bin` trailer Spark attaches to an error:
  * `google.rpc.Status` holding `google.rpc.ErrorInfo`, whose metadata carries Spark's errorClass, sqlState, errorId and
- * messageParameters (D02-C36).
+ * messageParameters.
  *
  * The two messages are read by hand because proto-loader builds serializers only for service methods and protobufjs
- * is a devDependency (spec 4.4). Every read is bounded: at most 64 KiB, 16 details and 8 KiB per kept map value; a
+ * is a devDependency. Every read is bounded: at most 64 KiB, 16 details and 8 KiB per kept map value; a
  * value over 8 KiB drops its own key only, so errorClass and sqlState survive a long messageParameters. A response from
  * a misbehaving or untrusted server is treated as untrusted input: anything malformed answers undefined, never a throw.
  * Pure: no I/O, no logger.

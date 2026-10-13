@@ -1,5 +1,5 @@
 /**
- * Spark's spelling of names and of multi-part namespaces (spec 4.1, 4.11, 7.4; L08-C17, C21).
+ * Spark's spelling of names and of multi-part namespaces.
  *
  * Pure and browser-safe: the connection dialog cannot import a provider module, so src/lib/db-ui-config.ts copies the
  * three field patterns below literally, and tests/unit/lib/db-ui-config.test.ts holds each copy equal to these.
@@ -8,22 +8,22 @@
  */
 import { SPARK_NAMESPACE_MAX_PARTS } from "./constants";
 
-/** One catalog name: 1 to 255 characters, no dot and no control character (spec 3.1). */
+/** One catalog name: 1 to 255 characters, no dot and no control character. */
 export const SPARK_CATALOG_PATTERN = /^[^.\p{Cc}]{1,255}$/u;
-/** 1 to 8 parts joined by `.`, each bare as quoteIfNeeded leaves it or backticked with a backtick doubled (spec 3.1). */
+/** 1 to 8 parts joined by `.`, each bare as quoteIfNeeded leaves it or backticked with a backtick doubled. */
 export const SPARK_NAMESPACE_PATTERN =
   /^(?:[A-Za-z_][A-Za-z0-9_]*|`(?:[^`]|``)+`)(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|`(?:[^`]|``)+`)){0,7}$/;
 /**
  * Printable ASCII, U+0020 to U+007E, the characters grpc-js takes in a non-binary header value, with no space at
- * either end, since Spark compares the token exactly (spec 3.1). The empty string matches: an empty Token is no token.
+ * either end, since Spark compares the token exactly. The empty string matches: an empty Token is no token.
  */
 export const SPARK_TOKEN_PATTERN = /^(?:[\x21-\x7E](?:[\x20-\x7E]*[\x21-\x7E])?)?$/;
 
-/** A name Spark's own quoteIfNeeded leaves bare (L08-C21). */
+/** A name Spark's own quoteIfNeeded leaves bare. */
 const BARE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const BARE_PREFIX = /^[A-Za-z_][A-Za-z0-9_]*/;
 
-/** Backticks, a backtick inside doubled (L08-C17). */
+/** Backticks, a backtick inside doubled. */
 export function quoteSparkName(name: string): string {
   return `\`${name.replaceAll("`", "``")}\``;
 }
@@ -76,7 +76,7 @@ export function spellNamespace(parts: readonly string[]): string {
   return parts.map(spellSparkName).join(".");
 }
 
-/** `catalog.namespace[.name]` as a statement writes it (spec 4.11): the catalog and the name always quoted, the namespace as given. */
+/** `catalog.namespace[.name]` as a statement writes it: the catalog and the name always quoted, the namespace as given. */
 export function qualifiedName(catalog: string, namespaceSpelling: string, name?: string): string {
   return [quoteSparkName(catalog), namespaceSpelling, ...(name === undefined ? [] : [quoteSparkName(name)])].join(".");
 }

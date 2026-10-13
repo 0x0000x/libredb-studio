@@ -713,7 +713,7 @@ services:
       SPARK_CONNECT_AUTHENTICATE_TOKEN: ${SPARK_CONNECT_TOKEN:-}
     # spark.driver.maxResultSize=4m and spark.connect.grpc.arrow.maxBatchSize=1m here only, so their two failures are
     # captured without bounding the default server: with the batch size at 1m a command answer above about 0.7 MiB
-    # fails with Spark's one-batch assertion (spec 4.10 command-batch-bound), which a default server reaches only past
+    # fails with Spark's one-batch assertion, which a default server reaches only past
     # the 16 MiB receive cap.
     command:
       - bash

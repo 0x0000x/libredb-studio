@@ -1,7 +1,7 @@
 import type { ParsedConnection } from "@/lib/connection-string-parser";
 
 /**
- * The Paste URL reader of an Apache Spark Connect address (spec 3.2): Spark's documented grammar
+ * The Paste URL reader of an Apache Spark Connect address: Spark's documented grammar
  * `sc://host[:port][/][;key=value]*`, the scheme fixed, the path empty, parameter names case-sensitive, port 15002 by
  * default. Pure, with type-only imports: `src/lib/connection-string-parser.ts` imports it, and the browser carries
  * that module. A refusal fills nothing and never repeats the text it refuses; when the text may hold a secret, a token

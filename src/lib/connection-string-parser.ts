@@ -264,7 +264,7 @@ export function parseConnectionString(input: string): ParsedConnection | null {
   }
   if (/^databend(\+https?)?:\/\//.test(trimmed)) return parseDatabendDSN(trimmed);
 
-  // Apache Spark (spec 3.2): the sc:// address, and the Spark Connect JDBC driver's jdbc:sc:// form, which it refuses.
+  // Apache Spark: the sc:// address, and the Spark Connect JDBC driver's jdbc:sc:// form, which it refuses.
   if (trimmed.startsWith("sc://") || trimmed.startsWith("jdbc:sc://")) return parseSparkConnectUri(trimmed);
 
   // Snowflake, ahead of ClickHouse's https:// rule: only an exact Snowflake host or Snowsight is claimed.

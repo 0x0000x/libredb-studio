@@ -1,7 +1,7 @@
 /**
- * Geometry and geography values to EWKT (spec 5.2): Spark sends Struct{srid Int32, wkb Binary}, and Studio shows
+ * Geometry and geography values to EWKT: Spark sends Struct{srid Int32, wkb Binary}, and Studio shows
  * `SRID=<srid>;<WKT>`. The reader is wkbToWkt of the Milvus provider, copied and never imported, from
- * src/lib/db/providers/vector/milvus/field-data.ts, with four changes. Two are the bounds of spec 6.5: a geometry
+ * src/lib/db/providers/vector/milvus/field-data.ts, with four changes. Two are bounds: a geometry
  * nested past 64 levels is not decoded, and a point count that would pass the end is refused before any point is
  * read, as is a ring count or a multi or collection part count that cannot fit, before any ring or part is read. Two refuse malformed forms the Milvus reader writes as WKT: a byte order other than 0 or 1, and a multi form
  * holding a part of another type, which it writes as WKT that misnames the value. A form the reader does not decode

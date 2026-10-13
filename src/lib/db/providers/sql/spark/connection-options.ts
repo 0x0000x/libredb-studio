@@ -1,12 +1,12 @@
 /**
- * Maps an Apache Spark connection to the options its gRPC channel opens with (spec 3.1, 4.3, 6.3). No socket opens
+ * Maps an Apache Spark connection to the options its gRPC channel opens with. No socket opens
  * here: every refusal is a DatabaseConfigError raised before any channel is built, and none repeats the value it
  * refuses (the Milvus rule). The checks run in one fixed order, and the first refusal answers: the tunnel, Host, Port,
  * User, Token, Catalog, Namespace, the SSL / TLS panel, the token's plaintext rule, then the query timeout.
  *
  * The target is `dns:` and the validated host and port. The TLS identity is the tunnel's far end when a tunnel carries
  * the connection, else the host; an IP identity is checked through SPARK_IP_SERVER_NAME. A token is never sent without
- * TLS to a host that is neither loopback nor tunnelled, with no opt-out (D5b): Spark Connect has no TLS of its own, so
+ * TLS to a host that is neither loopback nor tunnelled, with no opt-out: Spark Connect has no TLS of its own, so
  * a remote server is reached through a TLS proxy or the SSH tunnel.
  *
  * Host, Catalog and Namespace read as blank when they are absent, null, empty or only white space. Host and Namespace
@@ -57,7 +57,7 @@ export interface SparkConnectionOptions {
 }
 
 /**
- * The refusals of spec 3.1, each ending "Nothing was sent." where the spec words it so. src/lib/db-ui-config.ts copies
+ * The field refusals, each ending "Nothing was sent." where it applies. src/lib/db-ui-config.ts copies
  * hostEmpty, tokenCharacters, catalogFormat and namespaceFormat literally into SPARK_FIELD_RULES, and
  * tests/unit/lib/db-ui-config.test.ts holds each copy equal to these.
  */
@@ -80,7 +80,7 @@ const MAX_QUERY_TIMEOUT_MS = 2_147_483_647;
 /** What the shared TLS panel reader words its refusals with: Spark's name and Spark's own errors. */
 const WORDS: GrpcConfigWords = { engine: "Apache Spark", refuse: configError, wrongType };
 
-/** Throws DatabaseConfigError for every refusal of spec 3.1 and 6.3; never echoes a value. */
+/** Throws DatabaseConfigError for every refusal of the connection's fields and its TLS panel; never echoes a value. */
 export function buildSparkConnectionOptions(
   config: DatabaseConnection & WithTunnelFarEnd,
   context: { readonly queryTimeout: number },
@@ -99,7 +99,7 @@ export function buildSparkConnectionOptions(
     farEnd === undefined
       ? { host: targetHost, port: targetPort }
       : { host: grpcEndpointHost(farEnd.host, WORDS), port: shared(() => validatePort(farEnd.port)) };
-  // Any User but an absent, null or empty one, whatever its type: Spark Connect's identity is fixed (D5e).
+  // Any User but an absent, null or empty one, whatever its type: Spark Connect's identity is fixed.
   if (config.user !== undefined && config.user !== null && config.user !== "") {
     throw configError(SPARK_FIELD_SENTENCES.userNotTaken);
   }

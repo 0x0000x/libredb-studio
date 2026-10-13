@@ -1,12 +1,12 @@
 /**
- * Reading one ExecutePlan stream (spec 4.6 steps 5 to 8): the response kinds, the reassembly of chunked Arrow batches,
- * and the three budgets of 5.6: 100,000 rows and 16 MiB of decoded cost kept per statement, and 32 MiB received per
+ * Reading one ExecutePlan stream: the response kinds, the reassembly of chunked Arrow batches,
+ * and the three budgets: 100,000 rows and 16 MiB of decoded cost kept per statement, and 32 MiB received per
  * stream, whose end only stream.truncated tells apart from the server's end. Responses are told apart by the fields
  * they set, never by the oneof name; the descriptor decodes `schema` and `metrics`, which lie outside the oneof, as null
  * when unset. Every batch passes the IPC stream check before apache-arrow reads it, and a row's cost is known from its
  * offsets before any value is built. A misbehaving or untrusted server's answer is refused as unreadable: a chunk gap,
  * a repeat, a count field that is not a whole number, a row count that disagrees. Interrupt on a cut is execute.ts's
- * rule (4.8).
+ * rule.
  */
 import { type ArrowColumns, readIpcColumns, rowCost } from "./arrow";
 import { SPARK_ARROW_CHUNK_BYTES, SPARK_BATCH_OVERHEAD_BYTES, SPARK_STREAM_MAX_RECEIVED_BYTES } from "./constants";
@@ -31,7 +31,7 @@ export interface SparkKeptBatch {
   readonly rows: number;
 }
 
-/** The warning each cut is shown with (spec 3.6). */
+/** The warning each cut is shown with. */
 export const SPARK_CUT_WARNINGS = Object.freeze({
   rows: "The result reached Studio's statement budget of 100,000 rows, so only the rows before it are shown.",
   bytes: "The result reached Studio's statement budget of 16 MiB, so only the rows before it are shown.",
@@ -78,7 +78,7 @@ function count(value: unknown, what: string, fallback?: number, least = 0): numb
 }
 
 /**
- * How many leading rows of `columns` fit what the budget leaves after `used`, advancing `used` by them (spec 5.6): a
+ * How many leading rows of `columns` fit what the budget leaves after `used`, advancing `used` by them: a
  * row is refused by the row budget once `used.rows` has reached it, and by the byte budget when its cost would pass
  * what is left. The first row's cost includes the batch's SPARK_BATCH_OVERHEAD_BYTES, so every kept batch pays it once
  * and a batch that keeps no row pays nothing. The cut is declared only when such a row exists, so a result that ends
@@ -101,7 +101,7 @@ export function keepRows(
 }
 
 /**
- * ExecutePlan 1 (spec 4.6 step 5): the relation of the first command result, an inline local_relation or a lazy query.
+ * ExecutePlan 1: the relation of the first command result, an inline local_relation or a lazy query.
  * The stream is read to its end, past progress and metrics; one that ends without a command result, or that the
  * 32 MiB bound truncated, is refused as unreadable.
  */
@@ -129,7 +129,7 @@ interface Pending {
 }
 
 /**
- * ExecutePlan 2 (spec 4.6 steps 7 and 8): the schema's DataType and the kept batches, under the three budgets. A batch
+ * ExecutePlan 2: the schema's DataType and the kept batches, under the three budgets. A batch
  * without `num_chunks_in_batch` is one chunk; chunks are reassembled in order, and a batch is decoded only whole. A
  * batch of one chunk is whole once the reader holds it, so it is read even when its bytes reached the stream bound. At
  * the first chunk of a batch with chunks still to come, a batch whose other chunks could reach the bound is not read:
@@ -181,7 +181,7 @@ export async function readRelationAnswer(
     );
     if (index === 0) {
       if (pending !== undefined) throw unreadable(ENDED);
-      // Each chunk still to come may be a whole preferred chunk (4.6 step 7); a batch of one chunk has none and is
+      // Each chunk still to come may be a whole preferred chunk; a batch of one chunk has none and is
       // read. receivedBytes also counts the responses the channel has read ahead, so the check errs toward the cut.
       if (
         total > 1 &&

@@ -2,7 +2,7 @@
 /**
  * Writes src/lib/db/providers/sql/spark/proto/descriptor.ts: Spark Connect's gRPC API at apache/spark v4.2.0 as the
  * JSON descriptor that `@grpc/proto-loader`'s `fromJSON` reads, so the Apache Spark client loads no `.proto` file at
- * run time (spec 4.4). It has the shape of scripts/generate-milvus-descriptor.mjs, written again here because each
+ * run time. It has the shape of scripts/generate-milvus-descriptor.mjs, written again here because each
  * provider keeps its own files.
  *
  * The input is the vendored proto directory beside that file (its README.md records each file's SHA-256). The output

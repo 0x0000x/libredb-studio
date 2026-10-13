@@ -1,9 +1,9 @@
 /**
- * Pure builders of every request message the Apache Spark provider sends (spec 4.1), in the field names of the vendored
- * v4.2.0 protos as proto-loader reads them (`keepCase`). Every message carries the fixed identity of D5e and, once a
+ * Pure builders of every request message the Apache Spark provider sends, in the field names of the vendored
+ * v4.2.0 protos as proto-loader reads them (`keepCase`). Every message carries the fixed identity and, once a
  * session's first answer was observed, `client_observed_server_side_session_id`, so a restarted server answers
- * INVALID_HANDLE.SESSION_CHANGED instead of silently opening a fresh session without the setup (spec 4.5).
- * Every ExecutePlan asks for 4 MiB result chunks and carries no reattach option (spec 4.6). Pure: no I/O, no logger.
+ * INVALID_HANDLE.SESSION_CHANGED instead of silently opening a fresh session without the setup.
+ * Every ExecutePlan asks for 4 MiB result chunks and carries no reattach option. Pure: no I/O, no logger.
  */
 import { SPARK_ARROW_CHUNK_BYTES, SPARK_CLIENT_TYPE, SPARK_USER_CONTEXT } from "./constants";
 
@@ -78,12 +78,12 @@ export function configGetAllRequest(session: SparkSessionRef, prefix: string): o
   return { ...head(session), operation: { get_all: { prefix } } };
 }
 
-/** AnalyzePlan spark_version: one unary call, no Spark job (spec 4.9). */
+/** AnalyzePlan spark_version: one unary call, no Spark job. */
 export function versionRequest(session: SparkSessionRef): object {
   return { ...head(session), spark_version: {} };
 }
 
-/** Interrupt by the run's tag, which reaches both of its operations (spec 4.8). */
+/** Interrupt by the run's tag, which reaches both of its operations. */
 export function interruptByTagRequest(session: SparkSessionRef, tag: string): object {
   return { ...head(session), interrupt_type: "INTERRUPT_TYPE_TAG", operation_tag: tag };
 }

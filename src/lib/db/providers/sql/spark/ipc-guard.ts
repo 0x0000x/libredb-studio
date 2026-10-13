@@ -1,5 +1,5 @@
 /**
- * The pre-check of every Arrow IPC stream before apache-arrow reads it (spec 5.5): a minimal, bounds-checked reader of
+ * The pre-check of every Arrow IPC stream before apache-arrow reads it: a minimal, bounds-checked reader of
  * the IPC framing and of the four FlatBuffers tables it needs (Message, Schema, Field, RecordBatch). apache-arrow
  * decodes a schema recursively with no depth limit and was never fed a malformed stream, so Studio reads the
  * structure first and refuses the result as unreadable when anything is out of bounds. Pure: no I/O, no logger.
@@ -180,7 +180,7 @@ class Header {
   }
 }
 
-/** A field's layout and value width, or a refusal for a type Studio does not read (spec 5.5 lists those it does). */
+/** A field's layout and value width, or a refusal for a type Studio does not read. */
 function layoutOf(header: Header, field: number): { readonly layout: Layout; readonly width: number } {
   const id = header.scalar(field, 2, 1, 0);
   const type = header.target(field, 3);

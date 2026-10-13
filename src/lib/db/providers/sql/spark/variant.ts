@@ -1,5 +1,5 @@
 /**
- * VARIANT binary to JSON text (spec 5.2), per the Variant encoding of parquet-format 37b6e8b that Spark 4.2 writes.
+ * VARIANT binary to JSON text, per the Variant encoding of parquet-format 37b6e8b that Spark 4.2 writes.
  * Every offset and length is checked against its buffer, nesting is at most 64 levels, and the text is bounded while
  * it is written: the encoding lets an object's fields share one nested value, so a short binary can stand for a long
  * text, and the reader stops the moment the text would pass `maxChars`. Pure: no I/O, no logger.
@@ -187,7 +187,7 @@ function writePrimitive(value: Uint8Array, at: number, id: number, out: Writer):
     case 16:
       return out.push(JSON.stringify(utf8(value, body + 4, unsigned(value, body, 4))));
     default:
-      // TIME, the nanosecond timestamps and UUID are not produced by Spark (L10-C56);
+      // TIME, the nanosecond timestamps and UUID are not produced by Spark;
       // any other id is not in the encoding.
       return malformed();
   }

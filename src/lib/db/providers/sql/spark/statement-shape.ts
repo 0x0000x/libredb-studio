@@ -3,7 +3,7 @@ import { readLeadingKeyword } from "@/lib/sql/leading-keyword";
 import { readSqlSpan } from "@/lib/sql/spans";
 
 /**
- * The refusals made before any call to Spark (spec 3.5, 4.6 steps 1 and 2), each read under the Spark grammar row so
+ * The refusals made before any call to Spark, each read under the Spark grammar row so
  * the statement Spark parses is the one Studio's confirmation gate and row limiter read. Pure: no I/O, no logger.
  */
 export const SPARK_STATEMENT_SENTENCES = Object.freeze({
@@ -17,7 +17,7 @@ export const SPARK_STATEMENT_SENTENCES = Object.freeze({
 });
 
 const SPARK_GRAMMAR = resolveSqlGrammar("spark");
-/** The Unicode spaces Spark 4.x reads as white space and Studio's span reader does not (L08-C75). */
+/** The Unicode spaces Spark 4.x reads as white space and Studio's span reader does not. */
 const UNICODE_SPACE = /[\u00A0\u1680\u2000-\u200A\u2028\u202F\u205F\u3000]/;
 
 /**
@@ -45,7 +45,7 @@ const LATE_START = /(?<=[A-Za-z0-9])(?![\x00-\x7F])\p{L}/u;
 const WORD_STEP = new RegExp(String.raw`\p{L}*(?:(?!${LATE_START.source})[\p{L}0-9_])*`, "uy");
 
 /**
- * The script-block refusal when the statement's leading keyword under the Spark grammar is BEGIN (D8a). Spark's lexer
+ * The script-block refusal when the statement's leading keyword under the Spark grammar is BEGIN. Spark's lexer
  * upper-cases each character before it matches a token (`UpperCaseCharStream.LA`, `parsers.scala` v4.2.0), and U+0131,
  * the dotless i, upper-cases to I, so the keyword is read with each U+0131 as I. U+017F, the long s, is the one other
  * character that upper-cases into `A-Z`, to S, which BEGIN does not hold.

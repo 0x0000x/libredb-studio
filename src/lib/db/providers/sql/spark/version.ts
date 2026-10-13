@@ -1,5 +1,5 @@
 /**
- * The version floor of D3 (spec 4.9): Studio connects to Spark 4.1 and later, the first release that splits large
+ * The version floor: Studio connects to Spark 4.1 and later, the first release that splits large
  * results into chunks Studio can read (SPARK-53525). The text is AnalyzePlan's spark_version answer; a pre-release of
  * exactly 4.1.0 reads as below the floor, because which 4.1.0 previews carry result chunking was not checked.
  * Pure: no I/O, no logger.

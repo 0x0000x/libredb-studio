@@ -1,8 +1,8 @@
 /**
- * The 15 s unary heartbeat of D17 (spec 4.7). Spark cuts a connection with a too_many_pings GOAWAY once it has written
- * nothing on it for 20 to 40 s while the channel pings every 10 s (D01-C10, C16, C17), and a session can silence a
+ * The 15 s unary heartbeat. Spark cuts a connection with a too_many_pings GOAWAY once it has written
+ * nothing on it for 20 to 40 s while the channel pings every 10 s, and a session can silence a
  * run's progress or a paused reader can silence the server; a unary call every 15 s on the same channel prevented every
- * measured cut (D01-C19, C20). Each session with at least one open ExecutePlan holds one timer; each tick sends the
+ * measured cut. Each session with at least one open ExecutePlan holds one timer; each tick sends the
  * beat the caller gave (a Config get_option of spark.sql.ansi.enabled on that session, under its own deadline). A beat
  * that fails ends nothing: the run's own call reports its own outcome. The channel's options do not change.
  */
@@ -58,7 +58,7 @@ export class SparkHeartbeat {
 
   private tick(session: SparkSessionRef): void {
     this.sent += 1;
-    // A failed beat ends nothing (spec 4.7): the run's own call reports its own outcome.
+    // A failed beat ends nothing: the run's own call reports its own outcome.
     Promise.resolve()
       .then(() => this.beat(session))
       .catch(() => undefined);

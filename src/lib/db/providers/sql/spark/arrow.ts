@@ -1,9 +1,9 @@
 /**
- * The only module under src/ that imports apache-arrow (spec 4.1, D6): one Arrow IPC stream to raw columns. The stock
+ * The only module under src/ that imports apache-arrow: one Arrow IPC stream to raw columns. The stock
  * getters are never used for int64, decimal, timestamp, time, duration or interval values, which they return as
  * bigint, unscaled digits, rounded milliseconds or raw words; the Studio value mapper (values.ts) reads the raw
  * buffers instead. Every stream passes checkIpcStream first, so apache-arrow never reads an unchecked byte, and a
- * row's decoded cost (spec 5.6) is read from offsets and children's lengths before any value is built. Pure: no I/O,
+ * row's decoded cost is read from offsets and children's lengths before any value is built. Pure: no I/O,
  * no logger.
  */
 import {
@@ -21,7 +21,7 @@ import {
 import { SPARK_ERROR_SENTENCES, SparkError } from "./errors";
 import { checkIpcStream, SPARK_IPC_FAILURES } from "./ipc-guard";
 
-/** The Arrow types spec 5.2 maps, the only ones a column can carry. */
+/** The Arrow types the value mapper reads, the only ones a column can carry. */
 export type ArrowTypeName =
   | "null"
   | "bool"
@@ -91,7 +91,7 @@ function unreadable(what: string, cause?: unknown): never {
 }
 
 /**
- * The type spec 5.2 maps, read from apache-arrow's field type. The pre-check already refused every other type, so a
+ * The mapped type, read from apache-arrow's field type. The pre-check already refused every other type, so a
  * type left unnamed here is refused with the pre-check's own words.
  */
 function typeName(type: DataType): ArrowTypeName {
@@ -180,7 +180,7 @@ function columnOf(field: Field, data: Data | undefined): ArrowColumnData {
 
 /** One checked Arrow IPC stream to its columns' fields and raw buffers; refuses with `SparkError("unreadable")`. */
 export function readIpcColumns(bytes: Uint8Array): ArrowColumns {
-  // Spark sends one record batch a stream (spec 5.1). The pre-check counts them, so a second one is refused before
+  // Spark sends one record batch a stream. The pre-check counts them, so a second one is refused before
   // apache-arrow reads any of the stream.
   if (checkIpcStream(bytes).batches > 1) unreadable("a stream with more than one record batch");
   let table: Table;
@@ -200,7 +200,7 @@ export function readIpcColumns(bytes: Uint8Array): ArrowColumns {
 }
 
 /**
- * The cost of rows [from, to) of a column: 8 bytes a value at every depth plus string and binary lengths (spec 5.6).
+ * The cost of rows [from, to) of a column: 8 bytes a value at every depth plus string and binary lengths.
  * An empty range reads no offset, since a column of no values may carry none.
  */
 function rangeCost(column: ArrowColumnData, from: number, to: number): number {
@@ -217,7 +217,7 @@ function rangeCost(column: ArrowColumnData, from: number, to: number): number {
 }
 
 /**
- * The decoded cost of one row, from offsets and children's lengths before any value is built (spec 5.6). A nested
+ * The decoded cost of one row, from offsets and children's lengths before any value is built. A nested
  * range is summed in one step per level, never per element, so a list over a long Null child costs no loop. The
  * offsets read are the ones the pre-check bounded, so no read falls outside them; a row outside the batch is refused.
  */

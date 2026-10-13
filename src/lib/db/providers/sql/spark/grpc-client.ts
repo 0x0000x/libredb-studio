@@ -1,12 +1,12 @@
 /**
- * The Apache Spark provider's gRPC adapter (spec 4.3, 4.4): the one provider file that imports the generated
+ * The Apache Spark provider's gRPC adapter: the one provider file that imports the generated
  * descriptor, and with proto/descriptor.ts the only files under src/ importing @grpc/proto-loader, over the shared gRPC
  * transport of src/lib/db/grpc/, which tests/unit/db/spark/seam-guard.test.ts holds.
  *
  * The channel, its options and its calls are the shared transport's; this file adds a stub built from
  * SparkConnectService filtered to SPARK_ALLOWLISTED_RPCS, so AddArtifacts, ArtifactStatus, ReattachExecute,
  * ReleaseExecute, CloneSession and GetStatus cannot be called although the whole descriptor is loaded. Retries are
- * "none": a statement sent twice runs twice (P01-C51). A call its own signal ended before it was sent raises
+ * "none": a statement sent twice runs twice. A call its own signal ended before it was sent raises
  * SparkError("unsent").
  */
 import { fromJSON, type MethodDefinition, type PackageDefinition, type ServiceDefinition } from "@grpc/proto-loader";
@@ -27,7 +27,7 @@ export const SPARK_LOADER_OPTIONS = {
 
 export type SparkRpc = "ExecutePlan" | "AnalyzePlan" | "Config" | "Interrupt" | "ReleaseSession" | "FetchErrorDetails";
 
-/** Every RPC the adapter may name; the stub holds these and no other (spec 4.4). */
+/** Every RPC the adapter may name; the stub holds these and no other. */
 export const SPARK_ALLOWLISTED_RPCS: readonly SparkRpc[] = [
   "ExecutePlan",
   "AnalyzePlan",
@@ -42,7 +42,7 @@ const SERVICE = "spark.connect.SparkConnectService";
 let definition: PackageDefinition | undefined;
 let allowlisted: ServiceDefinition | undefined;
 
-/** The descriptor as grpc-js reads it, built on first use and kept for the process: fromJSON costs 33 to 37 ms (D01-C54). */
+/** The descriptor as grpc-js reads it, built on first use and kept for the process: fromJSON costs 33 to 37 ms. */
 export function sparkDefinition(): PackageDefinition {
   definition ??= fromJSON(SPARK_DESCRIPTOR, SPARK_LOADER_OPTIONS);
   return definition;
@@ -57,7 +57,7 @@ export function allowlistedService(): ServiceDefinition {
   return allowlisted;
 }
 
-/** `authorization: Bearer <token>`, the prefix exact and case-sensitive; no metadata at all without a token (spec 4.3). */
+/** `authorization: Bearer <token>`, the prefix exact and case-sensitive; no metadata at all without a token. */
 export function sparkCallMetadata(token: string | undefined): Readonly<Record<string, string>> {
   return token === undefined ? {} : { authorization: `Bearer ${token}` };
 }

@@ -1,12 +1,12 @@
 /**
- * A result's columns as Studio shows them (spec 5.1, 5.2, 3.6): the value kind values.ts maps a cell by, and Spark's
+ * A result's columns as Studio shows them: the value kind values.ts maps a cell by, and Spark's
  * own spelling of the column type for `columnTypes`, the form Spark's simpleString writes, never cut (`decimal(10,2)`,
  * `interval year to month`), but with each struct field name spelled as Spark's quoteIfNeeded spells it
  * (``struct<`a b`:int,ok:bigint>``), so a struct's spelling is type text Spark parses back as the same struct, which
  * the SQL export hands to FROM_JSON. The relation path reads the `DataType` proto Spark sends first, as Spark's own
  * client reads it (DataTypeProtoConverter), held to the 64 levels, the 10,000 fields and the decimal bound the IPC
- * schema is held to (5.5); the command path, which sends no `DataType`, reads the Arrow types as Spark reads them
- * back (ArrowUtils). On the relation path the two must name the same columns (5.1), of the same type at every depth.
+ * schema is held to; the command path, which sends no `DataType`, reads the Arrow types as Spark reads them
+ * back (ArrowUtils). On the relation path the two must name the same columns, of the same type at every depth.
  * Pure: no I/O, no logger.
  */
 import type { ArrowColumnData, ArrowColumns } from "./arrow";
@@ -61,7 +61,7 @@ const DAY_TIME: readonly IntervalUnit[] = ["DAY", "HOUR", "MINUTE", "SECOND"];
 const DECIMAL_DEFAULT_PRECISION = 10;
 /** Spark's DecimalType.MAX_PRECISION. */
 const DECIMAL_MAX_PRECISION = 38;
-/** Studio's floor for a legacy negative scale, which Spark leaves unbounded (spec 5.5, as ipc-guard.ts holds it). */
+/** Studio's floor for a legacy negative scale, which Spark leaves unbounded, as ipc-guard.ts holds it. */
 const DECIMAL_MIN_SCALE = -38;
 /** TimeType.DEFAULT_PRECISION: Spark's time with no precision named, and its reading of an Arrow Time64(ns). */
 const TIME_DEFAULT_PRECISION = 6;
@@ -132,7 +132,7 @@ function intervalOf(yearMonth: boolean, fields: IntervalFields): Leaf {
 }
 
 /**
- * A decimal, held to the bound ipc-guard.ts holds an Arrow Decimal to (spec 5.5): Spark's precision 1 to 38 and a scale
+ * A decimal, held to the bound ipc-guard.ts holds an Arrow Decimal to: Spark's precision 1 to 38 and a scale
  * at most the precision, and Studio's own floor of -38 for a legacy negative scale, so the text of one value stays
  * short.
  */
@@ -278,10 +278,10 @@ function typed(dataType: unknown, depth: number, budget: { fields: number }, out
     case "geography":
       return emit(out, geospatialOf(name, typeof body.srid === "number" ? body.srid : 0));
     case "udt":
-      // A user-defined type travels as its storage type (spec 5.2; Spark's ArrowUtils writes a UDT as its sqlType), so
+      // A user-defined type travels as its storage type (Spark's ArrowUtils writes a UDT as its sqlType), so
       // it is read and spelled as that type, at the same depth and counted once, as the Arrow schema carries it. A
       // storage type that is itself user-defined is bounded by protobufjs, which refuses a message nested past 100
-      // levels (spec 5.5).
+      // levels.
       budget.fields -= 1;
       return typed(body.sql_type, depth, budget, out);
     default:
@@ -289,7 +289,7 @@ function typed(dataType: unknown, depth: number, budget: { fields: number }, out
   }
 }
 
-/** The relation path's result schema, a struct `DataType`, to Studio columns; refused past the bounds of 5.5. */
+/** The relation path's result schema, a struct `DataType`, to Studio columns; refused past the IPC schema's bounds. */
 export function columnsFromDataType(dataType: object): SparkColumn[] {
   if ((dataType as { kind?: unknown }).kind !== "struct") unreadable("a result schema that is not a struct");
   const body = ((dataType as { struct?: unknown }).struct ?? {}) as Record<string, unknown>;
@@ -443,7 +443,7 @@ function sameKind(declared: SparkValueKind, read: SparkValueKind): boolean {
 }
 
 /**
- * On the relation path the `DataType` schema and the Arrow batch must name the same columns (spec 5.1), each of the
+ * On the relation path the `DataType` schema and the Arrow batch must name the same columns, each of the
  * same kind (sameKind), so no cell is read by a kind its batch does not hold. A column's name is compared as it is,
  * since Spark numbers a repeated name only inside a struct.
  */

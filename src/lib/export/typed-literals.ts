@@ -762,7 +762,7 @@ const snowflakeLiteral: TypedWriter = (value, declared, scalar) =>
 // ---------------------------------------------------------------------------------------
 
 /**
- * Spark's typed literals for the texts the Spark provider's decoder writes (spec 5.2, 7.5): a date, a timestamp with
+ * Spark's typed literals for the texts the Spark provider's decoder writes: a date, a timestamp with
  * its `+00:00`, a timestamp without a zone and a time, each checked against that text before it is quoted, so a cell
  * in another form is refused rather than left to Spark's string casts. Strings, booleans, plain numbers and bytes
  * are the generic writer's (`LITERAL_ESCAPE.spark`, `BINARY_LITERAL.spark`).
@@ -790,7 +790,7 @@ const SPARK_ANSI_INTERVAL =
 const SPARK_NESTED_TYPE = /^(array|map|struct)</;
 /**
  * The type names inside an array, map or struct that FROM_JSON does not read back from the text the decoder writes
- * (spec 5.2), each with the words its refused cell is reported in. Spark 4.2.0's JSON reader takes a binary value
+ * each with the words its refused cell is reported in. Spark 4.2.0's JSON reader takes a binary value
  * only as base64, where the decoder writes `\x<hex>`; makes a JSON string under VARIANT a string VARIANT, where the
  * decoder writes a variant's JSON text as a string; and has no reader for a geospatial type (`JacksonParser.scala`
  * at v4.2.0). A CHAR or VARCHAR anywhere in a FROM_JSON schema fails the statement with

@@ -201,7 +201,7 @@ const DIALECT_TYPES: Partial<Record<DatabaseType, Partial<Record<InferredKind, s
     // 2005.
     binary: "VARBINARY(MAX)",
   },
-  // Spark SQL has no TEXT, DOUBLE PRECISION or BLOB: its spellings are STRING, DOUBLE and BINARY (spec 7.5).
+  // Spark SQL has no TEXT, DOUBLE PRECISION or BLOB: its spellings are STRING, DOUBLE and BINARY.
   spark: { text: "STRING", numeric: "DOUBLE", binary: "BINARY" },
 };
 

@@ -1,5 +1,5 @@
 /**
- * Exact date, timestamp, time and interval texts from the raw integers Spark sends (spec 5.2): no Date object and no
+ * Exact date, timestamp, time and interval texts from the raw integers Spark sends: no Date object and no
  * fraction held in a double, so 0001-01-01 and the int64 extremes come out exact and an interval reads as Spark prints
  * it. A day or month count is an int32, whose every quotient below is exact in a double; anything finer than a day is
  * BigInt. A time of day or a field range outside its type is refused as unreadable, never written as a text Spark does

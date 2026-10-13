@@ -1,9 +1,9 @@
 /**
- * The Studio value mapper of spec 5.2: one cell of a raw Arrow column to an exact, JSON-safe value. No bigint leaves
- * (5.3): an int64 is a number when safe and its digits otherwise, a decimal its text. Every object keyed by server
+ * The Studio value mapper: one cell of a raw Arrow column to an exact, JSON-safe value. No bigint leaves
+ * the mapper: an int64 is a number when safe and its digits otherwise, a decimal its text. Every object keyed by server
  * text is built from entries, so a key named __proto__ is an own property. A cell is read only under the Arrow type
  * its kind reads. The relation path takes a column's kind from the DataType Spark sends first, and assertSchemasAgree
- * (spec 5.1) holds the batch to it in column count, names and kinds, a struct's repeated field names as Spark's Arrow
+ * holds the batch to it in column count, names and kinds, a struct's repeated field names as Spark's Arrow
  * writer numbers them. The layout check here also holds what that comparison leaves out, the children of a VARIANT or
  * geospatial struct, and covers a caller that maps cells without comparing schemas, so a column whose batch is laid
  * out otherwise is refused before a byte of it is read under the wrong type. Pure: no I/O, no logger.
@@ -25,7 +25,7 @@ const EMPTY = new Uint8Array(0);
 // string, where a default decoder would drop it from the value (variant.ts reads its strings alike).
 const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 /**
- * The key kinds whose values are not scalar text: a map of such keys is a list of [key, value] pairs (spec 5.2), as is
+ * The key kinds whose values are not scalar text: a map of such keys is a list of [key, value] pairs, as is
  * a map whose key texts are not all distinct.
  */
 const NESTED_KEYS: ReadonlySet<SparkValueKind["type"]> = new Set([
@@ -37,7 +37,7 @@ const NESTED_KEYS: ReadonlySet<SparkValueKind["type"]> = new Set([
   "geography",
 ]);
 
-/** The Arrow type a cell of each kind is read from, as Spark writes it (spec 5.2, the Arrow column). */
+/** The Arrow type a cell of each kind is read from, as Spark writes it. */
 const ARROW_TYPES: Readonly<Record<SparkValueKind["type"], ArrowTypeName>> = {
   void: "null",
   boolean: "bool",
@@ -212,7 +212,7 @@ function valueOf(
       }
     case "binary": {
       const bytes = bytesAt(data, row);
-      // A top-level binary is a Buffer of its own, which the grid renders as binary (spec 5.3). A nested one is the
+      // A top-level binary is a Buffer of its own, which the grid renders as binary. A nested one is the
       // \x<hex> text binaryText (src/lib/export/binary.ts) writes, from Buffer's own hex encoder: binaryText builds the
       // text a byte at a time, which for a 16 MiB value measured 1.6 s and 1 GB under Node and 4.4 s and 1.5 GB under
       // Bun, against 15 ms here.
@@ -302,9 +302,9 @@ function valueOf(
 }
 
 /**
- * One cell as Studio shows it (spec 5.2). `text` is the statement's decoded budget still left, which a VARIANT's text
+ * One cell as Studio shows it. `text` is the statement's decoded budget still left, which a VARIANT's text
  * counts against while it is written and is charged with; past it, `SparkCellOverBudget` is thrown before more is
- * built (spec 5.2, 5.6). Absent, a whole statement budget (SPARK_RESULT_BYTE_BUDGET), never an unbounded one: a VARIANT
+ * built. Absent, a whole statement budget (SPARK_RESULT_BYTE_BUDGET), never an unbounded one: a VARIANT
  * of a few hundred bytes can stand for 2^64 values, and variantJson refuses a budget that is not a non-negative safe
  * integer. A cell Studio cannot read is refused as `SparkError("unreadable")` naming the column; a row outside the
  * column is a RangeError, as it is for rowCost.
