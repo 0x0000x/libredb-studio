@@ -1,10 +1,10 @@
 /**
- * Spec 10.1 rows 6 to 16 and the pure bounds of 6.5, run once under Bun by grpc-runtimes.test.ts and once in a Node
- * child it bundles, because every bound must hold under both and the TLS failure texts differ by runtime while the
- * sentences Studio shows must not. No bun:test import and no Bun global.
+ * The wire cases and the pure decoder bounds, run once under Bun by grpc-runtimes.test.ts and once in a Node child it
+ * bundles, because every bound must hold under both and the TLS failure texts differ by runtime while the sentences
+ * Studio shows must not. No bun:test import and no Bun global.
  */
 import { readFileSync } from "node:fs";
-import { SparkHeartbeat } from "@/lib/db/providers/sql/spark/heartbeat";
+import { SPARK_HEARTBEAT_INTERVAL_MS } from "@/lib/db/providers/sql/spark/constants";
 import { SparkProvider } from "@/lib/db/providers/sql/spark/index";
 import { checkIpcStream } from "@/lib/db/providers/sql/spark/ipc-guard";
 import { columnsFromDataType } from "@/lib/db/providers/sql/spark/schema";
@@ -12,7 +12,7 @@ import { readStatusDetails } from "@/lib/db/providers/sql/spark/status-details";
 import { variantJson } from "@/lib/db/providers/sql/spark/variant";
 import { wkbToWkt } from "@/lib/db/providers/sql/spark/wkb";
 import type { DatabaseConnection } from "@/lib/types";
-import { type SparkFakeOptions, startSparkFake } from "./spark-connect-server";
+import { type SparkFakeOptions, type SparkFakeServer, startSparkFake } from "./spark-connect-server";
 import { columnsStream, largeUtf8Stream, malformedStream, nestedSchemaStream } from "./spark-ipc";
 
 export interface SparkRuntimeOutcome {
@@ -84,7 +84,7 @@ const details = (bytes: Uint8Array) => {
   return `${bytes.length} ${shown}`;
 };
 
-/** A CA that did not sign the fake's certificate, read from the working directory (the repository root, PLAN-00 gap m). */
+/** A CA that did not sign the fake's certificate, read from the working directory, which is the repository root. */
 const OTHER_CA = () => readFileSync("tests/fixtures/tls/other-ca.crt", "utf8");
 
 /**
@@ -94,7 +94,7 @@ const OTHER_CA = () => readFileSync("tests/fixtures/tls/other-ca.crt", "utf8");
 async function withFake(
   options: Omit<SparkFakeOptions, "statements"> & { statements?: SparkFakeOptions["statements"] },
   config: Partial<DatabaseConnection>,
-  body: (provider: SparkProvider) => Promise<string>,
+  body: (provider: SparkProvider, fake: SparkFakeServer) => Promise<string>,
   portFirst = false,
 ): Promise<string> {
   const fake = await startSparkFake({
@@ -114,7 +114,7 @@ async function withFake(
   const lead = portFirst ? `${port} ` : "";
   try {
     await provider.connect();
-    return lead + (await body(provider));
+    return lead + (await body(provider, fake));
   } catch (error) {
     return lead + failed(error);
   } finally {
@@ -122,6 +122,81 @@ async function withFake(
     fake.close();
   }
 }
+
+/** Waits for `ready`, polling every 5 ms, and fails naming `what` when it has not happened within two seconds. */
+async function until(what: string, ready: () => boolean): Promise<void> {
+  for (let waited = 0; !ready(); waited += 5) {
+    if (waited >= 2_000) throw new Error(`${what} did not happen within 2 s`);
+    // oxlint-disable-next-line no-await-in-loop -- a poll: each wait follows the check before it.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+/**
+ * Takes over the heartbeat's interval timer (the one set every SPARK_HEARTBEAT_INTERVAL_MS) so a case can fire its
+ * ticks itself instead of waiting 15 s, and records whether it is cleared. Every other timer stays the runtime's own.
+ */
+function heartbeatTimer() {
+  const { setInterval: realSet, clearInterval: realClear } = globalThis;
+  const timer = { tick: undefined as (() => void) | undefined, cleared: false };
+  const handle = {};
+  globalThis.setInterval = ((handler: () => void, ms?: number, ...rest: unknown[]) => {
+    if (ms !== SPARK_HEARTBEAT_INTERVAL_MS) return realSet(handler, ms, ...rest);
+    timer.tick = handler;
+    return handle;
+  }) as typeof globalThis.setInterval;
+  globalThis.clearInterval = ((id?: unknown) => {
+    if (id === handle) timer.cleared = true;
+    else realClear(id as ReturnType<typeof realSet>);
+  }) as typeof globalThis.clearInterval;
+  const restore = () => {
+    globalThis.setInterval = realSet;
+    globalThis.clearInterval = realClear;
+  };
+  return { timer, restore };
+}
+
+/** The Config get_option of spark.sql.ansi.enabled the fake received on `sessionId`, the beat the provider sends. */
+const configBeats = (fake: SparkFakeServer, sessionId: string) =>
+  fake.log.entries.filter(
+    (entry) =>
+      entry.rpc === "Config" &&
+      entry.sessionId === sessionId &&
+      JSON.stringify((entry.request as { operation?: { get_option?: object } }).operation?.get_option) ===
+        JSON.stringify({ keys: ["spark.sql.ansi.enabled"] }),
+  ).length;
+
+/** An array VARIANT `levels` deep around a null, its offsets two bytes wide so no length wraps. */
+function nestedVariant(levels: number): Uint8Array {
+  let value = Uint8Array.of(0x00);
+  for (let level = 0; level < levels; level += 1) {
+    value = Uint8Array.from([0x07, 1, 0, 0, value.length & 0xff, value.length >> 8, ...value]);
+  }
+  return value;
+}
+
+/** A WKB point inside `levels` geometry collections. */
+function nestedWkb(levels: number): Uint8Array {
+  let nested = Uint8Array.from([1, 1, 0, 0, 0, ...new Uint8Array(Float64Array.of(1, 2).buffer)]);
+  for (let level = 0; level < levels; level += 1) nested = Uint8Array.from([1, 7, 0, 0, 0, 1, 0, 0, 0, ...nested]);
+  return nested;
+}
+
+/** A one-column struct whose column is `levels` arrays around an integer. */
+function nestedDataType(levels: number): object {
+  let type: object = { kind: "integer", integer: {} };
+  for (let level = 0; level < levels; level += 1) type = { kind: "array", array: { element_type: type } };
+  return { kind: "struct", struct: { fields: [{ name: "c", data_type: type, nullable: true }] } };
+}
+
+/** What `read` answers as text, or the failure's class and sentence. */
+const outcomeOf = (read: () => unknown) => {
+  try {
+    return String(read());
+  } catch (error) {
+    return failed(error);
+  }
+};
 
 const statementFails = (answer: SparkFakeOptions["statements"][string]) =>
   withFake({ statements: { "SELECT x": answer } }, {}, async (provider) => {
@@ -132,7 +207,7 @@ const statementFails = (answer: SparkFakeOptions["statements"][string]) =>
 export async function runSparkRuntimeCases(): Promise<readonly SparkRuntimeOutcome[]> {
   const cases: [string, () => Promise<string>][] = [
     [
-      "6 interrupt",
+      "interrupt",
       () =>
         withFake({ statements: { "SELECT x": { kind: "silent" } } }, {}, async (provider) => {
           const run = provider.query("SELECT x", undefined, "q-6").then(() => "answered", failed);
@@ -142,49 +217,61 @@ export async function runSparkRuntimeCases(): Promise<readonly SparkRuntimeOutco
         }),
     ],
     [
-      "7 error info",
+      // The server's message names no class, so only the decoded ErrorInfo can add the TIME sentence.
+      "error info",
       () =>
         statementFails({
           kind: "error",
           code: 13,
-          message: "[TABLE_OR_VIEW_NOT_FOUND] The table cannot be found.",
-          errorInfo: { errorClass: "TABLE_OR_VIEW_NOT_FOUND", sqlState: "42P01" },
+          message: "The data type TIME is not supported.",
+          errorInfo: { errorClass: "UNSUPPORTED_TIME_TYPE", sqlState: "0A000" },
         }),
     ],
-    ["8 oversized command", () => statementFails({ kind: "oversized", bytes: 17_000_000, path: "command" })],
-    ["9 large var types", () => statementFails({ kind: "command", ipc: largeUtf8Stream() })],
-    ["10 over-deep schema", () => statementFails({ kind: "command", ipc: nestedSchemaStream(65) })],
+    ["oversized command", () => statementFails({ kind: "oversized", bytes: 17_000_000, path: "command" })],
+    ["large var types", () => statementFails({ kind: "command", ipc: largeUtf8Stream() })],
+    ["over-deep schema", () => statementFails({ kind: "command", ipc: nestedSchemaStream(65) })],
     [
-      "11 heartbeat",
-      async () => {
-        let beats = 0;
-        const heartbeat = new SparkHeartbeat(async () => {
-          beats += 1;
-        }, 50);
-        const release = heartbeat.hold({ sessionId: "00000000-0000-4000-8000-000000000000" });
-        await new Promise((resolve) => setTimeout(resolve, 180));
-        release();
-        const atRelease = beats;
-        await new Promise((resolve) => setTimeout(resolve, 120));
-        return `${atRelease >= 3} ${beats === atRelease}`;
-      },
+      "heartbeat",
+      () =>
+        withFake({ statements: { "SELECT x": { kind: "silent" } } }, {}, async (provider, fake) => {
+          const { timer, restore } = heartbeatTimer();
+          try {
+            fake.log.clear();
+            const run = provider.query("SELECT x", undefined, "q-heartbeat").then(() => "answered", failed);
+            const execute = () =>
+              fake.log.entries.find(
+                (entry) => entry.rpc === "ExecutePlan" && JSON.stringify(entry.request).includes("SELECT x"),
+              );
+            await until("the run's timer and ExecutePlan", () => timer.tick !== undefined && execute() !== undefined);
+            const sessionId = (execute() as { sessionId: string }).sessionId;
+            const before = configBeats(fake, sessionId);
+            for (let tick = 0; tick < 3; tick += 1) (timer.tick as () => void)();
+            await until("three beats on the run's session", () => configBeats(fake, sessionId) - before === 3);
+            const clearedWhileRunning = timer.cleared;
+            await provider.cancelQuery("q-heartbeat");
+            await run;
+            return `beats ${configBeats(fake, sessionId) - before}, cleared while running ${clearedWhileRunning}, cleared at the end ${timer.cleared}`;
+          } finally {
+            restore();
+          }
+        }),
     ],
     [
-      "12 keepalive cut",
+      "keepalive cut",
       () => statementFails({ kind: "status", code: 8, message: "Bandwidth exhausted or memory limit exceeded" }),
     ],
-    ["13 no token", () => withFake({ token: "t0ken" }, {}, async () => "connected")],
-    ["13 wrong token", () => withFake({ token: "t0ken" }, { password: "wrong" }, async () => "connected")],
-    ["14 old version", () => withFake({ sparkVersion: "3.5.9" }, {}, async () => "connected")],
-    ["14 vendor suffix", () => withFake({ sparkVersion: "4.1.3-vendor.1" }, {}, async () => "connected")],
+    ["no token", () => withFake({ token: "t0ken" }, {}, async () => "connected")],
+    ["wrong token", () => withFake({ token: "t0ken" }, { password: "wrong" }, async () => "connected")],
+    ["old version", () => withFake({ sparkVersion: "3.5.9" }, {}, async () => "connected")],
+    ["vendor suffix", () => withFake({ sparkVersion: "4.1.3-vendor.1" }, {}, async () => "connected")],
     [
-      "15 tls to plaintext",
+      "tls to plaintext",
       () =>
         withFake({}, { ssl: TLS_VERIFY_FULL(undefined) } as Partial<DatabaseConnection>, async () => "connected", true),
     ],
-    ["15 plaintext to tls", () => withFake({ tls: true }, {}, async () => "connected", true)],
+    ["plaintext to tls", () => withFake({ tls: true }, {}, async () => "connected", true)],
     [
-      "15 untrusted ca",
+      "untrusted ca",
       () =>
         withFake(
           { tls: true },
@@ -192,30 +279,29 @@ export async function runSparkRuntimeCases(): Promise<readonly SparkRuntimeOutco
           async () => "connected",
         ),
     ],
-    ["16 reset", () => statementFails({ kind: "reset" })],
+    ["reset", () => statementFails({ kind: "reset" })],
     [
-      "6.5 ipc bounds",
+      "ipc bounds",
       async () =>
-        (["no-continuation", "metadata-too-large", "body-past-end", "no-end-marker", "dictionary-batch"] as const)
-          .map((kind) => {
-            try {
-              checkIpcStream(malformedStream(kind));
-              return "read";
-            } catch (error) {
-              return failed(error);
-            }
-          })
+        [
+          ...(
+            ["no-continuation", "metadata-too-large", "body-past-end", "no-end-marker", "dictionary-batch"] as const
+          ).map((kind) => malformedStream(kind)),
+          nestedSchemaStream(64),
+          nestedSchemaStream(65),
+        ]
+          .map((stream) => outcomeOf(() => JSON.stringify(checkIpcStream(stream))))
           .join(" | "),
     ],
-    ["6.5 status details", async () => String(readStatusDetails(Uint8Array.of(0x0a, 0xff)))],
-    ["6.5 status details size", async () => `${details(paddedTo(65_536))} | ${details(paddedTo(65_537))}`],
+    ["status details", async () => String(readStatusDetails(Uint8Array.of(0x0a, 0xff)))],
+    ["status details size", async () => `${details(paddedTo(65_536))} | ${details(paddedTo(65_537))}`],
     [
-      "6.5 status details count",
+      "status details count",
       async () =>
         `${details(concat(...Array.from({ length: 16 }, CLASS_X)))} | ${details(concat(...Array.from({ length: 17 }, CLASS_X)))}`,
     ],
     [
-      "6.5 status details value",
+      "status details value",
       async () =>
         [8_192, 8_193]
           .map((length) =>
@@ -223,39 +309,25 @@ export async function runSparkRuntimeCases(): Promise<readonly SparkRuntimeOutco
           )
           .join(" | "),
     ],
-    ["6.5 status details bom", async () => details(detail("﻿R", entry("errorClass", "X")))],
+    ["status details bom", async () => details(detail("\ufeffR", entry("errorClass", "X")))],
     [
-      "6.5 variant depth",
-      async () => {
-        let value = Uint8Array.of(0x00);
-        for (let level = 0; level < 65; level += 1) value = Uint8Array.from([0x03, 1, 0, value.length, ...value]);
-        try {
-          return String(variantJson(value, Uint8Array.of(0x01, 0x00, 0x00), 1_000_000));
-        } catch (error) {
-          return failed(error);
-        }
-      },
+      "variant depth",
+      async () =>
+        [64, 65]
+          .map((levels) =>
+            outcomeOf(() => variantJson(nestedVariant(levels), Uint8Array.of(0x01, 0x00, 0x00), 1_000_000)),
+          )
+          .join(" | "),
     ],
+    ["wkb depth", async () => [63, 64].map((levels) => String(wkbToWkt(nestedWkb(levels)))).join(" | ")],
     [
-      "6.5 wkb depth",
-      async () => {
-        let nested = Uint8Array.from([1, 1, 0, 0, 0, ...new Uint8Array(Float64Array.of(1, 2).buffer)]);
-        for (let level = 0; level < 65; level += 1) nested = Uint8Array.from([1, 7, 0, 0, 0, 1, 0, 0, 0, ...nested]);
-        return String(wkbToWkt(nested));
-      },
-    ],
-    [
-      "6.5 schema depth",
-      async () => {
-        let type: object = { kind: "integer", integer: {} };
-        for (let level = 0; level < 65; level += 1) type = { kind: "array", array: { element_type: type } };
-        try {
-          columnsFromDataType({ kind: "struct", struct: { fields: [{ name: "c", data_type: type, nullable: true }] } });
-          return "read";
-        } catch (error) {
-          return failed(error);
-        }
-      },
+      "schema depth",
+      async () =>
+        [63, 64]
+          .map((levels) =>
+            outcomeOf(() => columnsFromDataType(nestedDataType(levels)).map((column) => column.spelling)),
+          )
+          .join(" | "),
     ],
   ];
   const outcomes: SparkRuntimeOutcome[] = [];
