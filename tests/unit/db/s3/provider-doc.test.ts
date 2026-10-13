@@ -1967,15 +1967,16 @@ describe("the agent docs count the type-ids and name S3 where they list engines"
       "- On S3-compatible object storage the grounding carries bucket names only, never an object key, a prefix, a size or any object content (objects are listed by the Keys panel, not by the object walk).",
     );
     /*
-     * TWENTY-EIGHT, COUNTED FROM THE DECLARATIONS AND NOT FROM THE SENTENCE. `declaresForeignKeys:
+     * TWENTY-NINE, COUNTED FROM THE DECLARATIONS AND NOT FROM THE SENTENCE. `declaresForeignKeys:
      * false` is set by every shipped type-id but the eight SQL engines that declare them, so the
      * number is `SHIPPED_DATABASE_TYPES.length - 8`. It was twenty-seven at thirty-five type-ids and
      * is twenty-eight at thirty-six, because Snowflake sets it false too
-     * (`src/lib/db/providers/sql/snowflake/index.ts`). The sentence had said twenty-four and named
+     * (`src/lib/db/providers/sql/snowflake/index.ts`), and twenty-nine at thirty-seven, because
+     * Apache Spark does as well (`src/lib/db/providers/sql/spark/index.ts`). The sentence had said twenty-four and named
      * twenty-four: BigQuery had been missing since its own merge, Firestore since its own, OPC UA
      * since ours and Snowflake since theirs.
      */
-    expect(flow).toContain("On the twenty-eight engines that declare no foreign keys at all");
+    expect(flow).toContain(`On the ${word(ids - 8)} engines that declare no foreign keys at all`);
     expect(flow).toContain(
       "Qdrant, Oxia, Databend, S3-compatible object storage and Kubernetes) this block carries no relations",
     );
