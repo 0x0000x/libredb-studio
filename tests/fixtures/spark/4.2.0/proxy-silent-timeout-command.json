@@ -7,7 +7,7 @@
     "date": "2026-10-13T11:07:25.696Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
-    "surface": "O12: a silent run of about 15 s through the TLS proxy, under its 300 s read timeout: command step",
+    "surface": "a silent run of about 15 s through the TLS proxy, under its 300 s read timeout: command step",
     "request": {
       "request_options": [
         {

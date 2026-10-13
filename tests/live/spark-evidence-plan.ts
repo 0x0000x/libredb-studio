@@ -1,13 +1,12 @@
 /**
- * The capture catalog of the Apache Spark evidence harness (spec 10.3, D16c), its sample data and the session
- * settings it sends, in the role tests/live/snowflake-evidence-plan.ts plays for Snowflake.
+ * The capture catalog of the Apache Spark evidence harness, its sample data and the session settings it sends, in the
+ * role tests/live/snowflake-evidence-plan.ts plays for Snowflake.
  *
  * Every capture is one RPC exchange in a fresh session. A query flows over two ExecutePlan calls, the command step and
- * the relation step (spec 4.6), and the integration replay needs both, so a relation-step capture names the capture of
- * its command step. The replay also sends every statement an entry runs before its capture, so each of those is
- * captured under its own name; a statement runs uncaptured only when another entry captures it, as set-catalog does
- * the session setup's SET CATALOG, or no replay sends it. The session settings are copies of the
- * provider's SPARK_SESSION_CONF and
+ * the relation step, and the integration replay needs both, so a relation-step capture names the capture of its command
+ * step. The replay also sends every statement an entry runs before its capture, so each of those is captured under its
+ * own name; a statement runs uncaptured only when another entry captures it, as set-catalog does the session setup's
+ * SET CATALOG, or no replay sends it. The session settings are copies of the provider's SPARK_SESSION_CONF and
  * SPARK_METADATA_SESSION_CONF, held to the same values by tests/unit/db/spark/capture-catalog.test.ts, because the
  * harness never imports the provider: a capture records what Spark sent independently of the code under test.
  */
@@ -102,7 +101,7 @@ export type SparkCaptureVersionDir = "4.2.0" | "4.1.3";
 /** The namespace the sample statements fill. */
 export const SPARK_SAMPLE_NAMESPACE = "studio";
 
-/** Copies of the provider's session settings (PLAN-00 Global Constraints), in the order the provider sends them. */
+/** Copies of the provider's session settings, in the order the provider sends them. */
 export const SPARK_CAPTURE_SESSION_CONF: readonly (readonly [string, string])[] = [
   ["spark.sql.variable.substitute", "false"],
   ["spark.sql.execution.arrow.compression.codec", "none"],
@@ -165,8 +164,9 @@ const WIDE_STRUCT_FIELDS = Array.from({ length: 30 }, (_, index) => `f${index + 
 
 /**
  * Idempotent statements that create the sample objects: run by `--setup <service>` after every start, because the
- * standalone server's catalog is in memory. `every_type` holds every type of spec 5.2 a table stores; the void column
- * and the calendar interval are added by SPARK_EVERY_TYPE_SELECT, since no table stores them.
+ * standalone server's catalog is in memory. `every_type` holds every type of the type table in docs/providers/spark.md
+ * that a table stores; the void column and the calendar interval are added by SPARK_EVERY_TYPE_SELECT, since no table
+ * stores them.
  */
 export const SPARK_SAMPLE_STATEMENTS: readonly string[] = [
   "CREATE NAMESPACE IF NOT EXISTS spark_catalog.studio",
@@ -184,7 +184,7 @@ export const SPARK_SAMPLE_STATEMENTS: readonly string[] = [
   "CREATE OR REPLACE FUNCTION spark_catalog.studio_functions.F2() RETURNS INT RETURN 4",
 ];
 
-/** Spec 10.5 item 5's every-type SELECT: the 32 stored columns, then void and the calendar interval; 34, no TIME. */
+/** The every-type SELECT: the 32 stored columns, then void and the calendar interval; 34, no TIME. */
 export const SPARK_EVERY_TYPE_SELECT =
   "SELECT t.*, NULL AS c_void, make_interval(1, 2, 3, 4, 5, 6, 7.000008) AS c_calendar_interval FROM spark_catalog.studio.every_type AS t";
 
@@ -248,9 +248,9 @@ const BOTH: readonly SparkCaptureVersionDir[] = ["4.2.0", "4.1.3"];
 const NEWEST: readonly SparkCaptureVersionDir[] = ["4.2.0"];
 const ALL_NINE = [...SPARK_CAPTURE_SESSION_CONF, ...SPARK_CAPTURE_METADATA_SESSION_CONF].map(([key]) => key);
 /**
- * O16's command answer: SHOW TABLES over 200 temp views whose names are about 4,000 characters, about 800 KB in rows.
- * Spark closes an inline answer's batch once its estimate passes the bound, so the answer needs many rows; one wide
- * row, such as a SET of a long value, always fits in one batch and passes.
+ * The command answer of command-over-batch-bound: SHOW TABLES over 200 temp views whose names are about 4,000
+ * characters, about 800 KB in rows. Spark closes an inline answer's batch once its estimate passes the bound, so the
+ * answer needs many rows; one wide row, such as a SET of a long value, always fits in one batch and passes.
  */
 const WIDE_TEMP_VIEWS = Array.from(
   { length: 200 },
@@ -328,7 +328,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "user",
     uncaptured: ["SET CATALOG 'spark_catalog'", "USE NAMESPACE studio_unloaded"],
-    surface: "O10: SHOW CURRENT NAMESPACE after USE NAMESPACE studio_unloaded",
+    surface: "SHOW CURRENT NAMESPACE after USE NAMESPACE studio_unloaded",
     action: { kind: "statement", sql: "SHOW CURRENT NAMESPACE", step: "command" },
     expect: "pass",
   },
@@ -351,7 +351,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     service: "spark",
     token: "none",
     session: "metadata",
-    surface: "O9: Config get of the nine keys after the setup",
+    surface: "Config get of the nine keys after the setup",
     action: { kind: "config-get", keys: ALL_NINE },
     expect: "pass",
   },
@@ -430,7 +430,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "user",
     before: [{ name: "large-var-types-set", sql: "SET spark.sql.execution.arrow.useLargeVarTypes=true" }],
-    surface: "O9: a SELECT after a session SET of useLargeVarTypes=true",
+    surface: "a SELECT after a session SET of useLargeVarTypes=true",
     action: {
       kind: "statement",
       sql: "SELECT 'x' AS v, X'01' AS b",
@@ -446,7 +446,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "user",
     conf: [["spark.sql.legacy.allowNegativeScaleOfDecimal", "true"]],
-    surface: "O14: 1E10BD under allowNegativeScaleOfDecimal",
+    surface: "1E10BD under allowNegativeScaleOfDecimal",
     action: {
       kind: "statement",
       sql: "SELECT 1E10BD AS d",
@@ -461,7 +461,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     service: "spark",
     token: "none",
     session: "user",
-    surface: "O11: 2,500 rows in batches of maxRecordsPerBatch",
+    surface: "2,500 rows in batches of maxRecordsPerBatch",
     action: {
       kind: "statement",
       sql: "FROM range(0, 2500, 1, 1) SELECT id",
@@ -754,7 +754,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     service: "spark",
     token: "none",
     session: "metadata",
-    surface: "O13: function names that need quoting",
+    surface: "function names that need quoting",
     action: { kind: "statement", sql: "SHOW USER FUNCTIONS IN `spark_catalog`.`studio_functions`", step: "command" },
     expect: "pass",
   },
@@ -835,7 +835,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "configured",
     session: "user",
     conf: [["spark.connect.progress.reportInterval", "-1"]],
-    surface: "O12: a silent run of about 15 s through the TLS proxy, under its 300 s read timeout",
+    surface: "a silent run of about 15 s through the TLS proxy, under its 300 s read timeout",
     action: {
       kind: "statement",
       sql: "SELECT sum(hash(id)) AS n FROM range(0, 25000000000, 1, 4)",
@@ -851,7 +851,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "configured",
     session: "user",
     uncaptured: WIDE_TEMP_VIEWS,
-    surface: "O16: a command answer above 0.7 times spark.connect.grpc.arrow.maxBatchSize=1m",
+    surface: "a command answer above 0.7 times spark.connect.grpc.arrow.maxBatchSize=1m",
     action: { kind: "statement", sql: "SHOW TABLES", step: "command" },
     expect: "error",
   },

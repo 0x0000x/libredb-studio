@@ -7,7 +7,7 @@
     "date": "2026-10-13T11:07:25.434Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
-    "surface": "O16: a command answer above 0.7 times spark.connect.grpc.arrow.maxBatchSize=1m: command step",
+    "surface": "a command answer above 0.7 times spark.connect.grpc.arrow.maxBatchSize=1m: command step",
     "request": {
       "request_options": [
         {

@@ -7,7 +7,7 @@
     "date": "2026-10-13T11:07:12.347Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/Config",
-    "surface": "O9: Config get of the nine keys after the setup",
+    "surface": "Config get of the nine keys after the setup",
     "request": {
       "session_id": "<session>",
       "user_context": {

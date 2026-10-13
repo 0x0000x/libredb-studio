@@ -7,7 +7,7 @@
     "date": "2026-10-13T11:07:13.496Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
-    "surface": "O14: 1E10BD under allowNegativeScaleOfDecimal: relation step",
+    "surface": "1E10BD under allowNegativeScaleOfDecimal: relation step",
     "request": {
       "request_options": [
         {

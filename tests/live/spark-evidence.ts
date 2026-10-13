@@ -1,5 +1,5 @@
 /**
- * Gate 4's evidence harness for the Apache Spark provider (spec 10.3, D16c).
+ * The evidence harness for the Apache Spark provider.
  *
  * It drives @grpc/grpc-js against the compose services of database-compose.yml with the definition the descriptor
  * generator's loadSparkDescriptor() builds, never an import of proto/descriptor.ts or of the provider, so a capture
@@ -300,7 +300,7 @@ function encode(value: unknown, check: (bytes: Uint8Array) => void = () => undef
 
 /**
  * Config answers: a value under spark.sql.catalog. may hold a catalog's credentials, so it is never written. A get_all
- * answer names its keys without the prefix (O4), so the full key is the prefix and the returned key together.
+ * answer names its keys without the prefix, so the full key is the prefix and the returned key together.
  */
 export function withoutCatalogValues(
   rpc: SparkCaptureRpc,
@@ -819,8 +819,7 @@ function cell(text: string): string {
 
 function answerLines(): string[] {
   const lines: string[] = [];
-  const fact = (item: string, captures: string, text: string) =>
-    lines.push(`| ${item} | ${captures} | ${cell(text)} |`);
+  const fact = (captures: string, text: string) => lines.push(`| ${captures} | ${cell(text)} |`);
   const keys = (version: SparkCaptureVersionDir, name: string) =>
     (
       stored(version, name)?.payload as
@@ -828,7 +827,6 @@ function answerLines(): string[] {
         | undefined
     )?.pairs ?? [];
   fact(
-    "O4",
     "`4.2.0/config-catalog-keys`, `4.2.0/show-catalogs`",
     `Config get_all keys: ${
       keys("4.2.0", "config-catalog-keys")
@@ -838,19 +836,16 @@ function answerLines(): string[] {
   );
   for (const version of ["4.2.0", "4.1.3"] as const) {
     fact(
-      "O9",
       `\`${version}/session-conf-readback\``,
       keys(version, "session-conf-readback")
         .map((pair) => `${pair.key}=${pair.value}`)
         .join(", "),
     );
     fact(
-      "O9",
       `\`${version}/large-var-types-refused\``,
       `outcome ${stored(version, "large-var-types-refused")?.outcome ?? "missing"}; the field types are in the Arrow schema`,
     );
     fact(
-      "O10",
       `\`${version}/use-namespace-current\``,
       `outcome ${stored(version, "use-namespace-current")?.outcome ?? "missing"}; the rows are in the Arrow answer`,
     );
@@ -859,7 +854,7 @@ function answerLines(): string[] {
         | readonly { readonly arrow_batch?: { readonly row_count: string } | null }[]
         | undefined) ?? []
     ).flatMap((response) => (response.arrow_batch ? [response.arrow_batch.row_count] : []));
-    fact("O11", `\`${version}/batch-rows\``, `row_count per batch: ${batches.join(", ")}`);
+    fact(`\`${version}/batch-rows\``, `row_count per batch: ${batches.join(", ")}`);
     const schema = (
       (stored(version, "negative-scale-decimal")?.payload as
         | readonly {
@@ -874,21 +869,18 @@ function answerLines(): string[] {
         | undefined) ?? []
     ).find((response) => response.schema)?.schema?.struct?.fields[0]?.data_type.decimal;
     fact(
-      "O14",
       `\`${version}/negative-scale-decimal\``,
       schema ? `decimal(${schema.precision},${schema.scale})` : "no schema",
     );
   }
   const proxy = stored("4.2.0", "proxy-silent-timeout");
   fact(
-    "O12",
     "`4.2.0/proxy-silent-timeout`",
     proxy?.outcome === "error"
       ? `error ${proxy.code}: ${proxy.details}`
       : `outcome ${proxy?.outcome ?? "missing"} under the proxy's 300 s read timeout`,
   );
   fact(
-    "O13",
     "`4.2.0/show-user-functions-quoted`",
     `outcome ${stored("4.2.0", "show-user-functions-quoted")?.outcome ?? "missing"}; the names are in the Arrow answer`,
   );
@@ -896,14 +888,12 @@ function answerLines(): string[] {
   const info =
     bound?.metadata === undefined ? undefined : statusDetailsOf(bound.metadata["grpc-status-details-bin"])?.errorInfo;
   fact(
-    "O16",
     "`4.2.0/command-over-batch-bound`",
     bound?.outcome === "error"
       ? `error ${bound.code}, reason ${info?.reason ?? "none"}, errorClass ${info?.metadata.errorClass ?? "none"}: ${(bound.details ?? "").split("\n")[0]}`
       : `outcome ${bound?.outcome ?? "missing"}`,
   );
   fact(
-    "O17",
     "`4.2.0/show-tables`, `show-views`, `show-user-functions`, `describe-table`, `describe-view`, `describe-table-struct30`",
     "every statement the object surface issues on the studio namespace",
   );
@@ -914,20 +904,21 @@ export function renderSparkFixturesReadme(): string {
   const lines = [
     "# Apache Spark captures",
     "",
-    "Answers Apache Spark gave to the provider's calls, written by `tests/live/spark-evidence.ts` from the services of `database-compose.yml` (spec 10.3).",
+    "Answers Apache Spark gave to the provider's calls, written by `tests/live/spark-evidence.ts` from the services of `database-compose.yml`.",
     'Each file is one RPC exchange: a `$captured` header whose request is written as the provider\'s codec reads it back, the outcome, and the decoded answer with every bytes field as `{"$bytes": "<base64>"}`, Arrow bodies byte for byte.',
     "Client-chosen ids are written `<session>`, `<operation>` and `<tag>`, inside a `grpc-status-details-bin` too, whose Status message and ErrorInfo values are then re-encoded; the token is written `<token>`, and every Config value whose full key lies under `spark.sql.catalog.` `<value>`.",
     "Every statement an entry runs before its capture that the replay sends is captured under its own name, and a FetchErrorDetails capture and its failure come from one run, so the errorIds pair.",
     "Never edit a capture by hand: start the service, run `bun tests/live/spark-evidence.ts --setup <service>` and `--capture <service>`, or `--capture <service> <entry> ...` to retake the captures of some entries, then `--readme`.",
+    "A surface changed in the catalog needs no retake: `--surfaces` rewrites it in every capture without contacting a server, then `--readme` renders it.",
     "",
     "## BUILT cases",
     "",
-    "The integration replay builds two cases from these captures and labels them: the version refusal (the 4.2.0 version answer rewritten to `3.5.9` and `4.0.4`) and a nested namespace walk (the `SHOW NAMESPACES` answer rewritten to multi-part spellings), because no catalog of the open-source fixture nests.",
+    "The integration replay builds two cases from these captures and labels them: the version refusal (the 4.2.0 version answer rewritten to `3.5.9` and `4.0.4`) and a nested namespace listing (the `SHOW NAMESPACES` answer rewritten to multi-part spellings), because no catalog of the open-source fixture nests.",
     "",
-    "## Answers to the spec's open items",
+    "## Facts read from the captures",
     "",
-    "| Item | Captures | Recorded |",
-    "|---|---|---|",
+    "| Captures | Recorded |",
+    "|---|---|",
     ...answerLines(),
   ];
   for (const version of ["4.2.0", "4.1.3"] as const) {

@@ -7,7 +7,7 @@
     "date": "2026-10-13T11:07:13.423Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
-    "surface": "O9: a SELECT after a session SET of useLargeVarTypes=true: relation step",
+    "surface": "a SELECT after a session SET of useLargeVarTypes=true: relation step",
     "request": {
       "request_options": [
         {

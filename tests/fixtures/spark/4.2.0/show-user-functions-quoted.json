@@ -7,7 +7,7 @@
     "date": "2026-10-13T21:14:02.438Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
-    "surface": "O13: function names that need quoting: command step",
+    "surface": "function names that need quoting: command step",
     "request": {
       "request_options": [
         {

@@ -7,7 +7,7 @@
     "date": "2026-10-13T11:06:33.107Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
-    "surface": "O11: 2,500 rows in batches of maxRecordsPerBatch: command step",
+    "surface": "2,500 rows in batches of maxRecordsPerBatch: command step",
     "request": {
       "request_options": [
         {
