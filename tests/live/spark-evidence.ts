@@ -16,8 +16,10 @@
  * Run by hand, never by `bun run test` (tests/runner/discover.ts excludes tests/live/), with the variables of
  * tests/helpers/spark-live.ts set and the service started:
  *   bun tests/live/spark-evidence.ts --setup <spark|spark-4-1|spark-auth>   create the sample objects
- *   bun tests/live/spark-evidence.ts --capture <spark|spark-4-1|spark-auth|spark-tls>
+ *   bun tests/live/spark-evidence.ts --capture <spark|spark-4-1|spark-auth|spark-tls> [<entry> ...]
  *   bun tests/live/spark-evidence.ts --readme                                render tests/fixtures/spark/README.md
+ * Named entries, each an entry of SPARK_CAPTURE_CATALOG that runs on the service, retake only their captures; with no
+ * entry named, every entry of the service runs.
  */
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -52,7 +54,7 @@ const ROOT = path.resolve(import.meta.dir, "../..");
 const FIXTURES = path.join(ROOT, "tests", "fixtures", "spark");
 const MAX_CAPTURE_BYTES = 2_000_000;
 const USAGE =
-  "Usage: bun tests/live/spark-evidence.ts --setup <spark|spark-4-1|spark-auth> | --capture <spark|spark-4-1|spark-auth|spark-tls> | --readme";
+  "Usage: bun tests/live/spark-evidence.ts --setup <spark|spark-4-1|spark-auth> | --capture <spark|spark-4-1|spark-auth|spark-tls> [<entry> ...] | --readme";
 const USER_CONTEXT = { user_id: "libredb-studio", user_name: "libredb-studio" };
 const CLIENT_TYPE = "libredb-studio";
 const CHUNKING = [
@@ -604,6 +606,21 @@ async function runEntry(ctx: Context, entry: SparkCaptureEntry): Promise<void> {
     case "after-release": {
       const release = await unary(ctx, "ReleaseSession", { ...base(ids), allow_reconnect: false }, token);
       if (release.outcome === "error") throw new Error(`${entry.name}: the release failed (${release.code})`);
+      if (action.sql !== undefined) {
+        const run = newRun(ids);
+        const command = commandRequest(ids, action.sql, run.operation, run.tag);
+        writeCapture(
+          ctx,
+          entry.name,
+          "ExecutePlan",
+          `${surface}: command step`,
+          command,
+          await executePlan(ctx, command, token),
+          ids,
+          entry.expect,
+        );
+        return;
+      }
       const request = { ...base(ids), operation: { get_option: { keys: ["spark.sql.ansi.enabled"] } } };
       writeCapture(
         ctx,
@@ -620,8 +637,22 @@ async function runEntry(ctx: Context, entry: SparkCaptureEntry): Promise<void> {
     case "fetch-error-details": {
       const run = newRun(ids);
       const first = commandRequest(ids, action.sql, run.operation, run.tag);
-      const failed = await executePlan(ctx, first, token);
-      writeCapture(ctx, entry.name, "ExecutePlan", `${surface}: command step`, first, failed, ids, entry.expect);
+      const command = await executePlan(ctx, first, token);
+      let failed = command;
+      if (action.commandName === undefined) {
+        writeCapture(ctx, entry.name, "ExecutePlan", `${surface}: command step`, first, command, ids, entry.expect);
+      } else {
+        if (command.outcome === "error")
+          throw new Error(`${entry.name}: the command step failed (${command.code}) before the relation step`);
+        writeCapture(ctx, action.commandName, "ExecutePlan", `${surface}: command step`, first, command, ids, "pass");
+        const relation = lazyRelation(command.payload);
+        if (relation === undefined) throw new Error(`${entry.name}: the statement answered inline, not as a relation`);
+        const second = randomUUID();
+        ids.operations.push(second);
+        const request = relationRequest(ids, relation, second, run.tag);
+        failed = await executePlan(ctx, request, token);
+        writeCapture(ctx, entry.name, "ExecutePlan", `${surface}: relation step`, request, failed, ids, entry.expect);
+      }
       if (failed.outcome !== "error") throw new Error(`${entry.name}: the statement did not fail`);
       const errorId = statusDetailsOf(failed.metadata["grpc-status-details-bin"])?.errorInfo?.metadata.errorId;
       if (errorId === undefined) throw new Error(`${entry.name}: the failure carried no errorId`);
@@ -830,7 +861,7 @@ export function renderSparkFixturesReadme(): string {
     'Each file is one RPC exchange: a `$captured` header whose request is written as the provider\'s codec reads it back, the outcome, and the decoded answer with every bytes field as `{"$bytes": "<base64>"}`, Arrow bodies byte for byte.',
     "Client-chosen ids are written `<session>`, `<operation>` and `<tag>`, inside a `grpc-status-details-bin` too, whose Status message and ErrorInfo values are then re-encoded; the token is written `<token>`, and every Config value whose full key lies under `spark.sql.catalog.` `<value>`.",
     "Every statement an entry runs before its capture that the replay sends is captured under its own name, and a FetchErrorDetails capture and its failure come from one run, so the errorIds pair.",
-    "Never edit a capture by hand: start the service, run `bun tests/live/spark-evidence.ts --setup <service>` and `--capture <service>`, then `--readme`.",
+    "Never edit a capture by hand: start the service, run `bun tests/live/spark-evidence.ts --setup <service>` and `--capture <service>`, or `--capture <service> <entry> ...` to retake the captures of some entries, then `--readme`.",
     "",
     "## BUILT cases",
     "",
@@ -917,7 +948,7 @@ async function readVersion(ctx: Context, token: Token): Promise<string> {
 }
 
 async function main(argv: readonly string[]): Promise<number> {
-  const [flag, value] = argv;
+  const [flag, value, ...named] = argv;
   if (flag === "--readme" && argv.length === 1) {
     writeFileSync(path.join(FIXTURES, "README.md"), renderSparkFixturesReadme());
     console.log("Wrote tests/fixtures/spark/README.md");
@@ -927,11 +958,20 @@ async function main(argv: readonly string[]): Promise<number> {
     flag === "--setup" ? ["spark", "spark-4-1", "spark-auth"] : ["spark", "spark-4-1", "spark-auth", "spark-tls"];
   if (
     (flag !== "--capture" && flag !== "--setup") ||
-    argv.length !== 2 ||
+    (flag === "--setup" && named.length > 0) ||
     value === undefined ||
     !services.includes(value)
   ) {
     console.error(USAGE);
+    return 2;
+  }
+  const runsOn = (entry: SparkCaptureEntry) =>
+    value === "spark-4-1"
+      ? entry.service === "spark" && entry.versions.includes("4.1.3")
+      : entry.service === value && entry.versions.includes("4.2.0");
+  const unknown = named.filter((name) => !SPARK_CAPTURE_CATALOG.some((entry) => entry.name === name && runsOn(entry)));
+  if (unknown.length > 0) {
+    console.error(`No entry of the capture catalog named ${unknown.join(", ")} runs on ${value}; nothing was sent.`);
     return 2;
   }
   const args = readSparkLiveArguments(process.env);
@@ -981,10 +1021,8 @@ async function main(argv: readonly string[]): Promise<number> {
       await unary(ctx, "ReleaseSession", { ...base(ids), allow_reconnect: false }, token);
       return 0;
     }
-    const entries = SPARK_CAPTURE_CATALOG.filter((entry) =>
-      service === "spark-4-1"
-        ? entry.service === "spark" && entry.versions.includes("4.1.3")
-        : entry.service === service && entry.versions.includes("4.2.0"),
+    const entries = SPARK_CAPTURE_CATALOG.filter(
+      (entry) => runsOn(entry) && (named.length === 0 || named.includes(entry.name)),
     );
     for (const entry of entries) {
       // oxlint-disable-next-line no-await-in-loop -- one capture at a time, in the catalog's order, so the server is idle.

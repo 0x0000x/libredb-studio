@@ -27,6 +27,7 @@ export const SPARK_CAPTURE_NAMES = [
   "every-type-relation",
   "time-type-refused-command",
   "time-type-refused",
+  "time-type-refused-details",
   "show-tables-inline",
   "explain-formatted",
   "large-var-types-set",
@@ -37,6 +38,9 @@ export const SPARK_CAPTURE_NAMES = [
   "batch-rows-command",
   "batch-rows",
   "release-session",
+  "cancel-interrupt-command",
+  "cancel-interrupt",
+  "cancel-interrupt-relation",
   // on 4.2.0 only
   "auth-no-token",
   "auth-wrong-token",
@@ -48,14 +52,14 @@ export const SPARK_CAPTURE_NAMES = [
   "error-syntax",
   "error-syntax-details",
   "error-missing-table",
+  "error-missing-table-details",
   "error-permission-denied",
   "error-permission-denied-details",
   "error-max-result-size-command",
   "error-max-result-size",
-  "cancel-interrupt-command",
-  "cancel-interrupt",
-  "cancel-interrupt-relation",
+  "error-max-result-size-details",
   "session-closed",
+  "session-closed-show-catalogs",
   "substitution-set",
   "substitution-off-command",
   "substitution-off",
@@ -70,6 +74,8 @@ export const SPARK_CAPTURE_NAMES = [
   "show-namespaces",
   "show-tables",
   "show-views",
+  "show-tables-default",
+  "show-views-default",
   "show-user-functions",
   "show-user-functions-quoted",
   "describe-table",
@@ -77,6 +83,8 @@ export const SPARK_CAPTURE_NAMES = [
   "describe-table-struct30",
   "show-create-table",
   "show-create-view",
+  "show-create-table-missing",
+  "show-create-table-missing-details",
   "overview-app-conf",
   "proxy-silent-timeout-command",
   "proxy-silent-timeout",
@@ -192,13 +200,15 @@ export type SparkCaptureAction =
   /** A query interrupted by tag after its relation step's first response: `<name>-command`, `<name>`, `<name>-relation`. */
   | { readonly kind: "interrupt"; readonly sql: string }
   | { readonly kind: "release" }
-  /** A Config get_option on a session released just before. */
-  | { readonly kind: "after-release" }
+  /** A call on a session released just before: a Config get_option, or with `sql` its command step. */
+  | { readonly kind: "after-release"; readonly sql?: string }
   /**
-   * One run: `sql`'s failing command step under the entry's name, then FetchErrorDetails of that failure's errorId in
-   * the same session under `<name>-details`, so the replay's request carries the errorId of the failure it replays.
+   * One run: `sql`'s failing step under the entry's name, then FetchErrorDetails of that failure's errorId in the same
+   * session under `<name>-details`, so the replay's request carries the errorId of the failure it replays. The failing
+   * step is the command step; with `commandName` the command step passes, captured under that name, and the relation
+   * step fails.
    */
-  | { readonly kind: "fetch-error-details"; readonly sql: string };
+  | { readonly kind: "fetch-error-details"; readonly sql: string; readonly commandName?: SparkCaptureName };
 
 /** A statement run before an entry's capture that the replay sends too: its command step is captured under `name`. */
 export interface SparkBeforeStatement {
@@ -362,9 +372,8 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     session: "user",
     surface: "a TIME literal with TIME values off",
     action: {
-      kind: "statement",
+      kind: "fetch-error-details",
       sql: "SELECT TIME'12:34:56' AS t",
-      step: "relation",
       commandName: "time-type-refused-command",
     },
     expect: "error",
@@ -518,7 +527,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "user",
     surface: "a missing table",
-    action: { kind: "statement", sql: "SELECT * FROM spark_catalog.studio.no_such_table", step: "command" },
+    action: { kind: "fetch-error-details", sql: "SELECT * FROM spark_catalog.studio.no_such_table" },
     expect: "error",
   },
   {
@@ -539,16 +548,15 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     session: "user",
     surface: "a result above spark.driver.maxResultSize=4m",
     action: {
-      kind: "statement",
+      kind: "fetch-error-details",
       sql: "SELECT id, repeat('x', 1000) AS v FROM range(0, 20000, 1, 4)",
-      step: "relation",
       commandName: "error-max-result-size-command",
     },
     expect: "error",
   },
   {
     name: "cancel-interrupt",
-    versions: NEWEST,
+    versions: BOTH,
     service: "spark",
     token: "none",
     session: "user",
@@ -564,6 +572,16 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     session: "user",
     surface: "a call on a released session",
     action: { kind: "after-release" },
+    expect: "error",
+  },
+  {
+    name: "session-closed-show-catalogs",
+    versions: NEWEST,
+    service: "spark",
+    token: "none",
+    session: "metadata",
+    surface: "a metadata read on a released session: SHOW CATALOGS",
+    action: { kind: "after-release", sql: "SHOW CATALOGS" },
     expect: "error",
   },
   {
@@ -646,7 +664,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "metadata",
     surface: "tree and object surface: SHOW TABLES",
-    action: { kind: "statement", sql: "SHOW TABLES IN `spark_catalog`.studio", step: "command" },
+    action: { kind: "statement", sql: "SHOW TABLES IN `spark_catalog`.`studio`", step: "command" },
     expect: "pass",
   },
   {
@@ -656,7 +674,27 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "metadata",
     surface: "tree and object surface: SHOW VIEWS",
-    action: { kind: "statement", sql: "SHOW VIEWS IN `spark_catalog`.studio", step: "command" },
+    action: { kind: "statement", sql: "SHOW VIEWS IN `spark_catalog`.`studio`", step: "command" },
+    expect: "pass",
+  },
+  {
+    name: "show-tables-default",
+    versions: NEWEST,
+    service: "spark",
+    token: "none",
+    session: "metadata",
+    surface: "overview: SHOW TABLES of the current namespace, for the table count",
+    action: { kind: "statement", sql: "SHOW TABLES IN `spark_catalog`.`default`", step: "command" },
+    expect: "pass",
+  },
+  {
+    name: "show-views-default",
+    versions: NEWEST,
+    service: "spark",
+    token: "none",
+    session: "metadata",
+    surface: "overview: SHOW VIEWS of the current namespace, for the table count",
+    action: { kind: "statement", sql: "SHOW VIEWS IN `spark_catalog`.`default`", step: "command" },
     expect: "pass",
   },
   {
@@ -666,7 +704,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "metadata",
     surface: "tree and object surface: SHOW USER FUNCTIONS",
-    action: { kind: "statement", sql: "SHOW USER FUNCTIONS IN `spark_catalog`.studio", step: "command" },
+    action: { kind: "statement", sql: "SHOW USER FUNCTIONS IN `spark_catalog`.`studio`", step: "command" },
     expect: "pass",
   },
   {
@@ -676,7 +714,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "metadata",
     surface: "O13: function names that need quoting",
-    action: { kind: "statement", sql: "SHOW USER FUNCTIONS IN `spark_catalog`.studio_functions", step: "command" },
+    action: { kind: "statement", sql: "SHOW USER FUNCTIONS IN `spark_catalog`.`studio_functions`", step: "command" },
     expect: "pass",
   },
   {
@@ -686,7 +724,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "metadata",
     surface: "object surface: DESCRIBE TABLE every_type",
-    action: { kind: "statement", sql: "DESCRIBE TABLE `spark_catalog`.studio.`every_type`", step: "command" },
+    action: { kind: "statement", sql: "DESCRIBE TABLE `spark_catalog`.`studio`.`every_type`", step: "command" },
     expect: "pass",
   },
   {
@@ -696,7 +734,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "metadata",
     surface: "object surface: DESCRIBE TABLE every_type_view",
-    action: { kind: "statement", sql: "DESCRIBE TABLE `spark_catalog`.studio.`every_type_view`", step: "command" },
+    action: { kind: "statement", sql: "DESCRIBE TABLE `spark_catalog`.`studio`.`every_type_view`", step: "command" },
     expect: "pass",
   },
   {
@@ -706,7 +744,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "metadata",
     surface: "object surface: DESCRIBE TABLE wide_struct, its 30-field struct whole",
-    action: { kind: "statement", sql: "DESCRIBE TABLE `spark_catalog`.studio.`wide_struct`", step: "command" },
+    action: { kind: "statement", sql: "DESCRIBE TABLE `spark_catalog`.`studio`.`wide_struct`", step: "command" },
     expect: "pass",
   },
   {
@@ -716,7 +754,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "metadata",
     surface: "source: SHOW CREATE TABLE of a table",
-    action: { kind: "statement", sql: "SHOW CREATE TABLE `spark_catalog`.studio.`every_type`", step: "command" },
+    action: { kind: "statement", sql: "SHOW CREATE TABLE `spark_catalog`.`studio`.`every_type`", step: "command" },
     expect: "pass",
   },
   {
@@ -726,8 +764,18 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "metadata",
     surface: "source: SHOW CREATE TABLE of a view",
-    action: { kind: "statement", sql: "SHOW CREATE TABLE `spark_catalog`.studio.`every_type_view`", step: "command" },
+    action: { kind: "statement", sql: "SHOW CREATE TABLE `spark_catalog`.`studio`.`every_type_view`", step: "command" },
     expect: "pass",
+  },
+  {
+    name: "show-create-table-missing",
+    versions: NEWEST,
+    service: "spark",
+    token: "none",
+    session: "metadata",
+    surface: "source: SHOW CREATE TABLE of a table that does not exist",
+    action: { kind: "fetch-error-details", sql: "SHOW CREATE TABLE `spark_catalog`.`studio`.`no_such_table`" },
+    expect: "error",
   },
   {
     name: "overview-app-conf",
@@ -780,8 +828,10 @@ export function capturesOf(entry: SparkCaptureEntry): SparkCaptureName[] {
       ...before,
     ];
   }
-  if (action.kind === "fetch-error-details")
-    return [entry.name, `${entry.name}-details` as SparkCaptureName, ...before];
+  if (action.kind === "fetch-error-details") {
+    const command = action.commandName === undefined ? [] : [action.commandName];
+    return [entry.name, `${entry.name}-details` as SparkCaptureName, ...command, ...before];
+  }
   if (action.kind === "statement" && action.commandName !== undefined)
     return [entry.name, action.commandName, ...before];
   return [entry.name, ...before];

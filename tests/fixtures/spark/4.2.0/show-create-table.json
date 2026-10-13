@@ -4,7 +4,7 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T11:06:35.777Z",
+    "date": "2026-10-13T21:14:02.535Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "source: SHOW CREATE TABLE of a table: command step",
@@ -43,7 +43,7 @@
                 "pos_arguments": [],
                 "args": {},
                 "named_arguments": {},
-                "query": "SHOW CREATE TABLE `spark_catalog`.studio.`every_type`"
+                "query": "SHOW CREATE TABLE `spark_catalog`.`studio`.`every_type`"
               },
               "rel_type": "sql"
             }
@@ -66,8 +66,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "3d7d875c-42c7-4dac-96f2-fa2b376daa0b",
-      "server_side_session_id": "79d204ae-cbf1-40ab-b32f-fb740fd83f93",
+      "response_id": "76cc326c-edbf-4255-807c-2b12d300c02c",
+      "server_side_session_id": "548d757c-a690-439a-9d0c-b6663d7ac650",
       "sql_command_result": {
         "relation": {
           "common": null,
@@ -96,15 +96,15 @@
               }
             },
             "name": "CommandResult",
-            "plan_id": "350",
-            "parent": "350"
+            "plan_id": "146",
+            "parent": "146"
           }
         ]
       },
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "20916844-96ec-4517-91d1-15cc11e6ebfe",
-      "server_side_session_id": "79d204ae-cbf1-40ab-b32f-fb740fd83f93"
+      "response_id": "6c8d0032-8dee-4746-8872-60a888bab23b",
+      "server_side_session_id": "548d757c-a690-439a-9d0c-b6663d7ac650"
     },
     {
       "observed_metrics": [],
@@ -112,8 +112,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "0ded5662-a77e-422d-baf3-fce702cd626a",
-      "server_side_session_id": "79d204ae-cbf1-40ab-b32f-fb740fd83f93",
+      "response_id": "f772c404-5386-4b4d-a63b-d39c8132b918",
+      "server_side_session_id": "548d757c-a690-439a-9d0c-b6663d7ac650",
       "execution_progress": {
         "stages": [],
         "num_inflight_tasks": "0"

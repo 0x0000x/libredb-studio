@@ -5,12 +5,6 @@
  * requestSerialize, SPARK_LOADER_OPTIONS), then the client-chosen ids are masked and the observed server id dropped on
  * both sides.
  *
- * The provider writes every part of the name a tree statement reads in backticks, as `spark_catalog`.`studio`, and the
- * captures hold the texts it wrote before, when it left a namespace part bare where Spark prints it bare, as
- * `spark_catalog`.studio. Both texts name the same object, so the name in such a statement is compared with every part
- * in backticks on both sides, and the provider's text finds the answer recorded for the older text of the same
- * statement.
- *
  * The answer gets the request's own ids written into its echo fields, and one server-side session id per session, the
  * one BUILT step every case shares. A request no capture matches fails the test, naming the RPC and the request;
  * `served` lists the captures that answered, in order.
@@ -55,24 +49,7 @@ function withBuffers(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, withBuffers(inner)]));
 }
 
-/** A statement the provider writes for its tree, then the name it reads: dotted parts, each bare or in backticks. */
-const TREE_STATEMENT =
-  /^(SHOW NAMESPACES IN|SHOW TABLES IN|SHOW VIEWS IN|SHOW USER FUNCTIONS IN|DESCRIBE TABLE|SHOW CREATE TABLE) ((?:[A-Za-z_]\w*|`(?:[^`]|``)+`)(?:\.(?:[A-Za-z_]\w*|`(?:[^`]|``)+`))*)$/;
-/** One part of such a name, read left to right: in backticks, a backtick inside doubled, or bare. */
-const NAME_PART = /`(?:[^`]|``)+`|[A-Za-z_]\w*/g;
-
-/** A tree statement's text with every part of its name in backticks; any other text as it is. */
-function everyPartBackticked(sql: string): string {
-  const statement = TREE_STATEMENT.exec(sql);
-  if (statement === null) return sql;
-  const [, head, name] = statement;
-  return `${head} ${name.replace(NAME_PART, (part) => (part.startsWith("`") ? part : `\`${part}\``))}`;
-}
-
-/**
- * A value with the client-chosen ids replaced by the captures' placeholders, the observed server id dropped, and the
- * name in a tree statement's text written with every part in backticks.
- */
+/** A value with the client-chosen ids replaced by the captures' placeholders and the observed server id dropped. */
 function masked(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(masked);
   if (typeof value !== "object" || value === null || Buffer.isBuffer(value)) return value;
@@ -81,11 +58,7 @@ function masked(value: unknown): unknown {
       .filter(([key]) => !DROPPED.has(key))
       .map(([key, inner]) => [
         key,
-        key === "tags" && Array.isArray(inner)
-          ? inner.map(() => "<tag>")
-          : key === "query" && typeof inner === "string"
-            ? everyPartBackticked(inner)
-            : (MASKS[key] ?? masked(inner)),
+        key === "tags" && Array.isArray(inner) ? inner.map(() => "<tag>") : (MASKS[key] ?? masked(inner)),
       ]),
   );
 }

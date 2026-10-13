@@ -4,7 +4,7 @@ Answers Apache Spark gave to the provider's calls, written by `tests/live/spark-
 Each file is one RPC exchange: a `$captured` header whose request is written as the provider's codec reads it back, the outcome, and the decoded answer with every bytes field as `{"$bytes": "<base64>"}`, Arrow bodies byte for byte.
 Client-chosen ids are written `<session>`, `<operation>` and `<tag>`, inside a `grpc-status-details-bin` too, whose Status message and ErrorInfo values are then re-encoded; the token is written `<token>`, and every Config value whose full key lies under `spark.sql.catalog.` `<value>`.
 Every statement an entry runs before its capture that the replay sends is captured under its own name, and a FetchErrorDetails capture and its failure come from one run, so the errorIds pair.
-Never edit a capture by hand: start the service, run `bun tests/live/spark-evidence.ts --setup <service>` and `--capture <service>`, then `--readme`.
+Never edit a capture by hand: start the service, run `bun tests/live/spark-evidence.ts --setup <service>` and `--capture <service>`, or `--capture <service> <entry> ...` to retake the captures of some entries, then `--readme`.
 
 ## BUILT cases
 
@@ -52,12 +52,14 @@ The integration replay builds two cases from these captures and labels them: the
 | `connect-current-namespace` | spark | SparkConnectService/ExecutePlan | connect: SHOW CURRENT NAMESPACE on the metadata session: command step | pass | 2026-10-13T11:06:32.034Z | bun 1.4.2 |
 | `connect-session-setup` | spark | SparkConnectService/Config | connect: the metadata session's Config set of nine pairs | pass | 2026-10-13T11:06:31.970Z | bun 1.4.2 |
 | `connect-version` | spark | SparkConnectService/AnalyzePlan | connect: AnalyzePlan spark_version on a fresh session | pass | 2026-10-13T11:06:31.960Z | bun 1.4.2 |
-| `describe-table-struct30` | spark | SparkConnectService/ExecutePlan | object surface: DESCRIBE TABLE wide_struct, its 30-field struct whole: command step | pass | 2026-10-13T11:06:35.751Z | bun 1.4.2 |
-| `describe-table` | spark | SparkConnectService/ExecutePlan | object surface: DESCRIBE TABLE every_type: command step | pass | 2026-10-13T11:06:35.710Z | bun 1.4.2 |
-| `describe-view` | spark | SparkConnectService/ExecutePlan | object surface: DESCRIBE TABLE every_type_view: command step | pass | 2026-10-13T11:06:35.728Z | bun 1.4.2 |
-| `error-max-result-size-command` | spark-auth | SparkConnectService/ExecutePlan | a result above spark.driver.maxResultSize=4m: command step | pass | 2026-10-13T11:07:21.914Z | bun 1.4.2 |
-| `error-max-result-size` | spark-auth | SparkConnectService/ExecutePlan | a result above spark.driver.maxResultSize=4m: relation step | error | 2026-10-13T11:07:22.808Z | bun 1.4.2 |
-| `error-missing-table` | spark | SparkConnectService/ExecutePlan | a missing table: command step | error | 2026-10-13T11:06:33.561Z | bun 1.4.2 |
+| `describe-table-struct30` | spark | SparkConnectService/ExecutePlan | object surface: DESCRIBE TABLE wide_struct, its 30-field struct whole: command step | pass | 2026-10-13T21:14:02.510Z | bun 1.4.2 |
+| `describe-table` | spark | SparkConnectService/ExecutePlan | object surface: DESCRIBE TABLE every_type: command step | pass | 2026-10-13T21:14:02.472Z | bun 1.4.2 |
+| `describe-view` | spark | SparkConnectService/ExecutePlan | object surface: DESCRIBE TABLE every_type_view: command step | pass | 2026-10-13T21:14:02.493Z | bun 1.4.2 |
+| `error-max-result-size-command` | spark-auth | SparkConnectService/ExecutePlan | a result above spark.driver.maxResultSize=4m: command step | pass | 2026-10-13T21:14:08.328Z | bun 1.4.2 |
+| `error-max-result-size-details` | spark-auth | SparkConnectService/FetchErrorDetails | a result above spark.driver.maxResultSize=4m: FetchErrorDetails of its errorId | pass | 2026-10-13T21:14:09.106Z | bun 1.4.2 |
+| `error-max-result-size` | spark-auth | SparkConnectService/ExecutePlan | a result above spark.driver.maxResultSize=4m: relation step | error | 2026-10-13T21:14:09.088Z | bun 1.4.2 |
+| `error-missing-table-details` | spark | SparkConnectService/FetchErrorDetails | a missing table: FetchErrorDetails of its errorId | pass | 2026-10-13T21:14:02.233Z | bun 1.4.2 |
+| `error-missing-table` | spark | SparkConnectService/ExecutePlan | a missing table: command step | error | 2026-10-13T21:14:02.226Z | bun 1.4.2 |
 | `error-permission-denied-details` | spark | SparkConnectService/FetchErrorDetails | a file the server's user cannot read: FetchErrorDetails of its errorId | pass | 2026-10-13T11:06:33.848Z | bun 1.4.2 |
 | `error-permission-denied` | spark | SparkConnectService/ExecutePlan | a file the server's user cannot read: command step | error | 2026-10-13T11:06:33.839Z | bun 1.4.2 |
 | `error-syntax-details` | spark | SparkConnectService/FetchErrorDetails | a syntax error with ErrorInfo: FetchErrorDetails of its errorId | pass | 2026-10-13T11:06:33.526Z | bun 1.4.2 |
@@ -77,26 +79,32 @@ The integration replay builds two cases from these captures and labels them: the
 | `request-session-setup` | spark | SparkConnectService/Config | a request session's Config set of seven pairs | pass | 2026-10-13T11:06:31.976Z | bun 1.4.2 |
 | `row-budget-cut-command` | spark | SparkConnectService/ExecutePlan | 100,001 bigint rows, FROM-led, which the row budget cuts: command step | pass | 2026-10-13T11:06:33.202Z | bun 1.4.2 |
 | `row-budget-cut` | spark | SparkConnectService/ExecutePlan | 100,001 bigint rows, FROM-led, which the row budget cuts: relation step | pass | 2026-10-13T11:06:33.335Z | bun 1.4.2 |
+| `session-closed-show-catalogs` | spark | SparkConnectService/ExecutePlan | a metadata read on a released session: SHOW CATALOGS: command step | error | 2026-10-13T21:14:02.248Z | bun 1.4.2 |
 | `session-closed` | spark | SparkConnectService/Config | a call on a released session | error | 2026-10-13T11:06:34.004Z | bun 1.4.2 |
 | `session-conf-readback` | spark | SparkConnectService/Config | O9: Config get of the nine keys after the setup | pass | 2026-10-13T11:06:32.144Z | bun 1.4.2 |
 | `set-catalog` | spark | SparkConnectService/ExecutePlan | session setup step 2: SET CATALOG as a string literal: command step | pass | 2026-10-13T11:06:32.054Z | bun 1.4.2 |
 | `show-catalogs` | spark | SparkConnectService/ExecutePlan | tree: SHOW CATALOGS: command step | pass | 2026-10-13T11:06:35.536Z | bun 1.4.2 |
-| `show-create-table` | spark | SparkConnectService/ExecutePlan | source: SHOW CREATE TABLE of a table: command step | pass | 2026-10-13T11:06:35.777Z | bun 1.4.2 |
-| `show-create-view` | spark | SparkConnectService/ExecutePlan | source: SHOW CREATE TABLE of a view: command step | pass | 2026-10-13T11:06:35.797Z | bun 1.4.2 |
+| `show-create-table-missing-details` | spark | SparkConnectService/FetchErrorDetails | source: SHOW CREATE TABLE of a table that does not exist: FetchErrorDetails of its errorId | pass | 2026-10-13T21:14:02.574Z | bun 1.4.2 |
+| `show-create-table-missing` | spark | SparkConnectService/ExecutePlan | source: SHOW CREATE TABLE of a table that does not exist: command step | error | 2026-10-13T21:14:02.569Z | bun 1.4.2 |
+| `show-create-table` | spark | SparkConnectService/ExecutePlan | source: SHOW CREATE TABLE of a table: command step | pass | 2026-10-13T21:14:02.535Z | bun 1.4.2 |
+| `show-create-view` | spark | SparkConnectService/ExecutePlan | source: SHOW CREATE TABLE of a view: command step | pass | 2026-10-13T21:14:02.557Z | bun 1.4.2 |
 | `show-namespaces` | spark | SparkConnectService/ExecutePlan | tree: SHOW NAMESPACES IN spark_catalog: command step | pass | 2026-10-13T11:06:35.573Z | bun 1.4.2 |
+| `show-tables-default` | spark | SparkConnectService/ExecutePlan | overview: SHOW TABLES of the current namespace, for the table count: command step | pass | 2026-10-13T21:14:02.386Z | bun 1.4.2 |
 | `show-tables-inline` | spark | SparkConnectService/ExecutePlan | a command answered inline with no Spark job: command step | pass | 2026-10-13T11:06:32.844Z | bun 1.4.2 |
-| `show-tables` | spark | SparkConnectService/ExecutePlan | tree and object surface: SHOW TABLES: command step | pass | 2026-10-13T11:06:35.607Z | bun 1.4.2 |
-| `show-user-functions-quoted` | spark | SparkConnectService/ExecutePlan | O13: function names that need quoting: command step | pass | 2026-10-13T11:06:35.676Z | bun 1.4.2 |
-| `show-user-functions` | spark | SparkConnectService/ExecutePlan | tree and object surface: SHOW USER FUNCTIONS: command step | pass | 2026-10-13T11:06:35.658Z | bun 1.4.2 |
-| `show-views` | spark | SparkConnectService/ExecutePlan | tree and object surface: SHOW VIEWS: command step | pass | 2026-10-13T11:06:35.625Z | bun 1.4.2 |
+| `show-tables` | spark | SparkConnectService/ExecutePlan | tree and object surface: SHOW TABLES: command step | pass | 2026-10-13T21:14:02.351Z | bun 1.4.2 |
+| `show-user-functions-quoted` | spark | SparkConnectService/ExecutePlan | O13: function names that need quoting: command step | pass | 2026-10-13T21:14:02.438Z | bun 1.4.2 |
+| `show-user-functions` | spark | SparkConnectService/ExecutePlan | tree and object surface: SHOW USER FUNCTIONS: command step | pass | 2026-10-13T21:14:02.422Z | bun 1.4.2 |
+| `show-views-default` | spark | SparkConnectService/ExecutePlan | overview: SHOW VIEWS of the current namespace, for the table count: command step | pass | 2026-10-13T21:14:02.400Z | bun 1.4.2 |
+| `show-views` | spark | SparkConnectService/ExecutePlan | tree and object surface: SHOW VIEWS: command step | pass | 2026-10-13T21:14:02.371Z | bun 1.4.2 |
 | `substitution-off-command` | spark | SparkConnectService/ExecutePlan | SELECT '${x}' with substitution off: command step | pass | 2026-10-13T11:06:34.036Z | bun 1.4.2 |
 | `substitution-off` | spark | SparkConnectService/ExecutePlan | SELECT '${x}' with substitution off: relation step | pass | 2026-10-13T11:06:35.332Z | bun 1.4.2 |
 | `substitution-set` | spark | SparkConnectService/ExecutePlan | SELECT '${x}' with substitution off: the statement run before it, command step | pass | 2026-10-13T11:06:34.027Z | bun 1.4.2 |
 | `temp-view-create` | spark | SparkConnectService/ExecutePlan | a temp view made by one statement, read by the next: the statement run before it, command step | pass | 2026-10-13T11:06:33.378Z | bun 1.4.2 |
 | `temp-view-script-command` | spark | SparkConnectService/ExecutePlan | a temp view made by one statement, read by the next: command step | pass | 2026-10-13T11:06:33.406Z | bun 1.4.2 |
 | `temp-view-script` | spark | SparkConnectService/ExecutePlan | a temp view made by one statement, read by the next: relation step | pass | 2026-10-13T11:06:33.491Z | bun 1.4.2 |
-| `time-type-refused-command` | spark | SparkConnectService/ExecutePlan | a TIME literal with TIME values off: command step | pass | 2026-10-13T11:06:32.718Z | bun 1.4.2 |
-| `time-type-refused` | spark | SparkConnectService/ExecutePlan | a TIME literal with TIME values off: relation step | error | 2026-10-13T11:06:32.746Z | bun 1.4.2 |
+| `time-type-refused-command` | spark | SparkConnectService/ExecutePlan | a TIME literal with TIME values off: command step | pass | 2026-10-13T21:14:02.152Z | bun 1.4.2 |
+| `time-type-refused-details` | spark | SparkConnectService/FetchErrorDetails | a TIME literal with TIME values off: FetchErrorDetails of its errorId | pass | 2026-10-13T21:14:02.209Z | bun 1.4.2 |
+| `time-type-refused` | spark | SparkConnectService/ExecutePlan | a TIME literal with TIME values off: relation step | error | 2026-10-13T21:14:02.197Z | bun 1.4.2 |
 | `tokenless-connect` | spark | SparkConnectService/AnalyzePlan | a tokenless server answers a call that carries a token | pass | 2026-10-13T11:06:32.148Z | bun 1.4.2 |
 | `use-namespace-current` | spark | SparkConnectService/ExecutePlan | O10: SHOW CURRENT NAMESPACE after USE NAMESPACE studio_unloaded: command step | pass | 2026-10-13T11:06:32.135Z | bun 1.4.2 |
 | `use-namespace` | spark | SparkConnectService/ExecutePlan | session setup step 3: USE NAMESPACE: command step | pass | 2026-10-13T11:06:32.088Z | bun 1.4.2 |
@@ -107,6 +115,9 @@ The integration replay builds two cases from these captures and labels them: the
 |---|---|---|---|---|---|---|
 | `batch-rows-command` | spark-4-1 | SparkConnectService/ExecutePlan | O11: 2,500 rows in batches of maxRecordsPerBatch: command step | pass | 2026-10-13T11:07:13.520Z | bun 1.4.2 |
 | `batch-rows` | spark-4-1 | SparkConnectService/ExecutePlan | O11: 2,500 rows in batches of maxRecordsPerBatch: relation step | pass | 2026-10-13T11:07:13.588Z | bun 1.4.2 |
+| `cancel-interrupt-command` | spark-4-1 | SparkConnectService/ExecutePlan | Interrupt by tag of a running statement: command step | pass | 2026-10-13T21:14:10.207Z | bun 1.4.2 |
+| `cancel-interrupt-relation` | spark-4-1 | SparkConnectService/ExecutePlan | Interrupt by tag of a running statement: relation step | error | 2026-10-13T21:14:10.491Z | bun 1.4.2 |
+| `cancel-interrupt` | spark-4-1 | SparkConnectService/Interrupt | Interrupt by tag of a running statement | pass | 2026-10-13T21:14:10.490Z | bun 1.4.2 |
 | `connect-current-namespace` | spark-4-1 | SparkConnectService/ExecutePlan | connect: SHOW CURRENT NAMESPACE on the metadata session: command step | pass | 2026-10-13T11:07:12.242Z | bun 1.4.2 |
 | `connect-session-setup` | spark-4-1 | SparkConnectService/Config | connect: the metadata session's Config set of nine pairs | pass | 2026-10-13T11:07:12.187Z | bun 1.4.2 |
 | `connect-version` | spark-4-1 | SparkConnectService/AnalyzePlan | connect: AnalyzePlan spark_version on a fresh session | pass | 2026-10-13T11:07:12.180Z | bun 1.4.2 |
@@ -123,8 +134,9 @@ The integration replay builds two cases from these captures and labels them: the
 | `session-conf-readback` | spark-4-1 | SparkConnectService/Config | O9: Config get of the nine keys after the setup | pass | 2026-10-13T11:07:12.347Z | bun 1.4.2 |
 | `set-catalog` | spark-4-1 | SparkConnectService/ExecutePlan | session setup step 2: SET CATALOG as a string literal: command step | pass | 2026-10-13T11:07:12.266Z | bun 1.4.2 |
 | `show-tables-inline` | spark-4-1 | SparkConnectService/ExecutePlan | a command answered inline with no Spark job: command step | pass | 2026-10-13T11:07:13.193Z | bun 1.4.2 |
-| `time-type-refused-command` | spark-4-1 | SparkConnectService/ExecutePlan | a TIME literal with TIME values off: command step | pass | 2026-10-13T11:07:13.044Z | bun 1.4.2 |
-| `time-type-refused` | spark-4-1 | SparkConnectService/ExecutePlan | a TIME literal with TIME values off: relation step | error | 2026-10-13T11:07:13.083Z | bun 1.4.2 |
+| `time-type-refused-command` | spark-4-1 | SparkConnectService/ExecutePlan | a TIME literal with TIME values off: command step | pass | 2026-10-13T21:14:10.072Z | bun 1.4.2 |
+| `time-type-refused-details` | spark-4-1 | SparkConnectService/FetchErrorDetails | a TIME literal with TIME values off: FetchErrorDetails of its errorId | pass | 2026-10-13T21:14:10.145Z | bun 1.4.2 |
+| `time-type-refused` | spark-4-1 | SparkConnectService/ExecutePlan | a TIME literal with TIME values off: relation step | error | 2026-10-13T21:14:10.130Z | bun 1.4.2 |
 | `tokenless-connect` | spark-4-1 | SparkConnectService/AnalyzePlan | a tokenless server answers a call that carries a token | pass | 2026-10-13T11:07:12.351Z | bun 1.4.2 |
 | `use-namespace-current` | spark-4-1 | SparkConnectService/ExecutePlan | O10: SHOW CURRENT NAMESPACE after USE NAMESPACE studio_unloaded: command step | pass | 2026-10-13T11:07:12.339Z | bun 1.4.2 |
 | `use-namespace` | spark-4-1 | SparkConnectService/ExecutePlan | session setup step 3: USE NAMESPACE: command step | pass | 2026-10-13T11:07:12.300Z | bun 1.4.2 |

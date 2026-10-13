@@ -4,7 +4,7 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T11:07:21.914Z",
+    "date": "2026-10-13T21:14:08.328Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "a result above spark.driver.maxResultSize=4m: command step",
@@ -66,8 +66,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "5e381d83-060e-4e6e-bdea-732089c1e1b0",
-      "server_side_session_id": "bd57b7ab-dcdf-46f0-bfec-0098b6901d39",
+      "response_id": "e0f5b5f8-f1a1-4e28-b466-90410fc4af74",
+      "server_side_session_id": "d2a78252-0141-48be-a809-ee2732849ff8",
       "sql_command_result": {
         "relation": {
           "common": null,
@@ -89,8 +89,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "6813db87-dab8-48b0-a7d8-60253196ba72",
-      "server_side_session_id": "bd57b7ab-dcdf-46f0-bfec-0098b6901d39",
+      "response_id": "e00490c7-c058-43f7-ae60-2afd02f11ea6",
+      "server_side_session_id": "d2a78252-0141-48be-a809-ee2732849ff8",
       "execution_progress": {
         "stages": [],
         "num_inflight_tasks": "0"

@@ -56,7 +56,7 @@ function entry(name: SparkCaptureName): SparkCaptureEntry {
 /** The statement a capture ran, read from the plan, because the matcher compares statement texts. */
 function actionSql(name: SparkCaptureName): string {
   const { action } = entry(name);
-  if (!("sql" in action)) throw new Error(`the capture plan's ${name} runs no statement`);
+  if (!("sql" in action) || action.sql === undefined) throw new Error(`the capture plan's ${name} runs no statement`);
   return action.sql;
 }
 

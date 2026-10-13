@@ -4,7 +4,7 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T11:06:35.607Z",
+    "date": "2026-10-13T21:14:02.351Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "tree and object surface: SHOW TABLES: command step",
@@ -43,7 +43,7 @@
                 "pos_arguments": [],
                 "args": {},
                 "named_arguments": {},
-                "query": "SHOW TABLES IN `spark_catalog`.studio"
+                "query": "SHOW TABLES IN `spark_catalog`.`studio`"
               },
               "rel_type": "sql"
             }
@@ -66,8 +66,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "da1e06ae-23fa-4c65-a208-5ca4dc386135",
-      "server_side_session_id": "6815043f-7245-45c9-b5fa-617eb67adca1",
+      "response_id": "9ca26fcf-c505-447f-b1d8-3abfe83d7331",
+      "server_side_session_id": "cbb19d69-cddd-4cef-864a-2a057f24b537",
       "sql_command_result": {
         "relation": {
           "common": null,
@@ -96,15 +96,15 @@
               }
             },
             "name": "CommandResult",
-            "plan_id": "308",
-            "parent": "308"
+            "plan_id": "92",
+            "parent": "92"
           }
         ]
       },
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "47c1a714-ff00-44bc-9eef-6224ffc04c07",
-      "server_side_session_id": "6815043f-7245-45c9-b5fa-617eb67adca1"
+      "response_id": "a75d133c-dee7-4f1c-a656-35aff7f915b3",
+      "server_side_session_id": "cbb19d69-cddd-4cef-864a-2a057f24b537"
     },
     {
       "observed_metrics": [],
@@ -112,8 +112,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "1ddbe668-3de3-4ecb-8821-16a8f7b4de22",
-      "server_side_session_id": "6815043f-7245-45c9-b5fa-617eb67adca1",
+      "response_id": "64e5eba5-de52-45f2-a70d-f5e31387a01e",
+      "server_side_session_id": "cbb19d69-cddd-4cef-864a-2a057f24b537",
       "execution_progress": {
         "stages": [],
         "num_inflight_tasks": "0"

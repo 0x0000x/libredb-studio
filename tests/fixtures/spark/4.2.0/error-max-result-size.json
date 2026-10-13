@@ -4,7 +4,7 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T11:07:22.808Z",
+    "date": "2026-10-13T21:14:09.088Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "a result above spark.driver.maxResultSize=4m: relation step",
@@ -53,7 +53,7 @@
   "details": "Job aborted due to stage failure: Total size of serialized results of 1 tasks (4.9 MiB) is bigger than spark.driver.maxResultSize (4.0 MiB)",
   "metadata": {
     "grpc-status-details-bin": {
-      "$bytes": "CA0SiwFKb2IgYWJvcnRlZCBkdWUgdG8gc3RhZ2UgZmFpbHVyZTogVG90YWwgc2l6ZSBvZiBzZXJpYWxpemVkIHJlc3VsdHMgb2YgMSB0YXNrcyAoNC45IE1pQikgaXMgYmlnZ2VyIHRoYW4gc3BhcmsuZHJpdmVyLm1heFJlc3VsdFNpemUgKDQuMCBNaUIpGoACCih0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuRXJyb3JJbmZvEtMBCh9vcmcuYXBhY2hlLnNwYXJrLlNwYXJrRXhjZXB0aW9uEhBvcmcuYXBhY2hlLnNwYXJrGm0KB2NsYXNzZXMSYlsib3JnLmFwYWNoZS5zcGFyay5TcGFya0V4Y2VwdGlvbiIsImphdmEubGFuZy5FeGNlcHRpb24iLCJqYXZhLmxhbmcuVGhyb3dhYmxlIiwiamF2YS5sYW5nLk9iamVjdCJdGi8KB2Vycm9ySWQSJDJhNTBkNDBmLTMwMGEtNGZiOS1hZjBiLTUxZDdhYjhjODBkZA=="
+      "$bytes": "CA0SiwFKb2IgYWJvcnRlZCBkdWUgdG8gc3RhZ2UgZmFpbHVyZTogVG90YWwgc2l6ZSBvZiBzZXJpYWxpemVkIHJlc3VsdHMgb2YgMSB0YXNrcyAoNC45IE1pQikgaXMgYmlnZ2VyIHRoYW4gc3BhcmsuZHJpdmVyLm1heFJlc3VsdFNpemUgKDQuMCBNaUIpGoACCih0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuRXJyb3JJbmZvEtMBCh9vcmcuYXBhY2hlLnNwYXJrLlNwYXJrRXhjZXB0aW9uEhBvcmcuYXBhY2hlLnNwYXJrGm0KB2NsYXNzZXMSYlsib3JnLmFwYWNoZS5zcGFyay5TcGFya0V4Y2VwdGlvbiIsImphdmEubGFuZy5FeGNlcHRpb24iLCJqYXZhLmxhbmcuVGhyb3dhYmxlIiwiamF2YS5sYW5nLk9iamVjdCJdGi8KB2Vycm9ySWQSJDZlNzU5OTgwLTg3MTQtNDdlZC1hY2I4LWUxMmFmNTViOTJmNQ=="
     }
   }
 }

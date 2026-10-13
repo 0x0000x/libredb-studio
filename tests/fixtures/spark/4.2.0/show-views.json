@@ -4,7 +4,7 @@
     "image": "apache/spark:4.2.0",
     "digest": "sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89",
     "sparkVersion": "4.2.0",
-    "date": "2026-10-13T11:06:35.625Z",
+    "date": "2026-10-13T21:14:02.371Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
     "surface": "tree and object surface: SHOW VIEWS: command step",
@@ -43,7 +43,7 @@
                 "pos_arguments": [],
                 "args": {},
                 "named_arguments": {},
-                "query": "SHOW VIEWS IN `spark_catalog`.studio"
+                "query": "SHOW VIEWS IN `spark_catalog`.`studio`"
               },
               "rel_type": "sql"
             }
@@ -66,8 +66,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "41a971b8-93f8-4960-aadc-75cb42bd79b4",
-      "server_side_session_id": "5573d7ed-0ee7-41c1-9fb0-12d40a1fa002",
+      "response_id": "1f262f92-7cbd-4c12-a0ee-5dea3f024437",
+      "server_side_session_id": "78e44375-715b-4e50-8b9b-caeaab5246bc",
       "sql_command_result": {
         "relation": {
           "common": null,
@@ -88,8 +88,8 @@
       "metrics": null,
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "d0afcb07-1e5c-4051-bbce-a8fc4c043ce1",
-      "server_side_session_id": "5573d7ed-0ee7-41c1-9fb0-12d40a1fa002",
+      "response_id": "f8eb3188-4ed2-4146-9726-2299353f6fc9",
+      "server_side_session_id": "78e44375-715b-4e50-8b9b-caeaab5246bc",
       "execution_progress": {
         "stages": [],
         "num_inflight_tasks": "0"
@@ -110,15 +110,15 @@
               }
             },
             "name": "CommandResult",
-            "plan_id": "314",
-            "parent": "314"
+            "plan_id": "98",
+            "parent": "98"
           }
         ]
       },
       "schema": null,
       "operation_id": "<operation>",
-      "response_id": "7d3f7dda-8ad7-432f-b370-3abe812cc1d8",
-      "server_side_session_id": "5573d7ed-0ee7-41c1-9fb0-12d40a1fa002"
+      "response_id": "5b060b7b-f7d4-445c-a028-1d70f46a6c43",
+      "server_side_session_id": "78e44375-715b-4e50-8b9b-caeaab5246bc"
     }
   ]
 }

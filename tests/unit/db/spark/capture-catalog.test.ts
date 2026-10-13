@@ -144,11 +144,19 @@ describe("the catalog", () => {
     ]);
   });
 
-  test("a FetchErrorDetails entry writes its failing command step and the details of that failure's errorId", () => {
+  test("a FetchErrorDetails entry writes its failing step, the details of that failure's errorId, and a passing command step before a failing relation step", () => {
     const entries = SPARK_CAPTURE_CATALOG.filter((entry) => entry.action.kind === "fetch-error-details");
-    expect(entries.map((entry) => [entry.name, entry.expect, capturesOf(entry)])).toEqual([
+    expect(entries.map((entry) => [entry.name, entry.expect, capturesOf(entry)])).toStrictEqual([
+      ["time-type-refused", "error", ["time-type-refused", "time-type-refused-details", "time-type-refused-command"]],
       ["error-syntax", "error", ["error-syntax", "error-syntax-details"]],
+      ["error-missing-table", "error", ["error-missing-table", "error-missing-table-details"]],
       ["error-permission-denied", "error", ["error-permission-denied", "error-permission-denied-details"]],
+      [
+        "error-max-result-size",
+        "error",
+        ["error-max-result-size", "error-max-result-size-details", "error-max-result-size-command"],
+      ],
+      ["show-create-table-missing", "error", ["show-create-table-missing", "show-create-table-missing-details"]],
     ]);
   });
 
@@ -256,13 +264,37 @@ describe("the answers the captures hold", () => {
   });
 
   test("each FetchErrorDetails capture asks for the errorId of the failure captured in the same run", () => {
-    for (const name of ["error-syntax", "error-permission-denied"] as const) {
-      const failure = readSparkCapture("4.2.0", name);
-      if (failure.outcome !== "error") throw new Error(`${name} is a pass capture`);
+    const pairs = SPARK_CAPTURE_CATALOG.filter((entry) => entry.action.kind === "fetch-error-details").flatMap(
+      (entry) => entry.versions.map((version) => [version, entry.name] as const),
+    );
+    expect(pairs.length).toBeGreaterThan(0);
+    for (const [version, name] of pairs) {
+      const failure = readSparkCapture(version, name);
+      if (failure.outcome !== "error") throw new Error(`${version}/${name} is a pass capture`);
       const errorId = statusDetailsOf(failure.metadata["grpc-status-details-bin"])?.errorInfo?.metadata.errorId;
-      expect(errorId).toMatch(/^[0-9a-f-]{36}$/);
-      const details = readSparkCapture("4.2.0", `${name}-details`);
-      expect(details.$captured.request.error_id).toBe(errorId);
+      expect({ version, name, errorId }).toStrictEqual({
+        version,
+        name,
+        errorId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      });
+      const details = readSparkCapture(version, `${name}-details` as SparkCaptureName);
+      expect({ version, name, asked: details.$captured.request.error_id }).toStrictEqual({
+        version,
+        name,
+        asked: errorId,
+      });
+    }
+  });
+
+  test("a call on a released session, a Config get and a metadata statement alike, answers INVALID_HANDLE.SESSION_CLOSED", () => {
+    for (const name of ["session-closed", "session-closed-show-catalogs"] as const) {
+      const capture = readSparkCapture("4.2.0", name);
+      if (capture.outcome !== "error") throw new Error(`${name} is a pass capture`);
+      const info = statusDetailsOf(capture.metadata["grpc-status-details-bin"])?.errorInfo;
+      expect({ name, errorClass: info?.metadata.errorClass }).toStrictEqual({
+        name,
+        errorClass: "INVALID_HANDLE.SESSION_CLOSED",
+      });
     }
   });
 });
