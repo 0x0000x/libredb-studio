@@ -13,6 +13,8 @@
  * Interrupt by the run's tag, none when Spark ended it (a Spark error, a closed or changed session, a session
  * released under the run), and an Interrupt that fails changing nothing; the heartbeat; no reattach option; a SET
  * that changes only its own scope; and concurrent scopes that share no session, heartbeat hold, tag or Interrupt.
+ * A run stays in flight, and Stop reaches it, until it settled and its Interrupt, if it sent one, answered or failed,
+ * in either order.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, jest, test } from "bun:test";
 import { randomUUID } from "node:crypto";
@@ -184,8 +186,14 @@ function schemaless(): SparkWireChannel {
   };
 }
 
-/** The fake's channel, with each unary `held` call waiting until the test opens it; `waiting` settles once one does. */
-function heldUnary(held: string): {
+/**
+ * The channel `inner`, the fake's unless given, with each unary `held` call waiting until the test opens it; `waiting`
+ * settles once one does.
+ */
+function heldUnary(
+  held: string,
+  inner: SparkWireChannel = channel,
+): {
   readonly wire: SparkWireChannel;
   readonly waiting: Promise<void>;
   readonly open: () => void;
@@ -204,9 +212,9 @@ function heldUnary(held: string): {
         reached();
         await gate;
       }
-      return channel.unary(rpc, request, call);
+      return inner.unary(rpc, request, call);
     },
-    executePlan: (request, call, limits) => channel.executePlan(request, call, limits),
+    executePlan: (request, call, limits) => inner.executePlan(request, call, limits),
     close: () => undefined,
   };
   return { wire, waiting, open };
@@ -281,8 +289,8 @@ const rewritingIds = () =>
 
 /**
  * The fake's channel, with each Interrupt held before it is sent until the test lets it go or fails it; `order` records
- * the Interrupt when the run hands it over, the next event-loop turn after each Interrupt, and the abort of the run's
- * signal.
+ * the Interrupt when the run hands it over, the next event-loop turn after each Interrupt, the abort of the run's
+ * signal, and each Interrupt's answer once the fake answered it.
  */
 function heldInterrupt(): {
   readonly wire: SparkWireChannel;
@@ -301,7 +309,9 @@ function heldInterrupt(): {
       order.push("Interrupt");
       setImmediate(() => order.push("turn"));
       if ((await gate) === "fail") throw new Error("Interrupt failed by the test");
-      return channel.unary(rpc, request, call);
+      const answer = await channel.unary(rpc, request, call);
+      order.push("answered");
+      return answer;
     },
     executePlan: (request, call, limits) => {
       if (!watched.has(call.signal)) {
@@ -993,6 +1003,72 @@ describe("the deadline and Stop", () => {
     expect(await runs.cancel("qs")).toBe(false);
     expect(interrupts()).toHaveLength(1);
     expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    await sessions.releaseAll();
+  });
+
+  test("a Stop's Interrupt that answers while the run releases its statement session leaves the run in flight until it settled, and a second Stop answers true", async () => {
+    const held = heldInterrupt();
+    const release = heldUnary("ReleaseSession", held.wire);
+    const { sessions, runs } = world(release.wire);
+    const running = settle(
+      runs.run({ sql: "SLOW", queryId: "qv", session: () => sessions.forScope(undefined), deadline: soon() }),
+    );
+    await waitFor(() => plans().length === 2);
+    const stopping = runs.cancel("qv");
+    // The run ends cancelled and releases its statement session while the Stop's Interrupt is still held.
+    await release.waiting;
+    held.letGo("send");
+    await waitFor(() => held.order.includes("answered"));
+    expect(held.order).toStrictEqual(["Interrupt", "turn", "abort", "answered"]);
+    // The Interrupt answered before the run settled, so the run is still registered and a Stop still reaches it.
+    expect(runs.runsInFlight()).toBe(1);
+    let answered: boolean | undefined;
+    const second = runs.cancel("qv").then((value) => {
+      answered = value;
+      return value;
+    });
+    await turn();
+    expect(answered).toBeUndefined();
+    release.open();
+    expect(await second).toBe(true);
+    expect(await stopping).toBe(true);
+    expect((await running).error?.category).toBe("cancelled");
+    expect(runs.runsInFlight()).toBe(0);
+    expect(await runs.cancel("qv")).toBe(false);
+    expect(interrupts()).toHaveLength(1);
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    expect(fake.log.entries.filter((entry) => entry.rpc === "ReleaseSession")).toHaveLength(1);
+    await sessions.releaseAll();
+  });
+
+  test("a run whose own Interrupt answered stays in flight while it releases its statement session, and a Stop then waits for its end and answers false", async () => {
+    const release = heldUnary("ReleaseSession");
+    const { sessions, runs } = world(release.wire);
+    const running = settle(
+      runs.run({ sql: "DROPPED", queryId: "qd", session: () => sessions.forScope(undefined), deadline: soon() }),
+    );
+    // The run awaits the answer of its own Interrupt before it releases its statement session.
+    await release.waiting;
+    expect(interrupts()).toHaveLength(1);
+    expect(runs.runsInFlight()).toBe(1);
+    let answered: boolean | undefined;
+    const stopping = runs.cancel("qd").then((value) => {
+      answered = value;
+      return value;
+    });
+    // The run's outcome is not settled while its release is held, so Stop has nothing to answer from yet.
+    await turn();
+    expect(answered).toBeUndefined();
+    release.open();
+    // The run settled with the stream's failure, not as cancelled.
+    expect(await stopping).toBe(false);
+    const error = (await running).error;
+    expect(error?.category).toBe("stream-failed");
+    expect(error?.message).toBe(SPARK_ERROR_SENTENCES.streamFailed("upstream reset"));
+    expect(runs.runsInFlight()).toBe(0);
+    expect(interrupts()).toHaveLength(1);
+    expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
+    expect(fake.log.entries.filter((entry) => entry.rpc === "ReleaseSession")).toHaveLength(1);
     await sessions.releaseAll();
   });
 });
