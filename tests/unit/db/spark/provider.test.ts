@@ -13,6 +13,7 @@ import {
   SPARK_HEARTBEAT_DEADLINE_MS,
   SPARK_HEARTBEAT_INTERVAL_MS,
   SPARK_REFUSED_SESSION_MAP_MAX,
+  SPARK_VERSION_TEXT_MAX_CHARS,
 } from "@/lib/db/providers/sql/spark/constants";
 import { SPARK_ERROR_SENTENCES, SparkError } from "@/lib/db/providers/sql/spark/errors";
 import {
@@ -31,7 +32,7 @@ import { SPARK_STATEMENT_SENTENCES } from "@/lib/db/providers/sql/spark/statemen
 import { type DatabaseProvider, DEFAULT_QUERY_TIMEOUT } from "@/lib/db/types";
 import { MAX_UNLIMITED_ROWS } from "@/lib/db/utils/query-limiter";
 import { logger } from "@/lib/logger";
-import type { DatabaseConnection } from "@/lib/types";
+import { type DatabaseConnection, TUNNEL_FAR_END, type TunnelFarEnd, type WithTunnelFarEnd } from "@/lib/types";
 import { type SparkFakeAnswer, type SparkFakeServer, startSparkFake } from "../../../helpers/spark-connect-server";
 import { columnsStream, int64Batch } from "../../../helpers/spark-ipc";
 
@@ -99,6 +100,12 @@ const FAKE_STATEMENTS: Record<string, SparkFakeAnswer> = {
 
 function connection(port: number, extra: Partial<DatabaseConnection> = {}): DatabaseConnection {
   return { id: `spark-${port}`, name: "spark", type: "spark", host: "127.0.0.1", port, ...extra } as DatabaseConnection;
+}
+
+/** A connection as the factory hands it over through an SSH tunnel: Host and Port name the tunnel's local forward. */
+function tunnelled(id: string, localPort: number, farEnd: TunnelFarEnd): DatabaseConnection & WithTunnelFarEnd {
+  const sshTunnel = { enabled: true, host: "bastion", port: 22, username: "u", authMethod: "password" } as const;
+  return { ...connection(localPort, { id, sshTunnel }), [TUNNEL_FAR_END]: farEnd };
 }
 
 /** The SQL text of an ExecutePlan request: plan.command.sql_command.input.sql.query. */
@@ -210,6 +217,26 @@ function scripted(options: ScriptOptions = {}): Scripted {
     },
     calls,
     closed: () => closed,
+  };
+}
+
+/** The scripted transport with the channels it opens told apart: `closed()` answers, per open in order, whether it closed. */
+function channelsOf(script: Scripted): { readonly transport: SparkWireTransport; readonly closed: () => boolean[] } {
+  const opens: { closed: boolean }[] = [];
+  return {
+    transport: (options) => {
+      const channel = script.transport(options);
+      const open = { closed: false };
+      opens.push(open);
+      return {
+        ...channel,
+        close: () => {
+          open.closed = true;
+          channel.close();
+        },
+      };
+    },
+    closed: () => opens.map((open) => open.closed),
   };
 }
 
@@ -850,6 +877,44 @@ describe("SparkProvider: the version floor and the probe session", () => {
     expect(first.includes(again)).toBe(false);
   });
 
+  test("refused connects through a tunnel whose local port changes on every attempt read the version on one probe session id", async () => {
+    const script = scripted({
+      version: "3.5.9",
+      unary: (rpc) => (rpc === "ReleaseSession" ? Promise.reject(unimplemented()) : undefined),
+    });
+    const farEnd = { host: "spark.remote", port: 15002 };
+    // Each attempt's tunnel listens on a new local port; the far end stays the same.
+    for (const localPort of [40001, 40002]) {
+      const provider = new SparkProvider(tunnelled("probe-tunnel", localPort, farEnd), {}, script);
+      // oxlint-disable-next-line no-await-in-loop -- the connects are sequential on purpose.
+      await expect(provider.connect()).rejects.toThrow(SPARK_ERROR_SENTENCES.versionTooOld("3.5.9"));
+    }
+    const probes = script.calls.filter((call) => call.rpc === "AnalyzePlan").map((call) => call.sessionId);
+    expect(probes).toHaveLength(2);
+    expect(probes[1]).toBe(probes[0] as string);
+  });
+
+  test("refused connects of one connection to different far ends through one local port use different probe session ids", async () => {
+    const script = scripted({
+      version: "3.5.9",
+      unary: (rpc) => (rpc === "ReleaseSession" ? Promise.reject(unimplemented()) : undefined),
+    });
+    const probeOf = async (farEnd: TunnelFarEnd): Promise<string> => {
+      const before = script.calls.length;
+      const provider = new SparkProvider(tunnelled("probe-far-ends", 40001, farEnd), {}, script);
+      await expect(provider.connect()).rejects.toBeInstanceOf(ConnectionError);
+      return script.calls.slice(before).find((call) => call.rpc === "AnalyzePlan")?.sessionId as string;
+    };
+    const probes = [
+      await probeOf({ host: "spark.remote", port: 15002 }),
+      await probeOf({ host: "spark.other", port: 15002 }),
+      await probeOf({ host: "spark.remote", port: 15003 }),
+      // Run together, this host and port would spell the first far end's host and port.
+      await probeOf({ host: "spark.remote1", port: 5002 }),
+    ];
+    expect(new Set(probes).size).toBe(4);
+  });
+
   test("a failed release of the metadata session logs one warning holding only its category, never the server's text or the token", async () => {
     let failRelease = false;
     const script = scripted({
@@ -958,6 +1023,137 @@ describe("SparkProvider: the version floor and the probe session", () => {
     expect(script.closed()).toBe(1);
     await provider.disconnect();
     expect(script.closed()).toBe(2);
+  });
+
+  test("a second connect the version floor refuses closes the first connection too, so nothing stays open behind a disconnected provider", async () => {
+    let version = "4.2.0";
+    const script = scripted({
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT, "SELECT 1": ONE },
+      unary: (rpc) => (rpc === "AnalyzePlan" ? Promise.resolve({ spark_version: { version } }) : undefined),
+    });
+    const channels = channelsOf(script);
+    const provider = new SparkProvider(connection(1), {}, channels);
+    await provider.connect();
+    await provider.query("SELECT 1", undefined, "q-first", "scope-first");
+    // The first connection's metadata session and the scope's session, each set up by one Config call.
+    const sessions = script.calls.filter((call) => call.rpc === "Config").map((call) => call.sessionId);
+    expect(sessions).toHaveLength(2);
+    // The server behind the same address now runs a version below the floor.
+    version = "3.5.9";
+    const before = script.calls.length;
+    const failure = await failureOf(provider.connect());
+    expect(failure).toBeInstanceOf(ConnectionError);
+    expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.versionTooOld("3.5.9"));
+    const sent = script.calls.slice(before);
+    const probe = sent.find((call) => call.rpc === "AnalyzePlan")?.sessionId as string;
+    expect(sent.filter((call) => call.rpc === "ReleaseSession").map((call) => call.sessionId)).toStrictEqual([
+      probe,
+      ...sessions,
+    ]);
+    // The first connection's channel and the refused connect's own.
+    expect(channels.closed()).toStrictEqual([true, true]);
+    expect(provider.isConnected()).toBe(false);
+    expect(provider.hasRunsInFlight()).toBe(false);
+    expect(provider.connectWarnings()).toStrictEqual([]);
+    const settled = script.calls.length;
+    const refused = await failureOf(provider.query("SELECT 1"));
+    expect(refused).toBeInstanceOf(DatabaseConfigError);
+    expect((refused as Error).message).toBe("Provider is not connected. Call connect() first.");
+    expect(await provider.endOpenQueryTransaction("scope-first")).toBe("none");
+    expect(script.calls.length).toBe(settled);
+  });
+
+  test("a failed release of the first connection's session leaves the refusal of the connect that closed it as its failure", async () => {
+    let version = "4.2.0";
+    const script = scripted({
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT },
+      unary: (rpc, request) => {
+        if (rpc === "AnalyzePlan") return Promise.resolve({ spark_version: { version } });
+        return rpc === "ReleaseSession" && sessionOf(request) === metadata()
+          ? Promise.reject(unavailable())
+          : undefined;
+      },
+    });
+    const metadata = () => script.calls.find((call) => call.rpc === "Config")?.sessionId;
+    const provider = new SparkProvider(connection(1), {}, script);
+    await provider.connect();
+    version = "3.5.9";
+    const warn = spyOn(logger, "warn").mockImplementation(() => {});
+    try {
+      const failure = await failureOf(provider.connect());
+      expect(failure).toBeInstanceOf(ConnectionError);
+      expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.versionTooOld("3.5.9"));
+      // The release was sent and failed, and its warning is the one trace it leaves.
+      expect(warn.mock.calls).toStrictEqual([["A Spark session release failed", { category: "not-connected" }]]);
+      expect(provider.isConnected()).toBe(false);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("a third connect that completes while a failed second connect is still closing keeps its connection and its state", async () => {
+    const release = gate();
+    let shows = 0;
+    const script = scripted({
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT, "SELECT 1": ONE },
+      stream: (sql) => {
+        if (sql !== "SHOW CURRENT NAMESPACE") return undefined;
+        shows += 1;
+        return shows === 2 ? failingStream(unavailable()) : undefined;
+      },
+      unary: (rpc, request) =>
+        rpc === "ReleaseSession" && sessionOf(request) === secondMetadata()
+          ? release.promise.then(() => ({}))
+          : undefined,
+    });
+    const secondMetadata = () => script.calls.filter((call) => call.rpc === "Config")[1]?.sessionId;
+    const channels = channelsOf(script);
+    const provider = new SparkProvider(connection(1), {}, channels);
+    await provider.connect();
+    const failed = failureOf(provider.connect());
+    // The failed connect is closing what it opened: the release of its metadata session waits on the test.
+    await eventually(() =>
+      script.calls.some((call) => call.rpc === "ReleaseSession" && call.sessionId === secondMetadata()),
+    );
+    expect(provider.isConnected()).toBe(false);
+    await provider.connect();
+    release.open();
+    const failure = await failed;
+    expect(failure).toBeInstanceOf(ConnectionError);
+    expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.notConnected("127.0.0.1", 1));
+    // The first and the second closed by the failed connect, the third open.
+    expect(channels.closed()).toStrictEqual([true, true, false]);
+    expect(provider.isConnected()).toBe(true);
+    expect((await provider.query("SELECT 1")).rows).toStrictEqual([{ "1": 1 }]);
+    await provider.disconnect();
+  });
+
+  test("a connect displaced while it replaced a live connection leaves the connect that displaced it connected", async () => {
+    const held = gate();
+    let shows = 0;
+    const script = scripted({
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT, "SELECT 1": ONE },
+      stream: (sql, request, call) => {
+        if (sql !== "SHOW CURRENT NAMESPACE") return undefined;
+        shows += 1;
+        // The second connect's namespace read waits on the test.
+        return shows === 2 ? heldStream(request, call, CURRENT, held.promise) : undefined;
+      },
+    });
+    const channels = channelsOf(script);
+    const provider = new SparkProvider(connection(1), {}, channels);
+    await provider.connect();
+    const displaced = failureOf(provider.connect());
+    await eventually(() => shows === 2);
+    await provider.connect();
+    held.open();
+    expect(await displaced).toBeInstanceOf(QueryCancelledError);
+    // The first was closed by the third connect, which replaced it, and the second by its own failure.
+    expect(channels.closed()).toStrictEqual([true, true, false]);
+    expect(provider.isConnected()).toBe(true);
+    expect((await provider.query("SELECT 1")).rows).toStrictEqual([{ "1": 1 }]);
+    await provider.disconnect();
+    expect(channels.closed()).toStrictEqual([true, true, true]);
   });
 
   test("a disconnect during connect ends the connect cancelled, its namespace read stopped once", async () => {
@@ -1239,6 +1435,44 @@ describe("SparkProvider: the panels through getMonitoringData", () => {
       activeSessions: [],
     });
     await provider.disconnect();
+  });
+
+  test("the overview's version is the server's text as a version sentence quotes it: a token withheld, a long text cut", async () => {
+    let version = "4.2.0";
+    const script = scripted({
+      commands: {
+        "SHOW CURRENT NAMESPACE": CURRENT,
+        [`SHOW VIEWS IN ${DEFAULT}`]: listing("viewName", []),
+        [`SHOW TABLES IN ${DEFAULT}`]: listing("tableName", ["t1"]),
+      },
+      unary: (rpc) => (rpc === "AnalyzePlan" ? Promise.resolve({ spark_version: { version } }) : undefined),
+    });
+    const provider = new SparkProvider(connection(1, { password: "t0ken" }), {}, script);
+    await provider.connect();
+    const overview = (shown: string) => ({
+      version: shown,
+      uptime: "N/A",
+      maxConnections: 0,
+      databaseSize: "N/A",
+      tableCount: 1,
+      tableCountSampledFrom: "the tables of spark_catalog.default, the connection's current namespace",
+      indexCount: 0,
+    });
+    const health = { databaseSize: "N/A", cacheHitRatio: "N/A", slowQueries: [], activeSessions: [] };
+    try {
+      version = "4.2.0 (served with Bearer t0ken)";
+      expect(await provider.getOverview()).toStrictEqual(
+        overview("(the server's text was withheld because it contained the configured credential)"),
+      );
+      expect(await provider.getHealth()).toStrictEqual(health);
+      version = `4.2.0-${"x".repeat(9_994)}`;
+      expect(await provider.getOverview()).toStrictEqual(
+        overview(`4.2.0-${"x".repeat(SPARK_VERSION_TEXT_MAX_CHARS - 6)}`),
+      );
+      expect(await provider.getHealth()).toStrictEqual(health);
+    } finally {
+      await provider.disconnect();
+    }
   });
 });
 

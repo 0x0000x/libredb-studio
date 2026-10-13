@@ -135,10 +135,12 @@ export const SPARK_OBJECT_KINDS: readonly ObjectKindSpec[] = Object.freeze([
 ] as const);
 
 /**
- * The probe session ids of connects the version floor refused, by connection id and channel target. A server without
- * ReleaseSession keeps a session until it idles out, so the next connect of the same connection reads the version on
- * the remembered id, and repeated refusals hold one server session, not one per attempt. Past the bound the oldest
- * entry is dropped; a connect that meets the floor, or that released its probe, removes its connection's entry.
+ * The probe session ids of connects the version floor refused, by connection id and configured endpoint, which is the
+ * far end under an SSH tunnel: the tunnel's local forward listens on a new ephemeral port for each attempt, so the
+ * channel target changes from one attempt to the next. A server without ReleaseSession keeps a session until it idles
+ * out, so the next connect of the same connection reads the version on the remembered id, and repeated refusals hold
+ * one server session, not one per attempt. Past the bound the oldest entry is dropped; a connect that meets the floor,
+ * or that released its probe, removes its connection's entry.
  */
 const REFUSED_PROBES = new Map<string, string>();
 
@@ -371,8 +373,10 @@ export class SparkProvider extends SQLBaseProvider {
 
   /**
    * The option checks, the channel, the version read on a probe session, the metadata session's setup, then the current
-   * catalog and namespace read. A failure closes what it opened and is mapped once; a second `connect()` replaces the
-   * first connection and closes it, and a connect still running when a second one starts ends cancelled.
+   * catalog and namespace read. A failure closes what it opened and is mapped once. A second `connect()` replaces the
+   * first connection and closes it; when the second fails, it closes the first connection too, so no connection stays
+   * open behind a provider that reports itself disconnected. A connect still running when a second one starts ends
+   * cancelled.
    */
   public async connect(): Promise<void> {
     let options: SparkConnectionOptions | undefined;
@@ -391,17 +395,24 @@ export class SparkProvider extends SQLBaseProvider {
       // A second connect() displaced this one from `connecting`: its connection is closed here whoever holds it, and
       // its failure leaves the state of the connect that replaced it alone.
       const displaced = opened !== null && this.connecting !== opened && (this.connecting ?? this.connection) !== null;
-      if (opened !== null) {
-        if (this.connecting === opened) this.connecting = null;
-        await this.close(opened);
-      }
       // A refusal of the option checks is already the repository's DatabaseConfigError.
       const failure = toDatabaseError(
         options === undefined
           ? error
           : toSparkError(error, { connection: sparkErrorConnection(options), phase: "connect" }),
       );
-      if (!displaced) this.setError(failure);
+      // Not displaced, the failure becomes the provider's state at once, before any close awaits, so a connect that
+      // completes during the closes keeps its own; the connection this one was to replace is closed too.
+      const previous = displaced ? null : this.connection;
+      if (!displaced) {
+        this.connection = null;
+        this.setError(failure);
+      }
+      if (opened !== null) {
+        if (this.connecting === opened) this.connecting = null;
+        await this.close(opened);
+      }
+      if (previous !== null) await this.close(previous);
       throw failure;
     }
     this.connecting = null;
@@ -418,7 +429,8 @@ export class SparkProvider extends SQLBaseProvider {
    * the floor without ReleaseSession keeps the probe, so its id is remembered for the next connect of this connection.
    */
   private async checkVersion(connection: SparkConnection): Promise<void> {
-    const key = `${this.config.id}\u0000${connection.options.target}`;
+    const { host, port } = connection.options.endpoint;
+    const key = `${this.config.id}\u0000${host}\u0000${port}`;
     const probe: SparkSessionRef = { sessionId: REFUSED_PROBES.get(key) ?? crypto.randomUUID() };
     const text = await SparkProvider.version(connection, probe);
     const version = parseSparkVersion(text);
@@ -617,9 +629,13 @@ export class SparkProvider extends SQLBaseProvider {
 
   private monitoringDeps(connection: SparkConnection): SparkMonitoringDeps {
     return {
-      version: () =>
-        connection.sessions.readMetadata((session) =>
-          mapControl(sparkErrorConnection(connection.options), () => SparkProvider.version(connection, session)),
+      // A server's text, shown as the connect path quotes it: a token withheld and the length bounded.
+      version: async () =>
+        sparkVersionText(
+          await connection.sessions.readMetadata((session) =>
+            mapControl(sparkErrorConnection(connection.options), () => SparkProvider.version(connection, session)),
+          ),
+          connection.options.secretForms,
         ),
       confAll: (prefix) => this.confAll(connection, prefix),
       currentTables: async () => {
