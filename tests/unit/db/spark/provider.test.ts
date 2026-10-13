@@ -2235,6 +2235,35 @@ describe("SparkProvider: the panels through getMonitoringData", () => {
       await provider.disconnect();
     }
   });
+
+  test("an overview whose SHOW CURRENT NAMESPACE answers no row is refused as unreadable, and sends no listing", async () => {
+    const commands: Record<string, Uint8Array> = {
+      "SHOW CURRENT NAMESPACE": CURRENT,
+      [`SHOW VIEWS IN ${DEFAULT}`]: listing("viewName", []),
+      [`SHOW TABLES IN ${DEFAULT}`]: listing("tableName", ["t1"]),
+    };
+    const script = scripted({ commands });
+    const provider = new SparkProvider(connection(1), {}, script);
+    await provider.connect();
+    try {
+      commands["SHOW CURRENT NAMESPACE"] = columnsStream([
+        { name: "catalog", kind: "utf8", values: [] },
+        { name: "namespace", kind: "utf8", values: [] },
+      ]);
+      const sentAt = script.calls.length;
+      const failure = await failureOf(provider.getOverview());
+      expect(failure).toBeInstanceOf(QueryError);
+      expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.unreadable("SHOW CURRENT NAMESPACE"));
+      expect(
+        script.calls
+          .slice(sentAt)
+          .filter((call) => call.rpc === "ExecutePlan")
+          .map((call) => statementOf(call.request)),
+      ).toStrictEqual(["SHOW CURRENT NAMESPACE"]);
+    } finally {
+      await provider.disconnect();
+    }
+  });
 });
 
 describe("SparkProvider: the metadata session after the server closed it", () => {
@@ -2370,7 +2399,7 @@ describe("SparkProvider: the metadata session after the server closed it", () =>
         Promise.all([met, after]).then((failures) =>
           failures.map((failure) => [failure instanceof QueryError, (failure as Error).message]),
         ),
-        later(timeout * 10).then(() => "still waiting at ten timeouts"),
+        later(timeout * 3).then(() => "still waiting at three timeouts"),
       ]);
       // The read that met the closed session had sent its statement there; the one that asked later had sent nothing.
       expect(outcome).toStrictEqual([
@@ -2439,6 +2468,108 @@ describe("SparkProvider: the metadata session after the server closed it", () =>
       ).toStrictEqual(["AnalyzePlan", "Config read", "SHOW CURRENT NAMESPACE", "Config set"]);
     } finally {
       setup.open();
+      clock.mockRestore();
+      await provider.disconnect();
+    }
+  });
+
+  test("getHealth whose version read met the closed metadata session waits for the new session's setup as long as it takes, past the query timeout", async () => {
+    const timeout = 50;
+    const setup = gate();
+    const server = laterSetupsHeld(setup.promise);
+    let closed = false;
+    const script = scripted({
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT },
+      unary: (rpc, request) =>
+        closed && rpc === "AnalyzePlan" && sessionOf(request) === server.first()
+          ? Promise.reject(new SparkError("session-closed", SPARK_ERROR_SENTENCES.sessionClosed))
+          : server.unary(rpc, request),
+    });
+    const provider = new SparkProvider(connection(1), { queryTimeout: timeout }, script);
+    await provider.connect();
+    try {
+      closed = true;
+      const health = provider.getHealth().then(
+        (answer) => answer,
+        (error: unknown) => `refused: ${(error as Error).message}`,
+      );
+      // The new session's setup takes four query timeouts.
+      await later(timeout * 4);
+      setup.open();
+      expect(await health).toStrictEqual({
+        databaseSize: "N/A",
+        cacheHitRatio: "N/A",
+        slowQueries: [],
+        activeSessions: [],
+      });
+    } finally {
+      setup.open();
+      await provider.disconnect();
+    }
+  });
+
+  test("getOverview whose Config read met the closed metadata session waits for the new session's setup as long as it takes, past the query timeout", async () => {
+    const timeout = 50;
+    const setup = gate();
+    const server = laterSetupsHeld(setup.promise);
+    let closed = false;
+    const script = scripted({
+      commands: {
+        "SHOW CURRENT NAMESPACE": CURRENT,
+        [`SHOW VIEWS IN ${DEFAULT}`]: listing("viewName", []),
+        [`SHOW TABLES IN ${DEFAULT}`]: listing("tableName", ["t"]),
+      },
+      unary: (rpc, request) =>
+        closed && rpc === "Config" && !setsConfig(request) && sessionOf(request) === server.first()
+          ? Promise.reject(new SparkError("session-closed", SPARK_ERROR_SENTENCES.sessionClosed))
+          : server.unary(rpc, request),
+    });
+    const provider = new SparkProvider(connection(1), { queryTimeout: timeout }, script);
+    await provider.connect();
+    try {
+      closed = true;
+      const overview = provider.getOverview().then(
+        (answer) => answer,
+        (error: unknown) => `refused: ${(error as Error).message}`,
+      );
+      // The new session's setup takes four query timeouts.
+      await later(timeout * 4);
+      setup.open();
+      expect(await overview).toStrictEqual({
+        version: "4.2.0",
+        uptime: "N/A",
+        maxConnections: 0,
+        databaseSize: "N/A",
+        tableCount: 1,
+        tableCountSampledFrom: "the tables of spark_catalog.default, the connection's current namespace",
+        indexCount: 0,
+      });
+    } finally {
+      setup.open();
+      await provider.disconnect();
+    }
+  });
+
+  test("a metadata statement's wait for the metadata session's setup leaves no timer behind once the setup answers", async () => {
+    const timeout = 7_919;
+    const script = scripted({ commands: { "SHOW CURRENT NAMESPACE": CURRENT } });
+    const provider = new SparkProvider(connection(1), { queryTimeout: timeout }, script);
+    // On a frozen clock each wait's timer is set for exactly the query timeout, which no other timer of a connect uses.
+    const frozen = Date.now();
+    const clock = spyOn(Date, "now").mockReturnValue(frozen);
+    const set = spyOn(globalThis, "setTimeout");
+    const cleared = spyOn(globalThis, "clearTimeout");
+    try {
+      await provider.connect();
+      const timers = set.mock.calls.flatMap((call, index) =>
+        call[1] === timeout ? [set.mock.results[index]?.value as unknown] : [],
+      );
+      // Connect's one metadata statement waited once for the setup, and its timer was cleared when the setup answered.
+      expect(timers).toHaveLength(1);
+      expect(cleared.mock.calls.map(([timer]) => timer as unknown)).toContain(timers[0]);
+    } finally {
+      set.mockRestore();
+      cleared.mockRestore();
       clock.mockRestore();
       await provider.disconnect();
     }
