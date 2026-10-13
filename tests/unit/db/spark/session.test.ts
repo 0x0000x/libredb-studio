@@ -1,10 +1,12 @@
 /**
  * The session registry of D4 (spec 4.5) over the fake Spark Connect server: one session per scope and a new one per
  * statement without a scope; the setup in its order, the catalog as a string literal and the namespace through USE
- * NAMESPACE; the metadata session's extra settings; observed server-side ids; a failed setup failing only the
- * statement that needed it; releases that never throw; the metadata session repeated once after the server closed it,
- * for each of the three INVALID_HANDLE classes (spec 10.8), and discarded once when two reads meet it together; the
- * repeat only for a failure the read mapped to a SparkError, never for the channel's own error.
+ * NAMESPACE; the metadata session's extra settings, and nothing on it but its setup; observed server-side ids; a failed
+ * setup failing only the statement that needed it, never the setup that replaced it; releases that never throw; the
+ * registry closed after releaseAll, so nothing is set up again; the metadata session repeated once after the server
+ * closed it, for each of the three INVALID_HANDLE classes (spec 10.8), and discarded once when two reads meet it
+ * together; a metadata setup discarded in flight released once it settles; the repeat only for a failure the read
+ * mapped to a SparkError, never for the channel's own error.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
@@ -157,7 +159,7 @@ describe("sessions by scope (D4)", () => {
     await sessions.releaseAll();
   });
 
-  test("the metadata session gets both settings lists in one call, and is one handle until discarded", async () => {
+  test("the metadata session gets both settings lists in one call, and is one handle until discarded, unreleased", async () => {
     const sessions = new SparkSessions(deps(), {});
     const metadata = await sessions.metadata();
     expect(metadata.kind).toBe("metadata");
@@ -167,9 +169,12 @@ describe("sessions by scope (D4)", () => {
     ]);
     sessions.discardMetadata();
     expect(sessions.openCount()).toBe(0);
-    expect((await sessions.metadata()).sessionId).not.toBe(metadata.sessionId);
+    const fresh = await sessions.metadata();
+    expect(fresh.sessionId).not.toBe(metadata.sessionId);
     expect(sessions.openCount()).toBe(1);
     await sessions.releaseAll();
+    // The server closed the session it discards, so the discard drops it and never releases it.
+    expect(releasesOf().map((entry) => entry.sessionId)).toStrictEqual([fresh.sessionId]);
   });
 
   test("the metadata session takes the connection's catalog and namespace too", async () => {
@@ -180,6 +185,24 @@ describe("sessions by scope (D4)", () => {
       "SET CATALOG 'spark_catalog'",
       "USE NAMESPACE `studio`",
     ]);
+    await sessions.releaseAll();
+  });
+
+  test("no user text reaches the metadata session: it carries its setup only, the statements their own sessions", async () => {
+    const sessions = new SparkSessions(deps(), PLACE);
+    const metadata = await sessions.metadata();
+    const request = await sessions.forScope("u");
+    const statement = await sessions.forScope(undefined);
+    await runStatement(request, "SHOW NAMESPACES");
+    await runStatement(statement, "SHOW NAMESPACES");
+    const place = ["SET CATALOG 'spark_catalog'", "USE NAMESPACE `studio`"];
+    expect(setupOf(metadata.sessionId)).toStrictEqual([
+      [...SPARK_SESSION_CONF, ...SPARK_METADATA_SESSION_CONF].map(([key, value]) => [key, value]),
+      ...place,
+    ]);
+    const user = [SPARK_SESSION_CONF.map(([key, value]) => [key, value]), ...place, "SHOW NAMESPACES"];
+    expect(setupOf(request.sessionId)).toStrictEqual(user);
+    expect(setupOf(statement.sessionId)).toStrictEqual(user);
     await sessions.releaseAll();
   });
 });
@@ -237,6 +260,60 @@ describe("a failed setup fails only the statement that needed it", () => {
     // The failed metadata setup left nothing behind: the next read sets up a new metadata session.
     refuse = false;
     expect(await sessions.readMetadata(read)).toBe(1);
+    expect(sessions.openCount()).toBe(1);
+    await sessions.releaseAll();
+  });
+
+  /** Deps whose first setup sends its Config set, then fails once `hold` resolves; every later setup succeeds. */
+  const firstSetupFails = (asked: string[], hold: Promise<void>) =>
+    deps({
+      configSet: async (session, pairs) => {
+        asked.push(session.sessionId);
+        const id = await deps().configSet(session, pairs);
+        if (asked[0] !== session.sessionId) return id;
+        await hold;
+        throw new SparkError("spark", "the old setup failed");
+      },
+    });
+
+  test("a scope ended and asked for again while its old setup is failing keeps the new session", async () => {
+    const hold = Promise.withResolvers<void>();
+    const asked: string[] = [];
+    const sessions = new SparkSessions(firstSetupFails(asked, hold.promise), {});
+    const oldFailure = sessions.forScope("k").then(
+      () => undefined,
+      (error: unknown) => (error as Error).message,
+    );
+    const ended = sessions.endScope("k");
+    const renewed = await sessions.forScope("k");
+    hold.resolve();
+    expect(await oldFailure).toBe("the old setup failed");
+    await ended;
+    expect(await sessions.forScope("k")).toBe(renewed);
+    // One Config set per setup, and the one release is the failed setup's own.
+    expect(asked).toStrictEqual([asked[0], renewed.sessionId]);
+    expect(fake.log.entries.filter((entry) => entry.rpc === "Config")).toHaveLength(2);
+    expect(releasesOf().map((entry) => entry.sessionId)).toStrictEqual([asked[0]]);
+    expect(sessions.openCount()).toBe(1);
+    await sessions.releaseAll();
+  });
+
+  test("a metadata session discarded and asked for again while its old setup is failing keeps the new session", async () => {
+    const hold = Promise.withResolvers<void>();
+    const asked: string[] = [];
+    const sessions = new SparkSessions(firstSetupFails(asked, hold.promise), {});
+    const oldFailure = sessions.metadata().then(
+      () => undefined,
+      (error: unknown) => (error as Error).message,
+    );
+    sessions.discardMetadata();
+    const renewed = await sessions.metadata();
+    hold.resolve();
+    expect(await oldFailure).toBe("the old setup failed");
+    expect(await sessions.metadata()).toBe(renewed);
+    expect(asked).toStrictEqual([asked[0], renewed.sessionId]);
+    expect(fake.log.entries.filter((entry) => entry.rpc === "Config")).toHaveLength(2);
+    expect(releasesOf().map((entry) => entry.sessionId)).toStrictEqual([asked[0]]);
     expect(sessions.openCount()).toBe(1);
     await sessions.releaseAll();
   });
@@ -377,6 +454,83 @@ describe("releases (spec 4.5)", () => {
     await released;
     expect(sessions.openCount()).toBe(0);
     expect(releasesOf(handle.sessionId)).toHaveLength(1);
+  });
+
+  test("after endScope the scope's next statement sets up a new session, not the released one", async () => {
+    const sessions = new SparkSessions(deps(), {});
+    const ended = await sessions.forScope("n");
+    await sessions.endScope("n");
+    const next = await sessions.forScope("n");
+    expect(next.sessionId).not.toBe(ended.sessionId);
+    expect(fake.log.entries.map((entry) => [entry.rpc, entry.sessionId])).toStrictEqual([
+      ["Config", ended.sessionId],
+      ["ReleaseSession", ended.sessionId],
+      ["Config", next.sessionId],
+    ]);
+    expect(sessions.openCount()).toBe(1);
+    await sessions.releaseAll();
+  });
+
+  test("a metadata read that meets the session releaseAll released is not repeated, and nothing follows the release", async () => {
+    const sessions = new SparkSessions(deps(), {});
+    const first = await sessions.metadata();
+    let reads = 0;
+    const refused = await sessions
+      .readMetadata(async () => {
+        reads += 1;
+        await sessions.releaseAll();
+        throw new SparkError("session-closed", SPARK_ERROR_SENTENCES.sessionClosed);
+      })
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    expect(reads).toBe(1);
+    expect(refused).toBeInstanceOf(SparkError);
+    expect([(refused as SparkError).category, (refused as SparkError).message]).toStrictEqual([
+      "cancelled",
+      SPARK_ERROR_SENTENCES.cancelled,
+    ]);
+    expect(fake.log.entries.map((entry) => [entry.rpc, entry.sessionId])).toStrictEqual([
+      ["Config", first.sessionId],
+      ["ReleaseSession", first.sessionId],
+    ]);
+    expect(sessions.openCount()).toBe(0);
+  });
+
+  test("after releaseAll the registry is closed: a scope, a statement and the metadata session are refused as cancelled", async () => {
+    const sessions = new SparkSessions(deps(), PLACE);
+    await sessions.forScope("a");
+    await sessions.metadata();
+    await sessions.releaseAll();
+    fake.log.clear();
+    let reads = 0;
+    const asked: Promise<unknown>[] = [
+      sessions.forScope("a"),
+      sessions.forScope("b"),
+      sessions.forScope(undefined),
+      sessions.metadata(),
+      sessions.readMetadata(async () => {
+        reads += 1;
+        return reads;
+      }),
+    ];
+    const refusals = await Promise.all(
+      asked.map((promise) =>
+        promise.then(
+          () => undefined,
+          (error: unknown) => (error instanceof SparkError ? [error.category, error.message] : error),
+        ),
+      ),
+    );
+    const cancelled = ["cancelled", SPARK_ERROR_SENTENCES.cancelled];
+    expect(refusals).toStrictEqual([cancelled, cancelled, cancelled, cancelled, cancelled]);
+    expect(reads).toBe(0);
+    expect(fake.log.entries).toHaveLength(0);
+    expect(sessions.openCount()).toBe(0);
+    await sessions.endScope("a");
+    await sessions.releaseAll();
+    expect(fake.log.entries).toHaveLength(0);
   });
 });
 
@@ -559,6 +713,37 @@ describe("the metadata session after the server closed it (spec 4.5)", () => {
       );
     expect(attempts).toBe(2);
     expect(network).toBe(unreachable);
+    await sessions.releaseAll();
+  });
+
+  test("a metadata session discarded while its setup is in flight is released once the setup settles", async () => {
+    const hold = Promise.withResolvers<void>();
+    const releasing: Promise<void>[] = [];
+    const sessions = new SparkSessions(
+      deps({
+        configSet: async (session, pairs) => {
+          await hold.promise;
+          return deps().configSet(session, pairs);
+        },
+        release: (session) => {
+          const done = deps().release(session);
+          releasing.push(done);
+          return done;
+        },
+      }),
+      {},
+    );
+    // With no metadata session, a discard is nothing.
+    sessions.discardMetadata();
+    const pending = sessions.metadata();
+    sessions.discardMetadata();
+    hold.resolve();
+    const handle = await pending;
+    await Promise.all(releasing);
+    expect(releasesOf().map((entry) => entry.sessionId)).toStrictEqual([handle.sessionId]);
+    expect(sessions.openCount()).toBe(0);
+    expect((await sessions.metadata()).sessionId).not.toBe(handle.sessionId);
+    expect(sessions.openCount()).toBe(1);
     await sessions.releaseAll();
   });
 });

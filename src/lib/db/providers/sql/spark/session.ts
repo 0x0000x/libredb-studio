@@ -7,8 +7,9 @@
  * session, SPARK_METADATA_SESSION_CONF in the same call), SET CATALOG as a string literal, USE NAMESPACE with every part
  * quoted. Every answer's server-side id is observed, so every later request of the session carries it and a restarted
  * server answers SESSION_CHANGED instead of opening a session without the setup. A release that fails changes nothing:
- * the deps log it with no server text and Spark drops the session after its idle timeout. This module imports neither
- * the channel nor execute.ts; index.ts builds its deps.
+ * the deps log it with no server text and Spark drops the session after its idle timeout. After releaseAll the registry
+ * is closed: a session asked for later is refused with the cancelled sentence, so no session is set up that no release
+ * would reach. This module imports neither the channel nor execute.ts; index.ts builds its deps.
  */
 import { quoteLiteral } from "@/lib/sql/values";
 import { SPARK_METADATA_SESSION_CONF, SPARK_SESSION_CONF } from "./constants";
@@ -52,6 +53,7 @@ export class SparkSessions {
   private readonly scopes = new Map<string, Promise<SparkSessionHandle>>();
   private readonly open = new Set<SparkSessionHandle>();
   private metadataEntry: MetadataEntry | undefined;
+  private released = false;
 
   constructor(
     private readonly deps: SparkSessionDeps,
@@ -91,7 +93,8 @@ export class SparkSessions {
    * A provider-written read on the metadata session, repeated once on a new one when the server closed the session.
    * The repeat reads only a SparkError's category (session-closed or session-changed), so `read` maps its own failures
    * with toSparkError before they leave it: any other failure, the channel's own error for a closed session included,
-   * propagates unchanged and is never repeated, and the closed session stays the current one.
+   * propagates unchanged and is never repeated, and the closed session stays the current one. After releaseAll the new
+   * session is refused with the cancelled sentence, so a read that met a released session is not repeated.
    */
   async readMetadata<T>(read: (session: SparkSessionHandle) => Promise<T>): Promise<T> {
     const session = await this.metadata();
@@ -137,25 +140,36 @@ export class SparkSessions {
     }
   }
 
-  /** Drops the metadata session the server closed; the next metadata() sets up a new one. */
+  /**
+   * Drops the metadata session the server closed; the next metadata() sets up a new one. A session still in setup was
+   * not closed by the server, so it is released once its setup settles; a failed setup released its own.
+   */
   discardMetadata(): void {
-    const handle = this.metadataEntry?.handle;
-    if (handle !== undefined) this.open.delete(handle);
+    const entry = this.metadataEntry;
+    if (entry === undefined) return;
     this.metadataEntry = undefined;
+    if (entry.handle === undefined) {
+      entry.promise.then(
+        (handle) => this.release(handle),
+        () => undefined,
+      );
+    } else {
+      this.open.delete(entry.handle);
+    }
   }
 
-  /** Releases every session, a setup still in flight included once it settles. */
+  /** Closes the registry and releases every session, a setup still in flight included once it settles. */
   async releaseAll(): Promise<void> {
+    this.released = true;
     const pending = [
       ...this.scopes.values(),
       ...(this.metadataEntry === undefined ? [] : [this.metadataEntry.promise]),
     ];
     this.scopes.clear();
     this.metadataEntry = undefined;
-    const settled = await Promise.all(pending.map((promise) => promise.catch(() => undefined)));
-    const handles = new Set<SparkSessionHandle>([...this.open]);
-    for (const handle of settled) if (handle !== undefined) handles.add(handle);
-    await Promise.all([...handles].map((handle) => this.release(handle)));
+    // Every handle a pending setup answers is still in `open`, so `open` after the wait holds them all.
+    await Promise.all(pending.map((promise) => promise.catch(() => undefined)));
+    await Promise.all([...this.open].map((handle) => this.release(handle)));
   }
 
   /** Sessions created and not yet released or discarded. */
@@ -164,6 +178,8 @@ export class SparkSessions {
   }
 
   private async create(kind: SparkSessionHandle["kind"]): Promise<SparkSessionHandle> {
+    // Asked for after releaseAll, the session belongs to a connection being disconnected: nothing reaches the server.
+    if (this.released) throw new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled);
     const handle: SparkSessionHandle = { sessionId: crypto.randomUUID(), kind };
     this.open.add(handle);
     try {
