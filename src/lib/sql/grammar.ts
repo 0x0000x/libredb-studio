@@ -203,6 +203,26 @@ export interface SqlGrammar {
    */
   readonly backtickBackslashEscapes?: boolean;
   /**
+   * Whether a tagged run (`$tag$ … $tag$`, the tag non-empty) is a string literal; absent means true, the reading
+   * every row had before the fact existed, which deliberately inverts its neighbours' absent-means-false because the
+   * fact is an opt-out. False: the `$` that would open a tagged run is code, and the untagged `$$ … $$` is still a
+   * dollar string.
+   *
+   * It is a fact the text cannot settle: `$t$x; DELETE FROM t; $t$` is one string where the tagged form exists and
+   * code holding a `DELETE` where it does not, so under the wrong reading the `DELETE` would hide inside a literal
+   * or a string would be cut into statements.
+   */
+  readonly dollarTags?: boolean;
+  /**
+   * Whether a backslash escapes the next character inside `"…"`; absent means the reading `backslashAlwaysEscapes`
+   * gives both quotes. False: a backslash there is an ordinary character, so `"a\"` is a terminated name. True: it
+   * escapes there.
+   *
+   * It is a fact the text cannot settle: `"a\"; DELETE FROM t --"` is a name and a DELETE where the backslash is part
+   * of the name, and one quoted run to the trailing quote where it escapes.
+   */
+  readonly doubleQuoteBackslashEscapes?: boolean;
+  /**
    * How a script is cut into the units the engine receives (E2E pass of 2026-10-03/04,
    * #1312). Before this fact existed every code `;` was a boundary in every dialect, so a
    * PL/SQL procedure, a SQLite trigger and a T-SQL batch were each cut at their inner `;`
