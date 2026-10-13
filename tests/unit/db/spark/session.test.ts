@@ -3,7 +3,8 @@
  * statement without a scope; the setup in its order, the catalog as a string literal and the namespace through USE
  * NAMESPACE; the metadata session's extra settings; observed server-side ids; a failed setup failing only the
  * statement that needed it; releases that never throw; the metadata session repeated once after the server closed it,
- * for each of the three INVALID_HANDLE classes (spec 10.8), and discarded once when two reads meet it together.
+ * for each of the three INVALID_HANDLE classes (spec 10.8), and discarded once when two reads meet it together; the
+ * repeat only for a failure the read mapped to a SparkError, never for the channel's own error.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
@@ -17,6 +18,7 @@ import {
   releaseSessionRequest,
   type SparkSessionRef,
   sqlCommandRequest,
+  versionRequest,
 } from "@/lib/db/providers/sql/spark/requests";
 import { type SparkSessionDeps, type SparkSessionPlace, SparkSessions } from "@/lib/db/providers/sql/spark/session";
 import type { DatabaseConnection } from "@/lib/types";
@@ -401,6 +403,41 @@ describe("the metadata session after the server closed it (spec 4.5)", () => {
     expect(seen).toHaveLength(2);
     expect(seen[0]).toBe(first.sessionId);
     expect(seen[1]).not.toBe(first.sessionId);
+    await sessions.releaseAll();
+  });
+
+  test("the repeat reads only a SparkError: the version read after a restart, unmapped and then mapped", async () => {
+    const sessions = new SparkSessions(deps(), {});
+    const first = await sessions.metadata();
+    fake.restart();
+    const seen: string[] = [];
+    const version = (session: SparkSessionRef) => {
+      seen.push(session.sessionId);
+      return channel.unary("AnalyzePlan", versionRequest(session), call());
+    };
+    // Unmapped, the restarted server's refusal is the channel's own error: never repeated, the closed session kept.
+    const unmapped = await sessions.readMetadata(version).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(unmapped).toBeInstanceOf(Error);
+    expect(unmapped).not.toBeInstanceOf(SparkError);
+    expect(sparkErrorOf(unmapped).category).toBe("session-changed");
+    expect(seen).toStrictEqual([first.sessionId]);
+    expect(await sessions.metadata()).toBe(first);
+    // Mapped inside the read, as the provider's reads are, the same refusal is repeated once on a new session.
+    const answer = await sessions.readMetadata(async (session) => {
+      try {
+        return await version(session);
+      } catch (error) {
+        throw sparkErrorOf(error);
+      }
+    });
+    expect((answer as { spark_version?: { version?: string } }).spark_version?.version).toBe("4.2.0");
+    expect(seen).toHaveLength(3);
+    expect(seen[1]).toBe(first.sessionId);
+    expect(seen[2]).not.toBe(first.sessionId);
+    expect(sessions.openCount()).toBe(1);
     await sessions.releaseAll();
   });
 

@@ -20,6 +20,11 @@ export interface SparkSessionHandle extends SparkSessionRef {
   readonly kind: "request" | "statement" | "metadata";
 }
 
+/**
+ * Built by index.ts over the channel. The registry holds no error context and maps no failure: a setup failure reaches
+ * the statement or the read that needed the session unchanged. So `configSet` and `runSetup` reject only with a
+ * SparkError, mapped by toSparkError with the phase control (spec 4.10).
+ */
 export interface SparkSessionDeps {
   /** Config set on `session`; answers the server_side_session_id of the answer. */
   configSet(session: SparkSessionRef, pairs: readonly (readonly [string, string])[]): Promise<string>;
@@ -82,7 +87,12 @@ export class SparkSessions {
     return this.metadataEntry.promise;
   }
 
-  /** A provider-written read on the metadata session, repeated once on a new one when the server closed the session. */
+  /**
+   * A provider-written read on the metadata session, repeated once on a new one when the server closed the session.
+   * The repeat reads only a SparkError's category (session-closed or session-changed), so `read` maps its own failures
+   * with toSparkError before they leave it: any other failure, the channel's own error for a closed session included,
+   * propagates unchanged and is never repeated, and the closed session stays the current one.
+   */
   async readMetadata<T>(read: (session: SparkSessionHandle) => Promise<T>): Promise<T> {
     const session = await this.metadata();
     try {
