@@ -46,6 +46,7 @@ import {
   SPARK_CONTROL_DEADLINE_MS,
   SPARK_DEFAULT_PORT,
   SPARK_HEARTBEAT_DEADLINE_MS,
+  SPARK_INTROSPECT_IN_FLIGHT_MAX,
   SPARK_REFUSED_SESSION_MAP_MAX,
   SPARK_RUN_TAG_PREFIX,
   SPARK_STREAM_MAX_RECEIVED_BYTES,
@@ -158,6 +159,79 @@ export interface SparkDeps {
   readonly transport: SparkWireTransport;
 }
 
+/** A metadata statement waiting for a slot: granted one in arrival order, or refused. */
+interface SlotWaiter {
+  readonly grant: () => void;
+  readonly refuse: (error: SparkError) => void;
+  readonly timer: ReturnType<typeof setTimeout>;
+}
+
+/**
+ * The metadata statements in flight on one connection, at most SPARK_INTROSPECT_IN_FLIGHT_MAX. The namespace walk keeps
+ * its own batches to that bound, but two tree expansions and a count or a bulk column read at the same moment would
+ * pass it on one channel, so every metadata statement runs in a slot. A statement waits for a free slot in arrival
+ * order, and the wait counts against its deadline: one still waiting when its deadline passes is refused unsent, with
+ * the sentence of a statement whose timeout passed before Studio could send it. A slot is given back however its
+ * statement ends. Once the connection closes, every statement still waiting, and every later one, is refused as
+ * cancelled.
+ */
+class SparkMetadataSlots {
+  private free = SPARK_INTROSPECT_IN_FLIGHT_MAX;
+  private readonly waiting: SlotWaiter[] = [];
+  private closed = false;
+
+  constructor(private readonly timeoutMs: number) {}
+
+  /** Runs `statement` once a slot is free, and gives the slot back when it ends. */
+  async run<T>(deadline: Date, statement: () => Promise<T>): Promise<T> {
+    await this.take(deadline);
+    try {
+      return await statement();
+    } finally {
+      this.giveBack();
+    }
+  }
+
+  /** Refuses every statement still waiting, and every later one; the slots in use come back as their statements end. */
+  close(): void {
+    this.closed = true;
+    for (const waiter of this.waiting.splice(0)) {
+      clearTimeout(waiter.timer);
+      waiter.refuse(new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled));
+    }
+  }
+
+  private take(deadline: Date): Promise<void> {
+    if (this.closed) return Promise.reject(new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled));
+    if (this.free > 0) {
+      this.free -= 1;
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const waiter: SlotWaiter = {
+        grant: resolve,
+        refuse: reject,
+        timer: setTimeout(() => {
+          this.waiting.splice(this.waiting.indexOf(waiter), 1);
+          reject(new SparkError("deadline", SPARK_ERROR_SENTENCES.deadlineBeforeSend(this.timeoutMs)));
+        }, deadline.getTime() - Date.now()),
+      };
+      this.waiting.push(waiter);
+    });
+  }
+
+  /** A slot given back goes to the statement that has waited longest, or is free again. */
+  private giveBack(): void {
+    const next = this.waiting.shift();
+    if (next === undefined) {
+      this.free += 1;
+      return;
+    }
+    clearTimeout(next.timer);
+    next.grant();
+  }
+}
+
 /** One opened channel with everything that runs over it. */
 interface SparkConnection {
   readonly options: SparkConnectionOptions;
@@ -165,6 +239,7 @@ interface SparkConnection {
   readonly metadata: Readonly<Record<string, string>>;
   readonly sessions: SparkSessions;
   readonly runs: SparkRuns;
+  readonly metadataSlots: SparkMetadataSlots;
 }
 
 /** One completed statement as the grid's result; a cut is reported with its warning and on `pagination.wasLimited`. */
@@ -366,7 +441,7 @@ export class SparkProvider extends SQLBaseProvider {
       errorConnection,
       timeoutMs: options.callTimeoutMs,
     });
-    return { options, channel, metadata, sessions, runs };
+    return { options, channel, metadata, sessions, runs, metadataSlots: new SparkMetadataSlots(options.callTimeoutMs) };
   }
 
   // -- lifecycle -----------------------------------------------------------------------------------------------------
@@ -462,12 +537,17 @@ export class SparkProvider extends SQLBaseProvider {
     if (refusal !== undefined) throw new SparkError("version", refusal);
   }
 
-  /** Stops every run, releases every session under the control deadline, then closes the channel; once per connection. */
+  /**
+   * Refuses the metadata statements still waiting for a slot, stops every run, releases every session under the control
+   * deadline, then closes the channel; once per connection. The refusal comes first, so no slot a stopped run gives
+   * back starts a statement on a connection that is closing.
+   */
   private async close(connection: SparkConnection): Promise<void> {
     if (this.closed.has(connection)) return;
     this.closed.add(connection);
     this.closing.add(connection);
     this.releasing += 1;
+    connection.metadataSlots.close();
     try {
       await connection.runs.cancelAll();
       await connection.sessions.releaseAll();
@@ -594,16 +674,19 @@ export class SparkProvider extends SQLBaseProvider {
   // -- the metadata session ------------------------------------------------------------------------------------------
 
   /**
-   * One statement the provider wrote, on the metadata session, read again once on a new one when the server closed it.
-   * Its deadline is the connection's query timeout from now, unless the read it belongs to passes the read's own.
+   * One statement the provider wrote, in one of the connection's metadata slots, on the metadata session, read again
+   * once on a new one when the server closed it. Its deadline, which its wait for a slot counts against, is the
+   * connection's query timeout from now, unless the read it belongs to passes the read's own.
    */
   private metadataSql(
     connection: SparkConnection,
     sql: string,
     deadline: Date = new Date(Date.now() + connection.options.callTimeoutMs),
   ): Promise<SparkStatementResult> {
-    return connection.sessions.readMetadata((session) =>
-      connection.runs.run({ sql, session: async () => session, deadline }),
+    return connection.metadataSlots.run(deadline, () =>
+      connection.sessions.readMetadata((session) =>
+        connection.runs.run({ sql, session: async () => session, deadline }),
+      ),
     );
   }
 

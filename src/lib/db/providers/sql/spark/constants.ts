@@ -74,7 +74,7 @@ export const SPARK_METADATA_SESSION_CONF: readonly (readonly [string, string])[]
 export const SPARK_NAMESPACE_WALK_MAX = 1_000;
 export const SPARK_NAMESPACE_MAX_PARTS = 8;
 export const SPARK_DESCRIBE_OBJECTS_MAX = 1_000;
-/** Introspection statements in flight at once (spec 4.11, the walk's breadth). */
+/** Metadata statements in flight at once on one connection, and the size of the namespace walk's batches. */
 export const SPARK_INTROSPECT_IN_FLIGHT_MAX = 8;
 /** FetchErrorDetails: one root, at most 5 causes of at most 1,024 characters (spec 4.10 step 2). */
 export const SPARK_ERROR_CAUSES_MAX = 5;

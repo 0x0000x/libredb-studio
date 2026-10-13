@@ -12,6 +12,7 @@ import {
   SPARK_CONTROL_DEADLINE_MS,
   SPARK_HEARTBEAT_DEADLINE_MS,
   SPARK_HEARTBEAT_INTERVAL_MS,
+  SPARK_INTROSPECT_IN_FLIGHT_MAX,
   SPARK_REFUSED_SESSION_MAP_MAX,
   SPARK_VERSION_TEXT_MAX_CHARS,
 } from "@/lib/db/providers/sql/spark/constants";
@@ -29,7 +30,7 @@ import { SPARK_MONITORING_LABELS } from "@/lib/db/providers/sql/spark/monitoring
 import { releaseSessionRequest } from "@/lib/db/providers/sql/spark/requests";
 import { SPARK_CUT_WARNINGS } from "@/lib/db/providers/sql/spark/result-stream";
 import { SPARK_STATEMENT_SENTENCES } from "@/lib/db/providers/sql/spark/statement-shape";
-import { type DatabaseProvider, DEFAULT_QUERY_TIMEOUT } from "@/lib/db/types";
+import { type DatabaseProvider, DEFAULT_QUERY_TIMEOUT, type ProviderOptions } from "@/lib/db/types";
 import { MAX_UNLIMITED_ROWS } from "@/lib/db/utils/query-limiter";
 import { logger } from "@/lib/logger";
 import { type DatabaseConnection, TUNNEL_FAR_END, type TunnelFarEnd, type WithTunnelFarEnd } from "@/lib/types";
@@ -696,9 +697,9 @@ describe("SparkProvider: one deadline for a bulk column read", () => {
   });
 
   /**
-   * A connected provider on a test clock, over a channel whose namespace `default` lists `tables`. The listing answers at
-   * once and each DESCRIBE TABLE `cost` ms after it was sent; one whose answer would come past its call's deadline fails
-   * at that deadline, as grpc-js fails a call past its deadline. The clock starts at START once connected.
+   * A connected provider on a test clock, over a channel whose namespace `default` lists `tables`. The listing answers
+   * at once and each DESCRIBE TABLE `cost` ms after it was sent; one whose answer would come past its call's deadline
+   * fails at that deadline, as grpc-js fails a call past its deadline. The clock starts at START once connected.
    */
   async function timed(tables: readonly string[], cost: number) {
     let now = Date.now();
@@ -826,6 +827,222 @@ describe("SparkProvider: one deadline for a bulk column read", () => {
       await read.end();
     }
   });
+});
+
+describe("SparkProvider: the metadata statements in flight on one connection", () => {
+  const MAX = SPARK_INTROSPECT_IN_FLIGHT_MAX;
+  const later = (ms: number) =>
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  /** Fails as grpc-js fails a call its client cancelled, once the call's signal aborts. */
+  const aborted = (call: SparkWireCall) =>
+    new Promise<never>((_, reject) => {
+      call.signal.addEventListener("abort", () => reject(clientCancel()), { once: true });
+    });
+  const NO_NAMESPACES = columnsStream([{ name: "namespace", kind: "utf8", values: [] }]);
+  const NO_FUNCTIONS = columnsStream([{ name: "function", kind: "utf8", values: [] }]);
+  const DEFAULT_COUNTS = { table: { count: 1 }, view: { count: 0 }, function: { count: 0 } };
+
+  /**
+   * A connected provider over a channel that counts the statements open on it at once, each from its ExecutePlan until
+   * its stream ended or failed. Catalog `lake<n>` lists the namespaces n0 to n<n-1>, and each of those answers that it
+   * holds none once `child` settles, or fails as `child` fails; the listings of `default` answer at once.
+   */
+  async function counted(options: ProviderOptions = {}) {
+    let open = 0;
+    let most = 0;
+    const sent: string[] = [];
+    const control: { child: (call: SparkWireCall) => Promise<void> } = { child: () => later(2) };
+    const fixed: Readonly<Record<string, Uint8Array>> = {
+      "SHOW CURRENT NAMESPACE": CURRENT,
+      [`SHOW VIEWS IN ${DEFAULT}`]: listing("viewName", []),
+      [`SHOW TABLES IN ${DEFAULT}`]: listing("tableName", ["t"]),
+      [`SHOW USER FUNCTIONS IN ${DEFAULT}`]: NO_FUNCTIONS,
+    };
+    const answer = async (sql: string, call: SparkWireCall): Promise<Uint8Array> => {
+      const top = /^SHOW NAMESPACES IN `lake(\d+)`$/.exec(sql);
+      if (top !== null) {
+        const names = Array.from({ length: Number(top[1]) }, (_, i) => `n${i}`);
+        return columnsStream([{ name: "namespace", kind: "utf8", values: names }]);
+      }
+      if (/^SHOW NAMESPACES IN `lake\d+`\.`n\d+`$/.test(sql)) {
+        await control.child(call);
+        return NO_NAMESPACES;
+      }
+      const known = fixed[sql];
+      if (known === undefined) throw new Error(`unexpected statement: ${sql}`);
+      return known;
+    };
+    const script = scripted({
+      stream: (sql, request, call) => {
+        sent.push(sql);
+        open += 1;
+        most = Math.max(most, open);
+        let reads = 0;
+        return {
+          read: async () => {
+            reads += 1;
+            if (reads > 1) {
+              open -= 1;
+              return undefined;
+            }
+            try {
+              return commandAnswer(request, await answer(sql, call));
+            } catch (error) {
+              open -= 1;
+              throw error;
+            }
+          },
+          receivedBytes: 0,
+          truncated: false,
+          cancel: () => undefined,
+        };
+      },
+    });
+    const provider = new SparkProvider(connection(1), options, script);
+    await provider.connect();
+    return { provider, control, sent, open: () => open, most: () => most };
+  }
+
+  /** Two expansions whose namespaces wait on the test take every slot, and no more, then answer whole. */
+  async function expectEverySlotFree(read: Awaited<ReturnType<typeof counted>>): Promise<void> {
+    const held = gate();
+    read.control.child = () => held.promise;
+    const both = Promise.all([read.provider.listContainers(["lake9"]), read.provider.listContainers(["lake10"])]);
+    await eventually(() => read.open() === MAX);
+    await later(5);
+    expect(read.open()).toBe(MAX);
+    held.open();
+    expect((await both).map((containers) => containers.length)).toStrictEqual([9, 10]);
+    expect(read.open()).toBe(0);
+  }
+
+  test(`two tree expansions and a count at once keep at most ${SPARK_INTROSPECT_IN_FLIGHT_MAX} metadata statements in flight`, async () => {
+    const read = await counted();
+    try {
+      const [lake, other, counts] = await Promise.all([
+        read.provider.listContainers(["lake10"]),
+        read.provider.listContainers(["lake11"]),
+        read.provider.countObjects(["spark_catalog", "default"]),
+      ]);
+      expect(lake.map((container) => container.path)).toStrictEqual(
+        Array.from({ length: 10 }, (_, i) => ["lake10", `n${i}`]),
+      );
+      expect(other).toHaveLength(11);
+      expect(counts).toStrictEqual(DEFAULT_COUNTS);
+      expect(read.most()).toBe(MAX);
+      expect(read.open()).toBe(0);
+    } finally {
+      await read.provider.disconnect();
+    }
+  });
+
+  test.each<[string, () => Error, string]>([
+    [
+      "failed",
+      () =>
+        Object.assign(new Error("13 INTERNAL: [SCHEMA_NOT_FOUND] gone"), {
+          code: 13,
+          details: "[SCHEMA_NOT_FOUND] gone",
+        }),
+      "[SCHEMA_NOT_FOUND] gone",
+    ],
+    ["were cancelled", clientCancel, SPARK_ERROR_SENTENCES.cancelled],
+  ])("every slot comes back once the statements that held them %s", async (_label, ending, message) => {
+    const read = await counted();
+    try {
+      const release = gate();
+      read.control.child = async () => {
+        await release.promise;
+        throw ending();
+      };
+      const first = failureOf(read.provider.listContainers([`lake${MAX}`]));
+      await eventually(() => read.open() === MAX);
+      release.open();
+      expect(((await first) as Error).message).toBe(message);
+      expect(read.open()).toBe(0);
+      await expectEverySlotFree(read);
+      expect(read.most()).toBe(MAX);
+    } finally {
+      await read.provider.disconnect();
+    }
+  });
+
+  test("a disconnect refuses the statements still waiting for a slot, unsent, and leaves nothing in flight", async () => {
+    const read = await counted();
+    read.control.child = (call) => aborted(call);
+    const walk = failureOf(read.provider.listContainers([`lake${MAX}`]));
+    await eventually(() => read.open() === MAX);
+    const waiting = [
+      failureOf(read.provider.countObjects(["spark_catalog", "default"])),
+      failureOf(read.provider.listObjects(["spark_catalog", "default"], "view")),
+    ];
+    const theirs = () => read.sent.filter((sql) => sql.includes(DEFAULT));
+    await later(5);
+    expect(theirs()).toStrictEqual([]);
+    await read.provider.disconnect();
+    for (const refusal of await Promise.all(waiting)) {
+      expect(refusal).toBeInstanceOf(QueryCancelledError);
+      expect((refusal as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+    }
+    expect(await walk).toBeInstanceOf(QueryCancelledError);
+    expect(theirs()).toStrictEqual([]);
+    expect(read.open()).toBe(0);
+    expect(read.provider.hasRunsInFlight()).toBe(false);
+  });
+
+  test("a read that goes on once a disconnect began sends no further statement", async () => {
+    const read = await counted();
+    const held = gate();
+    read.control.child = () => held.promise;
+    // Nine namespaces: the walk's first batch takes every slot, and its second asks for the ninth one's children.
+    const walk = failureOf(read.provider.listContainers([`lake${MAX + 1}`]));
+    await eventually(() => read.open() === MAX);
+    const closing = read.provider.disconnect();
+    // The first batch answers before the disconnect stops it, so the walk goes on to its second batch.
+    held.open();
+    await closing;
+    const failure = await walk;
+    expect(failure).toBeInstanceOf(QueryCancelledError);
+    expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+    expect(read.sent).not.toContain(`SHOW NAMESPACES IN \`lake${MAX + 1}\`.\`n${MAX}\``);
+    expect(read.open()).toBe(0);
+  });
+
+  test.each<[string, (provider: SparkProvider) => Promise<unknown>]>([
+    ["a count", (provider) => provider.countObjects(["spark_catalog", "default"])],
+    ["a bulk column read", (provider) => provider.describeObjects(["spark_catalog", "default"], "table")],
+  ])(
+    "%s still waiting for a slot at its deadline is refused unsent, and every slot stays whole",
+    async (_label, start) => {
+      const timeout = 100;
+      const read = await counted({ queryTimeout: timeout });
+      try {
+        const held = gate();
+        read.control.child = () => held.promise;
+        const walk = read.provider.listContainers([`lake${MAX}`]);
+        await eventually(() => read.open() === MAX);
+        const failure = await failureOf(start(read.provider));
+        expect(failure).toBeInstanceOf(QueryError);
+        expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.deadlineBeforeSend(timeout));
+        expect(read.sent.filter((sql) => sql.includes(DEFAULT))).toStrictEqual([]);
+        expect(read.open()).toBe(MAX);
+        held.open();
+        expect(await walk).toHaveLength(MAX);
+        // The refused statement was given no slot: a count runs at once, and one expansion takes every slot again.
+        expect(await read.provider.countObjects(["spark_catalog", "default"])).toStrictEqual(DEFAULT_COUNTS);
+        const again = gate();
+        read.control.child = () => again.promise;
+        const expansion = read.provider.listContainers([`lake${MAX}`]);
+        await eventually(() => read.open() === MAX);
+        again.open();
+        expect(await expansion).toHaveLength(MAX);
+      } finally {
+        await read.provider.disconnect();
+      }
+    },
+  );
 });
 
 describe("SparkProvider: refusals before any call", () => {
