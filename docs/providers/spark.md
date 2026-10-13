@@ -12,7 +12,7 @@ LibreDB Studio has no affiliation with and is not endorsed by The Apache Softwar
 | **Status**             | Implemented                                                                                      |
 | **Database type id**   | `spark`                                                                                          |
 | **Family**             | SQL (`src/lib/db/providers/sql/spark/`)                                                          |
-| **Driver**             | None: Spark Connect over the shared gRPC transport; `apache-arrow` 21.2.0 decodes result batches |
+| **Driver**             | `@grpc/grpc-js` through the shared gRPC transport, with no Spark client library; `apache-arrow` 21.2.0 decodes result batches |
 | **Query language**     | `sql` (Spark SQL)                                                                                |
 | **Default port**       | 15002                                                                                            |
 | **Connection string**  | Not stored: a pasted `sc://` address is decomposed into fields                                   |
@@ -29,7 +29,8 @@ The provider reaches a Spark Connect server only: gRPC with Arrow results, on po
 It needs Spark 4.1 or later, the first release that splits large results into chunks Studio can read, and it was tested on Spark 4.1.3 and 4.2.0.
 `connect()` reads the server's version with one AnalyzePlan call before anything else, and a server below 4.1.0 is refused with `This server runs Spark <version>. Studio connects to Spark 4.1 and later, the first release that splits large results into chunks Studio can read.`
 A pre-release of exactly 4.1.0 (`-preview<n>`, `-rc<n>`, `-SNAPSHOT`) reads as below the floor.
-A refused probe session is remembered for that connection, at most 256 such entries per process, so repeated refusals hold one server session, not one per attempt.
+A refused probe that the server cannot release, on a server below the floor without ReleaseSession, is remembered by the connection's id and its configured endpoint, the far end under an SSH tunnel, at most 256 such entries per process.
+The next connect of that connection reads the version on the remembered session, so repeated refusals hold one server session, not one per attempt.
 `createDatabaseProvider()` ([`factory.ts`](../../src/lib/db/factory.ts)) builds the provider for the type id `spark`.
 
 | Spark | Studio |
@@ -101,6 +102,7 @@ The SSL modes are read by the shared gRPC transport as for every gRPC provider:
 | --- | --- |
 | disable | Plaintext gRPC; a token goes only to a loopback host or through the tunnel |
 | require | Encrypts without verifying the certificate |
+| verify-system | Verifies the certificate against the system trust store, or a pasted CA, and checks that it names Host; the mode the paste sets for TLS |
 | verify-ca | Verifies the certificate against the pasted CA and checks that it names Host, as verify-full does |
 | verify-full | Verifies the certificate against the pasted CA, or the system trust store, and checks that it names Host |
 
@@ -140,7 +142,7 @@ What a user sees for each outcome:
 | Connected without a token | caution | the first caution of [section 2.3](#23-a-server-without-a-token) |
 | A token the server does not check | caution, Test connection only | the second caution of [section 2.3](#23-a-server-without-a-token) |
 
-The version in a sentence is the server's answer with the token redacted, cut to 64 characters.
+The version in a sentence is the server's text, withheld whole when it holds the token and otherwise cut to 64 characters.
 The two client-certificate rows are read under Node; under Bun the same failures read as nothing listening ([section 10](#10-security)).
 
 ### 2.5 Paste URL
@@ -193,7 +195,7 @@ connections:
     roles: ["admin", "user"]
 ```
 
-A seed that sets `connectionString`, `user` or `readOnly: true` for `spark` is refused.
+A seed that sets `connectionString` or `readOnly: true` for `spark` is refused when the file loads; one that sets `user` loads, and its connection is refused at connect with the User sentence of [section 2.1](#21-fields).
 
 ## 3. The recommended Spark setup
 
@@ -221,15 +223,20 @@ The driver's web UI shows every session's statement text without authentication 
 
 ## 4. Sessions and scripts
 
-Every Studio request gets a Spark session of its own, created for that request and released when it ends.
+Every Studio request gets a Spark session of its own, created for that request and released when its request scope ends: Studio's query routes end it, and in the embedded package a host that passes a scope ends it ([section 12](#12-embedded-package)).
 A script's statements run in the same request, so they share one session: a temp view, a `SET` or a `USE NAMESPACE` made by one statement is seen by the next, and by nothing after the request.
 A `query()` call outside a request scope runs in a session of its own, released when the statement ends.
+A disconnect of the provider releases every session.
 The provider also keeps one metadata session for the tree, the overview and health; it never runs a user statement.
+
+At most 8 of the statements the provider writes run on one connection's metadata session at once, and the rest wait for a slot, served in arrival order.
+A statement's wait for a slot and for the metadata session's setup counts against the connection's query timeout.
+One still waiting at its deadline is refused with `The statement was not sent: the connection's query timeout (<n> ms) passed before Studio could send it.`, and one still waiting when the connection's close begins is refused with `The query was cancelled.`
 
 Every new session starts with one Config call that sets `spark.sql.variable.substitute=false`, `spark.sql.execution.arrow.compression.codec=none`, `spark.sql.execution.arrow.useLargeVarTypes=false`, `spark.connect.session.resultChunking.maxChunkSize=4194304`, `spark.sql.execution.arrow.maxRecordsPerBatch=1000`, `spark.connect.progress.reportInterval=2s` and `spark.sql.connect.enrichError.enabled=true`.
 Substitution is off so that `${...}` is never expanded and the text Spark parses is the text the confirmation gate read; Arrow compression is off because Studio reads only uncompressed results.
 The metadata session also gets `spark.sql.legacy.keepCommandOutputSchema=false` and `spark.sql.debug.maxToStringFields=10000`, so the tree reads SHOW output by its current column names and DESCRIBE spells a struct type whole.
-When Catalog is set, the session then runs `SET CATALOG '<catalog>'`; when Namespace is set, `USE NAMESPACE <namespace>`, never the bare `USE`, so the first part of a namespace is never read as a catalog.
+When Catalog is set, the session then runs `SET CATALOG '<catalog>'`; when Namespace is set, `USE NAMESPACE` with every part of the namespace in backticks, never the bare `USE`, so the first part of a namespace is never read as a catalog.
 
 Refused before any call is sent:
 
@@ -263,10 +270,15 @@ While a run's stream is open, a heartbeat sends one Config read every 15 s on th
 A connection the server still closes that way reads `The connection to Spark was closed by the server's keepalive rule while the statement ran. Studio asked Spark to stop the statement; run it again.`
 
 Stop and a closed tab send Interrupt by the run's tag, which reaches both steps of the run, and the Spark job fails with its tasks killed: `The query was cancelled.`
-A run stopped before its first call reads `The statement was cancelled before it was sent.`
+A run stopped while its session is still being set up sends nothing and ends with the same sentence.
+Stop hands the Interrupt to the channel and aborts the run's stream one turn of the event loop later, without waiting for the Interrupt's answer, so the Interrupt leaves ahead of the stream's reset on the shared connection.
+A run stays reachable by Stop until it has ended and its Interrupt, if it sent one, answered or failed, and no run is sent more than one Interrupt; a Stop also reaches a run whose connection is still closing.
 Every other early end of a stream also sends Interrupt by tag, once, because cancelling a gRPC call alone leaves the Spark job running.
+A run that starts once its connection's close began is refused as cancelled before it asks for a session, and nothing is sent for it.
 
 The connection's query timeout bounds each run: `The statement ran past the connection's query timeout (<n> ms); Studio asked Spark to stop it.`
+A run whose deadline passes before Studio sends it, such as while its session is still being set up, is not sent, and no Interrupt follows: `The statement was not sent: the connection's query timeout (<n> ms) passed before Studio could send it.`
+A deadline that passes between the two steps sends no second ExecutePlan call, and the run's Interrupt follows, with the first of these two sentences.
 A dropped connection reads `The connection to Spark dropped while the statement ran. Studio asked Spark to stop it; run it again.`, and any other failure of the stream `The connection to Spark failed while the statement ran (<status text>). Studio asked Spark to stop it; run it again.`
 
 ## 6. Results
@@ -366,7 +378,8 @@ A session that set the Arrow codec or the large types for itself gets its result
 Catalogs come from three sources on the metadata session: the current catalog of `SHOW CURRENT NAMESPACE`, `SHOW CATALOGS`, and the configured `spark.sql.catalog.<name>` keys, whose values are never read.
 The current catalog comes first and is flagged as the session default, the rest by name.
 
-Namespaces are `SHOW NAMESPACES IN <catalog>`, each written in Spark's spelling, its parts quoted where needed and joined by dots.
+Namespaces come from `SHOW NAMESPACES IN <catalog>`, and the tree names each as Spark spells it: its parts joined by dots, a part in backticks only where Spark quotes it.
+Every statement Studio writes for a namespace puts every part of it in backticks, and the tree's statements put the catalog and the object's name in backticks too, because Spark's spelling leaves a reserved word such as `select` bare, and a statement that names it bare does not parse under `spark.sql.ansi.enforceReservedKeywords=true`.
 For every catalog but `spark_catalog`, which holds single-level databases, the walk goes on breadth first to at most 8 levels and 1,000 namespaces.
 Past either bound the listing is refused, never shown shorter: `This catalog has more than 1,000 namespaces, or nests them more than 8 levels deep, more than Studio walks for its tree. Query its objects by name.`
 A namespace path Studio cannot read as Spark spells it is refused before any statement: `Studio cannot read this namespace as Spark spells it, so no statement was sent.`
@@ -393,10 +406,27 @@ A kind the tree does not know reads `Apache Spark has no object kind "<kind>" in
 ### 7.3 Columns and definitions
 
 Columns come from `DESCRIBE TABLE`, read by column name until Spark's first section header; types keep Spark's spelling.
-`describeObjects` runs one `DESCRIBE TABLE` per object, in listing order, at most 1,000 objects when no limit is given, and reports the rest as truncated.
+A function's columns are read as none, with no statement, and its definition read is refused: `Studio reads no definition for an Apache Spark <kind>.`
+Below the provider, a column read of any other kind is refused with `Studio reads no columns for an Apache Spark <kind>.`; the provider itself refuses a kind it does not declare before that, with the sentence of [section 7.2](#72-kinds).
+
+`describeObjects` runs one `DESCRIBE TABLE` per object, one at a time in listing order, and describes at most 1,000 objects in one read, whatever the caller's limit.
 That is a stated deviation from one round trip per container: open-source Spark has no catalog view that lists every table's columns, and `SHOW TABLE EXTENDED` spells types differently and loads every table.
-Definitions come from `SHOW CREATE TABLE`; Spark's refusal, such as for a temp view, becomes the definition's own unavailable sentence.
-A function has neither: `Studio reads no columns for an Apache Spark <kind>.` and `Studio reads no definition for an Apache Spark <kind>.`
+When more objects remain past the bound, the read reports them as truncated, with the bound and its reason; a listing that ends exactly at the bound is not truncated.
+A caller's limit at or below 1,000 bounds the read and keeps the caller's own truncation reason; with no limit, or a larger one, the reason is `Studio describes at most 1,000 objects in one read, since Apache Spark needs one DESCRIBE TABLE per object`.
+A limit that is not a whole number above 0 is refused before any statement: `An Apache Spark bulk column read limit must be a positive whole number, received <limit>.`
+An object Spark answers `TABLE_OR_VIEW_NOT_FOUND` for, one dropped since the listing, is left out, and any other failure fails the whole read.
+For functions the read sends no statement and answers no details.
+The whole read runs under one deadline, the connection's query timeout from the read's start: each statement runs in the time left, and once it is up the read fails with a timeout sentence of [section 5](#5-how-a-statement-runs) and sends nothing more.
+
+Definitions come from `SHOW CREATE TABLE`.
+Only the refusals Spark gives for an object it holds but cannot print become the definition's unavailable sentence, in Spark's own text:
+
+- a temporary view: `EXPECT_PERMANENT_VIEW_NOT_TEMP`, which Spark 4.1.3 and 4.2.0 answer first, or `UNSUPPORTED_SHOW_CREATE_TABLE.ON_TEMPORARY_VIEW`;
+- a metric view: `UNSUPPORTED_SHOW_CREATE_TABLE.ON_METRIC_VIEW`;
+- a transactional Hive table: `UNSUPPORTED_SHOW_CREATE_TABLE.ON_TRANSACTIONAL_HIVE_TABLE`;
+- a Hive table whose features or serde configuration the statement cannot print: `UNSUPPORTED_SHOW_CREATE_TABLE.WITH_UNSUPPORTED_FEATURE` or `UNSUPPORTED_SHOW_CREATE_TABLE.WITH_UNSUPPORTED_SERDE_CONFIGURATION`.
+
+Any other failure fails the read, and the read of an object that does not exist fails with Spark's text, which names it.
 
 The tree declares no foreign keys and no indexes: Spark's PRIMARY KEY and FOREIGN KEY are informational and limited to some catalogs, and no Spark SQL statement lists indexes.
 A statement led by `CREATE`, `DROP`, `ALTER`, `REPLACE`, `REPAIR` or `MSCK` refreshes the tree.
@@ -414,20 +444,27 @@ No plan is requested beside an ordinary run.
 
 | Panel | What it shows |
 | --- | --- |
-| Overview | The version, start time and uptime from the metadata session, and the table count of the current namespace; no size and no connection count |
+| Overview | The version, start time and uptime from the metadata session, and the table count of the current namespace with a "counted from" line that names it; no size and no connection count |
 | Health | One AnalyzePlan round trip; size and cache ratio "N/A" |
 | Performance | Nothing |
 | Slow queries | Empty: `Spark keeps finished statements in the driver's web UI, which Studio does not read in this version.` |
 | Sessions | Empty: `Spark Connect sessions are listed in the driver's web UI, which Studio does not read in this version. Studio's own sessions last one request each.` |
 | Tables | Refused: `Spark keeps table statistics only where its catalog stores them, and Studio does not read them in this version.` |
-| Indexes | Empty: Spark has no indexes |
+| Indexes | Empty: no Spark SQL statement lists indexes |
 | Storage | Refused: `Spark reports no storage figure Studio can read in this version.` |
+
+A catalog with no current namespace, which Spark spells as an empty name, shows a table count of 0 and no "counted from" line.
+The overview's version is the server's text as the version sentences of [section 2.4](#24-test-connection) quote it: withheld whole when it holds the token, and otherwise cut to 64 characters.
 
 The 60 s connection pulse sends one AnalyzePlan on the metadata session, which also keeps that session from idling out.
 
 ### 8.3 Plan mode and agent operations
 
-Plan mode works: the model is told to write Spark SQL, and the grounding walk reads only the session-default namespace, or the default catalog's namespaces when none is set.
+Plan mode works: the model is told to write Spark SQL, and the grounding walk reads only the session's current namespace, or, when the current catalog holds no such namespace, that catalog's namespaces.
+The walk still lists the namespaces of every other catalog, to count what it did not read.
+A catalog whose listing fails there, one that cannot load or one past the bounds of [section 7.1](#71-catalogs-and-namespaces), is named to the model as not read, with the text of its failure, and the walk goes on.
+A catalog that cannot load is named with Spark's own text: the test services' `studio_unloaded` catalog, which nothing loads, answers `requirement failed: Option 'url' is required.`
+A failed listing of the current catalog ends the walk, and the run's inventory is then unavailable whole.
 Agent execute mode and the editor hand-over are refused at the start, because Spark has no engine-side read-only mode, so the provider has no read-only query path.
 The agent operations workflow reads the panels of [section 8.2](#82-monitoring) and receives the two refusals as such.
 
@@ -529,7 +566,7 @@ Studio treats every answer from the server as untrusted input and bounds it:
 
 Each bound is a unit test against a stub gRPC server or a hand-built Arrow stream.
 
-Isolation between Studio users: one cached provider serves every Studio user of a connection, so no Spark session outlives its request, and no user sees another's `SET`, `USE` or temp view.
+Isolation between Studio users: one cached provider serves every Studio user of a connection, so no two requests share a Spark session, and no user sees another's `SET`, `USE` or temp view.
 The global temp views in `global_temp` are shared by every client of the Spark server, by Spark's design.
 A run is cancelled only through its own query id.
 
@@ -549,7 +586,7 @@ Each failure becomes one of the repository's error classes at the provider bound
 | Category | What arrives | Class | Sentence |
 | --- | --- | --- | --- |
 | `config` | a field check | `DatabaseConfigError` | [section 2.1](#21-fields) |
-| `unsent` | the run was stopped before its call left Studio | `QueryCancelledError` | `The statement was cancelled before it was sent.` |
+| `unsent` | a call its own signal ended before it left Studio; when Stop ended a run's call so, the run reports `cancelled` instead | `QueryCancelledError` | `The statement was cancelled before it was sent.` |
 | `not-connected`, `tls` | UNAVAILABLE, a refused or unknown host, a TLS cause | `ConnectionError` | [section 2.4](#24-test-connection) |
 | `unauthenticated` | UNAUTHENTICATED | `AuthenticationError` | [section 2.4](#24-test-connection) |
 | `connection-dropped`, `stream-failed` | the stream broke while the statement ran | `ConnectionError` | [section 5](#5-how-a-statement-runs) |
@@ -557,11 +594,12 @@ Each failure becomes one of the repository's error classes at the provider bound
 | `receive-cap` | a message over 16 MiB | `QueryError` | [section 5](#5-how-a-statement-runs), [section 6.3](#63-budgets), and for a control call `Spark sent an answer larger than Studio reads in one message (16 MiB), so this request could not complete.` |
 | `command-batch-bound` | Spark's own one-batch bound on a command answer | `QueryError` | `Spark answers a command in one Arrow batch, and this answer is larger than the batch size this server allows (spark.connect.grpc.arrow.maxBatchSize). Narrow it, for example with LIKE or IN.` |
 | `batch-too-large` | the stream bound before any batch arrived whole | `QueryError` | [section 6.3](#63-budgets) |
-| `deadline` | the query timeout | `QueryError` | [section 5](#5-how-a-statement-runs) |
-| `cancelled` | Stop, a closed tab, or Spark's `OPERATION_CANCELED` | `QueryCancelledError` | `The query was cancelled.` |
+| `deadline` | the query timeout, while the statement ran or before Studio could send it | `QueryError` | [section 5](#5-how-a-statement-runs) |
+| `cancelled` | Stop, a closed tab, Spark's `OPERATION_CANCELED`, or a statement that starts or waits once the connection's close began | `QueryCancelledError` | `The query was cancelled.` |
 | `session-closed`, `session-changed` | `INVALID_HANDLE.SESSION_CLOSED`, `SESSION_NOT_FOUND`, `SESSION_CHANGED` | `QueryError` | [section 4](#4-sessions-and-scripts) |
 | `unimplemented`, `version` | not a Spark Connect server, or below the floor | `ConnectionError` | [section 2.4](#24-test-connection) |
 | `unreadable` | a result Studio could not read | `QueryError` | `Spark sent a result Studio could not read (<what>), so it is not shown.` |
+| `refused` | a tree request Studio declines: a list past its bounds, a namespace Studio cannot read as Spark spells it, a kind the tree does not know or one with no columns or no definition to read, or a bulk column read limit that is not a whole number above 0 | `QueryError` | [section 7](#7-the-tree) |
 | `spark` | Spark's own error | `QueryError` | Spark's text, then `Cause: <innermost cause>` |
 
 A Spark error carries its error class, SQL state and error id; Studio fetches the details once and adds the innermost cause as a `Cause:` line when it says something the text does not, such as "Permission denied" under a missing-file error.
@@ -586,21 +624,23 @@ The package depends on `apache-arrow` 21.2.0, pinned exactly.
 | --- | --- |
 | Unit | `tests/unit/db/spark/`, one file per module, against a fake Spark Connect server (`tests/helpers/spark-connect-server.ts`) and hand-built Arrow streams (`tests/helpers/spark-ipc.ts`) |
 | Doc | `tests/unit/db/spark/provider-doc.test.ts` holds this page to the code: its sentences, numbers, kinds, gate forms and the type table |
-| Integration | `tests/integration/db/spark-provider.test.ts` runs the real provider over recorded Spark answers |
-| Live | `tests/live/spark-evidence.ts` writes the captures, and `tests/live/spark-live-check.ts` runs the provider against the compose services by hand |
+| Integration | `tests/integration/db/spark-provider.test.ts` runs the real provider over recorded Spark answers, through the recorded transport of `tests/helpers/spark-fixtures.ts` |
+| Live | `tests/live/spark-evidence.ts` writes the captures by hand from the compose services, entry by entry from the catalog in `tests/live/spark-evidence-plan.ts` |
 
 The captures are under `tests/fixtures/spark/4.2.0/` and `tests/fixtures/spark/4.1.3/`, one RPC exchange per file, recorded on 2026-10-13 from `apache/spark:4.2.0@sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89` and `apache/spark:4.1.3@sha256:bf9d035a7c32a8ca46aa58d6348182ffd7d2dff6409206ecfbb3915ff1fef211`; [`tests/fixtures/spark/README.md`](../../tests/fixtures/spark/README.md) lists each one.
-The replay masks the ids the client chooses at random and writes the request's own ids into the answer, the one BUILT step every case shares.
-Two cases are BUILT from captures and labelled so: the version refusal, rewritten to 3.5.9 and 4.0.4, and a nested namespace walk, since no catalog of the open-source fixture nests.
+The replay matches a call by its RPC and its request, both read through the provider's own codec with the ids the client chooses at random masked, and a request no capture matches fails its case.
+The one BUILT step every case shares is in the answer: the request's own ids are written into it, and every call of one session gets one server-side session id, because each capture comes from its own run and the provider reads a changed id as a restarted server.
+Two cases are BUILT from captures and labelled so: the version refusal, the 4.2.0 version answer rewritten to 3.5.9 and 4.0.4, and a nested namespace listing, the session catalog's `SHOW NAMESPACES` answer rewritten to multi-part spellings, since no catalog of the open-source fixture nests.
 Nothing in CI contacts Spark.
 
-To repeat the capture and the live check by hand:
+To repeat the captures by hand:
 
 1. Start the services: `docker compose -f database-compose.yml up -d spark`, `docker compose -f database-compose.yml --profile spark-4-1 up -d spark-4-1`, and, with `SPARK_CONNECT_TOKEN` set to a token of your choosing and `SPARK_TLS_DIR` to a directory outside the repository, `docker/spark/make-certs.sh "$SPARK_TLS_DIR"` then `docker compose -f database-compose.yml --profile spark-auth up -d spark-auth spark-tls`.
-2. Set the targets the live files read: `SPARK_LIVE_TARGET` (127.0.0.1:15002), `SPARK_LIVE_TARGET_41` (127.0.0.1:15003), `SPARK_LIVE_TARGET_AUTH` (127.0.0.1:15004), `SPARK_LIVE_TARGET_TLS` (127.0.0.1:15005), `SPARK_LIVE_UI` (http://127.0.0.1:4040) and `SPARK_LIVE_UI_41` (http://127.0.0.1:4041).
-3. Write the sample objects and the captures with `bun tests/live/spark-evidence.ts --setup <service>` and `--capture <service>` for each service, then `--readme`.
-4. Run `bun tests/live/spark-live-check.ts`, which prints one PASS, FAIL or SKIP line per item and exits 1 on a FAIL and 2 on a missing variable.
-5. Stop the services with `docker compose -f database-compose.yml --profile spark-4-1 --profile spark-auth down`.
+2. Set every variable the harness reads through `tests/helpers/spark-live.ts`: `SPARK_CONNECT_TOKEN`, 16 to 256 letters, digits or the characters `. _ ~ + / = -`, and `SPARK_TLS_DIR`, both as in step 1, and `SPARK_LIVE_TARGET` (127.0.0.1:15002), `SPARK_LIVE_TARGET_41` (127.0.0.1:15003), `SPARK_LIVE_TARGET_AUTH` (127.0.0.1:15004), `SPARK_LIVE_TARGET_TLS` (127.0.0.1:15005), `SPARK_LIVE_UI` (http://127.0.0.1:4040) and `SPARK_LIVE_UI_41` (http://127.0.0.1:4041).
+   Every target and driver UI must be a loopback address, and a variable that is missing or refused stops the harness with exit code 2 before any socket opens.
+3. Create the sample objects with `bun tests/live/spark-evidence.ts --setup <service>` for `spark`, `spark-4-1` and `spark-auth`, write the captures with `--capture <service>` for each of the four services, or `--capture <service> <entry> ...` to retake some entries, then render the fixtures README with `--readme`.
+   The harness dials a service only once `docker port` lists its target for the fixture container running the pinned image, and an answer other than the catalog expects stops the run with exit code 1, so a surprise is reported rather than recorded.
+4. Stop the services with `docker compose -f database-compose.yml --profile spark-4-1 --profile spark-auth down`.
 
 ### References
 

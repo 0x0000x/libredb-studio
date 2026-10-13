@@ -84,6 +84,7 @@ function tableRows(text: string): string[][] {
 // The holes a sentence with parameters is printed with in the doc.
 const PORT = "<port>" as unknown as number;
 const N = "<n>" as unknown as number;
+const LIMIT = "<limit>" as unknown as number;
 const HOLES: Readonly<Record<string, readonly unknown[]>> = {
   notConnected: ["<host>", PORT],
   tlsPlaintextServer: ["<host>", PORT],
@@ -98,12 +99,14 @@ const HOLES: Readonly<Record<string, readonly unknown[]>> = {
   emptyStatus: ["<code name>"],
   batchTooLarge: [N],
   deadline: [N],
+  deadlineBeforeSend: [N],
   compressed: ["<codec>"],
   unreadable: ["<what>"],
   cellUnreadable: ["<type>", "<column>"],
   noKind: ["<kind>"],
   noColumns: ["<kind>"],
   noSource: ["<kind>"],
+  badLimit: [LIMIT],
 };
 
 /** Every sentence of a record, a function called with its holes; a key with no holes fails, so a new key is decided. */
