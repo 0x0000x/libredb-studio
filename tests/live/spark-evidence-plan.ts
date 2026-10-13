@@ -4,7 +4,9 @@
  *
  * Every capture is one RPC exchange in a fresh session. A query flows over two ExecutePlan calls, the command step and
  * the relation step (spec 4.6), and the integration replay needs both, so a relation-step capture names the capture of
- * its command step. The session settings are copies of the provider's SPARK_SESSION_CONF and
+ * its command step. The replay also sends every statement an entry runs before its capture, so each of those is
+ * captured under its own name; only statements no replay sends run uncaptured. The session settings are copies of the
+ * provider's SPARK_SESSION_CONF and
  * SPARK_METADATA_SESSION_CONF, held to the same values by tests/unit/db/spark/capture-catalog.test.ts, because the
  * harness never imports the provider: a capture records what Spark sent independently of the code under test.
  */
@@ -27,6 +29,7 @@ export const SPARK_CAPTURE_NAMES = [
   "time-type-refused",
   "show-tables-inline",
   "explain-formatted",
+  "large-var-types-set",
   "large-var-types-refused-command",
   "large-var-types-refused",
   "negative-scale-decimal-command",
@@ -39,6 +42,7 @@ export const SPARK_CAPTURE_NAMES = [
   "auth-wrong-token",
   "row-budget-cut-command",
   "row-budget-cut",
+  "temp-view-create",
   "temp-view-script-command",
   "temp-view-script",
   "error-syntax",
@@ -52,10 +56,13 @@ export const SPARK_CAPTURE_NAMES = [
   "cancel-interrupt",
   "cancel-interrupt-relation",
   "session-closed",
+  "substitution-set",
   "substitution-off-command",
   "substitution-off",
+  "compressed-zstd-set",
   "compressed-zstd-command",
   "compressed-zstd",
+  "compressed-lz4-set",
   "compressed-lz4-command",
   "compressed-lz4",
   "show-catalogs",
@@ -119,6 +126,28 @@ export const SPARK_SERVICE_IMAGES: Readonly<
   },
 };
 
+const pinned = (service: SparkLiveService) =>
+  `${SPARK_SERVICE_IMAGES[service].image}@${SPARK_SERVICE_IMAGES[service].digest}`;
+
+/**
+ * The container of database-compose.yml each service's target must be published by, the image it runs and the
+ * container port behind the target. The harness dials a target only once `docker port` lists it for that container, so
+ * a loopback port that leads anywhere else is refused; spark-tls's proxy is checked with the spark-auth server behind it.
+ */
+export const SPARK_FIXTURE_CONTAINERS: Readonly<
+  Record<SparkLiveService, { readonly container: string; readonly image: string; readonly port: number }>
+> = {
+  spark: { container: "libredb-spark", image: pinned("spark"), port: 15002 },
+  "spark-4-1": { container: "libredb-spark-4-1", image: pinned("spark-4-1"), port: 15002 },
+  "spark-auth": { container: "libredb-spark-auth", image: pinned("spark-auth"), port: 15002 },
+  "spark-tls": {
+    container: "libredb-spark-tls",
+    image:
+      "public.ecr.aws/docker/library/nginx:stable-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94",
+    port: 15005,
+  },
+};
+
 const WIDE_STRUCT_FIELDS = Array.from({ length: 30 }, (_, index) => `f${index + 1}: INT`).join(", ");
 
 /**
@@ -165,8 +194,17 @@ export type SparkCaptureAction =
   | { readonly kind: "release" }
   /** A Config get_option on a session released just before. */
   | { readonly kind: "after-release" }
-  /** FetchErrorDetails for the errorId of `sql`'s failure in the same session. */
+  /**
+   * One run: `sql`'s failing command step under the entry's name, then FetchErrorDetails of that failure's errorId in
+   * the same session under `<name>-details`, so the replay's request carries the errorId of the failure it replays.
+   */
   | { readonly kind: "fetch-error-details"; readonly sql: string };
+
+/** A statement run before an entry's capture that the replay sends too: its command step is captured under `name`. */
+export interface SparkBeforeStatement {
+  readonly name: SparkCaptureName;
+  readonly sql: string;
+}
 
 export interface SparkCaptureEntry {
   readonly name: SparkCaptureName;
@@ -179,8 +217,10 @@ export interface SparkCaptureEntry {
   readonly session: "user" | "metadata" | "none";
   /** Config pairs set after the setup, not captured. */
   readonly conf?: readonly (readonly [string, string])[];
-  /** Statements run after the setup in the same session, not captured. */
-  readonly before?: readonly string[];
+  /** Statements run after the setup in the same session, each answered inline and captured, expecting pass. */
+  readonly before?: readonly SparkBeforeStatement[];
+  /** Statements run after the setup and never captured, because no replay sends them (held by capture-catalog.test.ts). */
+  readonly uncaptured?: readonly string[];
   readonly action: SparkCaptureAction;
   /** The outcome of the capture named `name`; any other stops the run, so a surprise is reported, not recorded. */
   readonly expect: "pass" | "error";
@@ -258,7 +298,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     service: "spark",
     token: "none",
     session: "user",
-    before: ["SET CATALOG 'spark_catalog'"],
+    uncaptured: ["SET CATALOG 'spark_catalog'"],
     surface: "session setup step 3: USE NAMESPACE",
     action: { kind: "statement", sql: "USE NAMESPACE `studio`", step: "command" },
     expect: "pass",
@@ -269,7 +309,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     service: "spark",
     token: "none",
     session: "user",
-    before: ["SET CATALOG 'spark_catalog'", "USE NAMESPACE studio_unloaded"],
+    uncaptured: ["SET CATALOG 'spark_catalog'", "USE NAMESPACE studio_unloaded"],
     surface: "O10: SHOW CURRENT NAMESPACE after USE NAMESPACE studio_unloaded",
     action: { kind: "statement", sql: "SHOW CURRENT NAMESPACE", step: "command" },
     expect: "pass",
@@ -359,7 +399,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     service: "spark",
     token: "none",
     session: "user",
-    before: ["SET spark.sql.execution.arrow.useLargeVarTypes=true"],
+    before: [{ name: "large-var-types-set", sql: "SET spark.sql.execution.arrow.useLargeVarTypes=true" }],
     surface: "O9: a SELECT after a session SET of useLargeVarTypes=true",
     action: {
       kind: "statement",
@@ -451,7 +491,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     service: "spark",
     token: "none",
     session: "user",
-    before: ["CREATE OR REPLACE TEMP VIEW studio_temp_v AS SELECT 1 AS x"],
+    before: [{ name: "temp-view-create", sql: "CREATE OR REPLACE TEMP VIEW studio_temp_v AS SELECT 1 AS x" }],
     surface: "a temp view made by one statement, read by the next",
     action: {
       kind: "statement",
@@ -468,18 +508,8 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "user",
     surface: "a syntax error with ErrorInfo",
-    action: { kind: "statement", sql: "SELEC 1", step: "command" },
-    expect: "error",
-  },
-  {
-    name: "error-syntax-details",
-    versions: NEWEST,
-    service: "spark",
-    token: "none",
-    session: "user",
-    surface: "FetchErrorDetails of the syntax error",
     action: { kind: "fetch-error-details", sql: "SELEC 1" },
-    expect: "pass",
+    expect: "error",
   },
   {
     name: "error-missing-table",
@@ -498,18 +528,8 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     token: "none",
     session: "user",
     surface: "a file the server's user cannot read",
-    action: { kind: "statement", sql: "SELECT * FROM csv.`file:///tmp/studio-unreadable/data.csv`", step: "command" },
-    expect: "error",
-  },
-  {
-    name: "error-permission-denied-details",
-    versions: NEWEST,
-    service: "spark",
-    token: "none",
-    session: "user",
-    surface: "FetchErrorDetails of the unreadable file",
     action: { kind: "fetch-error-details", sql: "SELECT * FROM csv.`file:///tmp/studio-unreadable/data.csv`" },
-    expect: "pass",
+    expect: "error",
   },
   {
     name: "error-max-result-size",
@@ -552,7 +572,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     service: "spark",
     token: "none",
     session: "user",
-    before: ["SET x=1"],
+    before: [{ name: "substitution-set", sql: "SET x=1" }],
     surface: "SELECT '${x}' with substitution off",
     action: { kind: "statement", sql: "SELECT '${x}' AS v", step: "relation", commandName: "substitution-off-command" },
     expect: "pass",
@@ -563,7 +583,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     service: "spark",
     token: "none",
     session: "user",
-    before: ["SET spark.sql.execution.arrow.compression.codec=zstd"],
+    before: [{ name: "compressed-zstd-set", sql: "SET spark.sql.execution.arrow.compression.codec=zstd" }],
     surface: "a result after a session SET of the codec to zstd",
     action: {
       kind: "statement",
@@ -579,7 +599,7 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     service: "spark",
     token: "none",
     session: "user",
-    before: ["SET spark.sql.execution.arrow.compression.codec=lz4"],
+    before: [{ name: "compressed-lz4-set", sql: "SET spark.sql.execution.arrow.compression.codec=lz4" }],
     surface: "a result after a session SET of the codec to lz4",
     action: {
       kind: "statement",
@@ -741,19 +761,28 @@ export const SPARK_CAPTURE_CATALOG: readonly SparkCaptureEntry[] = [
     service: "spark-auth",
     token: "configured",
     session: "user",
-    before: WIDE_TEMP_VIEWS,
+    uncaptured: WIDE_TEMP_VIEWS,
     surface: "O16: a command answer above 0.7 times spark.connect.grpc.arrow.maxBatchSize=1m",
     action: { kind: "statement", sql: "SHOW TABLES", step: "command" },
     expect: "error",
   },
 ];
 
-/** Every capture an entry writes, its own name first. */
+/** Every capture an entry writes, its own name first, then its other steps, then the statements run before it. */
 export function capturesOf(entry: SparkCaptureEntry): SparkCaptureName[] {
   const { action } = entry;
+  const before = (entry.before ?? []).map((statement) => statement.name);
   if (action.kind === "interrupt") {
-    return [entry.name, `${entry.name}-command` as SparkCaptureName, `${entry.name}-relation` as SparkCaptureName];
+    return [
+      entry.name,
+      `${entry.name}-command` as SparkCaptureName,
+      `${entry.name}-relation` as SparkCaptureName,
+      ...before,
+    ];
   }
-  if (action.kind === "statement" && action.commandName !== undefined) return [entry.name, action.commandName];
-  return [entry.name];
+  if (action.kind === "fetch-error-details")
+    return [entry.name, `${entry.name}-details` as SparkCaptureName, ...before];
+  if (action.kind === "statement" && action.commandName !== undefined)
+    return [entry.name, action.commandName, ...before];
+  return [entry.name, ...before];
 }

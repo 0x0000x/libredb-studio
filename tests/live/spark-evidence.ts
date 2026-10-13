@@ -4,10 +4,14 @@
  * It drives @grpc/grpc-js against the compose services of database-compose.yml with the definition the descriptor
  * generator's loadSparkDescriptor() builds, never an import of proto/descriptor.ts or of the provider, so a capture
  * records what Spark sent independently of the code under test. Each entry of SPARK_CAPTURE_CATALOG runs in a fresh
- * session and writes tests/fixtures/spark/<version>/<name>.json. Client-chosen ids are written <session>, <operation>
- * and <tag>, the authorization metadata <token>, and every value of a Config answer under spark.sql.catalog. as
- * <value>; a file that would still hold the token, or pass 2 MB, is not written. An outcome other than the catalog
- * expects stops the run, so a surprise is reported rather than recorded. Captures run under Bun only.
+ * session and writes tests/fixtures/spark/<version>/<name>.json, the request as the provider's codec reads it back
+ * (requestDeserialize of requestSerialize, with the provider's loader options), so the replay matches it with that
+ * codec. Client-chosen ids are written <session>, <operation> and <tag>, inside grpc-status-details-bin too, whose
+ * Status message and ErrorInfo values are then re-encoded; the authorization metadata <token>; and every Config value
+ * whose full key lies under spark.sql.catalog. <value>. A file that would still hold the token or a client id, in its
+ * text or inside a bytes value read as Latin-1, or pass 2 MB, is not written. An outcome other than the catalog expects
+ * stops the run, so a surprise is reported rather than recorded. A target is dialled only once `docker port` lists it
+ * for its fixture container, which runs its pinned image. Captures run under Bun only.
  *
  * Run by hand, never by `bun run test` (tests/runner/discover.ts excludes tests/live/), with the variables of
  * tests/helpers/spark-live.ts set and the service started:
@@ -35,8 +39,10 @@ import {
   SPARK_CAPTURE_CATALOG,
   SPARK_CAPTURE_METADATA_SESSION_CONF,
   SPARK_CAPTURE_SESSION_CONF,
+  SPARK_FIXTURE_CONTAINERS,
   SPARK_SAMPLE_STATEMENTS,
   SPARK_SERVICE_IMAGES,
+  type SparkBeforeStatement,
   type SparkCaptureEntry,
   type SparkCaptureName,
   type SparkCaptureVersionDir,
@@ -58,17 +64,27 @@ const VERSION_OF: Readonly<Record<SparkLiveService, SparkCaptureVersionDir>> = {
   "spark-auth": "4.2.0",
   "spark-tls": "4.2.0",
 };
-/** The container whose image a service's captures come from: the proxy is answered by spark-auth. */
-const CONTAINER_OF: Readonly<Record<SparkLiveService, string>> = {
-  spark: "libredb-spark",
-  "spark-4-1": "libredb-spark-4-1",
-  "spark-auth": "libredb-spark-auth",
-  "spark-tls": "libredb-spark-auth",
-};
+/** The provider's loader options (SPARK_LOADER_OPTIONS of grpc-client.ts), copied: the harness never imports it. */
+export const SPARK_CAPTURE_LOADER_OPTIONS = {
+  keepCase: true,
+  longs: String,
+  enums: String,
+  defaults: true,
+  oneofs: true,
+} as const;
+const CATALOG_PREFIX = "spark.sql.catalog.";
+const ERROR_INFO = "type.googleapis.com/google.rpc.ErrorInfo";
 
-type Rpc = "ExecutePlan" | "AnalyzePlan" | "Config" | "Interrupt" | "ReleaseSession" | "FetchErrorDetails";
+export type SparkCaptureRpc =
+  | "ExecutePlan"
+  | "AnalyzePlan"
+  | "Config"
+  | "Interrupt"
+  | "ReleaseSession"
+  | "FetchErrorDetails";
+type Rpc = SparkCaptureRpc;
 type Token = SparkCaptureEntry["token"];
-type Answer =
+export type SparkCaptureAnswer =
   | { readonly outcome: "pass"; readonly payload: unknown }
   | {
       readonly outcome: "error";
@@ -76,6 +92,7 @@ type Answer =
       readonly details: string;
       readonly metadata: Record<string, unknown>;
     };
+type Answer = SparkCaptureAnswer;
 type UnaryMethod = (
   request: object,
   metadata: grpc.Metadata,
@@ -88,11 +105,13 @@ type StreamMethod = (
   options: grpc.CallOptions,
 ) => grpc.ClientReadableStream<object>;
 
-interface Ids {
+/** The ids the harness chose in one entry's session, which a capture writes as placeholders. */
+export interface SparkCaptureIds {
   readonly session: string;
   readonly operations: string[];
   readonly tags: string[];
 }
+type Ids = SparkCaptureIds;
 
 interface Context {
   readonly args: SparkLiveArguments;
@@ -102,27 +121,41 @@ interface Context {
   readonly secrets: readonly string[];
 }
 
+let definition: grpc.ServiceDefinition | undefined;
+function sparkService(): grpc.ServiceDefinition {
+  definition ??= fromJSON(loadSparkDescriptor(), SPARK_CAPTURE_LOADER_OPTIONS)[
+    "spark.connect.SparkConnectService"
+  ] as grpc.ServiceDefinition;
+  return definition;
+}
+
 let constructor: grpc.ServiceClientConstructor | undefined;
 function serviceClient(): grpc.ServiceClientConstructor {
-  if (constructor === undefined) {
-    const definition = fromJSON(loadSparkDescriptor(), {
-      keepCase: true,
-      longs: String,
-      enums: String,
-      defaults: true,
-      oneofs: true,
-    });
-    constructor = grpc.makeGenericClientConstructor(
-      definition["spark.connect.SparkConnectService"] as grpc.ServiceDefinition,
-      "SparkConnectService",
-    );
-  }
+  constructor ??= grpc.makeGenericClientConstructor(sparkService(), "SparkConnectService");
   return constructor;
 }
 
-function openClient(args: SparkLiveArguments, service: SparkLiveService): grpc.Client {
-  const { host, port } = args.targets[service];
-  const address = `${host.includes(":") ? `[${host}]` : host}:${port}`;
+/** `request` as the codec reads it back: what Spark received, in the decoded form the provider's codec gives. */
+function decodedRequest(rpc: Rpc, request: object): object {
+  const method = sparkService()[rpc] as grpc.MethodDefinition<object, object>;
+  return method.requestDeserialize(method.requestSerialize(request));
+}
+
+/** A stored value with every {"$bytes": "<base64>"} as bytes again. */
+function storedBytes(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(storedBytes);
+  if (value === null || typeof value !== "object") return value;
+  const { $bytes } = value as { readonly $bytes?: unknown };
+  if (typeof $bytes === "string" && Object.keys(value).length === 1) return Buffer.from($bytes, "base64");
+  return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, storedBytes(inner)]));
+}
+
+/** A stored request passed through its RPC's codec and stored again; a capture's request is already in this form. */
+export function reencodedRequest(rpc: SparkCaptureRpc, request: unknown): unknown {
+  return encode(decodedRequest(rpc, storedBytes(request) as object));
+}
+
+function openClient(args: SparkLiveArguments, service: SparkLiveService, address: string): grpc.Client {
   const Client = serviceClient();
   if (service !== "spark-tls") return new Client(address, grpc.credentials.createInsecure());
   return new Client(address, grpc.credentials.createSsl(readFileSync(path.join(args.tlsDir, "ca.pem"))), {
@@ -229,25 +262,57 @@ async function runUncaptured(ctx: Context, ids: Ids, sql: string, token: Token):
     throw new Error(`setup statement failed (${answer.code}): ${maskSparkLive(answer.details, ctx.secrets)}`);
 }
 
-function encode(value: unknown): unknown {
-  if (value instanceof Uint8Array) return { $bytes: Buffer.from(value).toString("base64") };
-  if (Array.isArray(value)) return value.map(encode);
+/** A statement the replay sends before the captured one: its command step, which must answer inline, captured. */
+async function runBefore(
+  ctx: Context,
+  ids: Ids,
+  statement: SparkBeforeStatement,
+  surface: string,
+  token: Token,
+): Promise<void> {
+  const run = newRun(ids);
+  const request = commandRequest(ids, statement.sql, run.operation, run.tag);
+  const answer = await executePlan(ctx, request, token);
+  if (answer.outcome === "pass" && lazyRelation(answer.payload) !== undefined) {
+    throw new Error(
+      `${statement.name}: the statement answered with a relation to run, not inline; nothing was written`,
+    );
+  }
+  writeCapture(ctx, statement.name, "ExecutePlan", surface, request, answer, ids, "pass");
+}
+
+/** `value` as JSON, every Uint8Array as {"$bytes": "<base64>"} once `check` has read it. */
+function encode(value: unknown, check: (bytes: Uint8Array) => void = () => undefined): unknown {
+  if (value instanceof Uint8Array) {
+    check(value);
+    return { $bytes: Buffer.from(value).toString("base64") };
+  }
+  if (Array.isArray(value)) return value.map((item) => encode(item, check));
   if (value !== null && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, encode(inner)]));
+    return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, encode(inner, check)]));
   }
   return value;
 }
 
-/** Config answers: a value under spark.sql.catalog. may hold a catalog's credentials, so it is never written. */
-function withoutCatalogValues(rpc: Rpc, request: object, answer: Answer): Answer {
+/**
+ * Config answers: a value under spark.sql.catalog. may hold a catalog's credentials, so it is never written. A get_all
+ * answer names its keys without the prefix (O4), so the full key is the prefix and the returned key together.
+ */
+export function withoutCatalogValues(
+  rpc: SparkCaptureRpc,
+  request: object,
+  answer: SparkCaptureAnswer,
+): SparkCaptureAnswer {
   if (rpc !== "Config" || answer.outcome !== "pass") return answer;
-  const prefix = (request as { readonly operation?: { readonly get_all?: { readonly prefix?: string } } }).operation
-    ?.get_all?.prefix;
-  const all = prefix !== undefined && prefix.startsWith("spark.sql.catalog.");
+  const prefix =
+    (request as { readonly operation?: { readonly get_all?: { readonly prefix?: string } } }).operation?.get_all
+      ?.prefix ?? "";
   const payload = answer.payload as { readonly pairs?: readonly { readonly key: string; readonly value?: unknown }[] };
   // oxlint-disable-next-line no-map-spread -- the answer object is decoded once and must stay as Spark sent it.
   const pairs = (payload.pairs ?? []).map((pair) =>
-    all || pair.key.startsWith("spark.sql.catalog.") ? { ...pair, value: "<value>" } : pair,
+    pair.key.startsWith(CATALOG_PREFIX) || `${prefix}${pair.key}`.startsWith(CATALOG_PREFIX)
+      ? { ...pair, value: "<value>" }
+      : pair,
   );
   return { outcome: "pass", payload: { ...payload, pairs } };
 }
@@ -257,6 +322,77 @@ function maskIds(text: string, ids: Ids): string {
   for (const tag of ids.tags) masked = masked.split(tag).join("<tag>");
   for (const operation of ids.operations) masked = masked.split(operation).join("<operation>");
   return masked.split(ids.session).join("<session>");
+}
+
+const clientIds = (ids: Ids): string[] => [...ids.tags, ...ids.operations, ids.session];
+
+/**
+ * grpc-status-details-bin with the client-chosen ids masked in the Status message and the ErrorInfo metadata values,
+ * re-encoded; Spark's bytes as sent when they hold no client id. Any other detail keeps its bytes, and the check of
+ * captureText stops the write if one of them holds an id.
+ */
+export function maskStatusDetails(bytes: Uint8Array, ids: SparkCaptureIds): Uint8Array {
+  if (!clientIds(ids).some((id) => Buffer.from(bytes).toString("latin1").includes(id))) return bytes;
+  const Status = RPC_TYPES.lookupType("google.rpc.Status");
+  const ErrorInfo = RPC_TYPES.lookupType("google.rpc.ErrorInfo");
+  const status = Status.decode(bytes) as unknown as {
+    readonly code: number;
+    readonly message: string;
+    readonly details: readonly { readonly type_url: string; readonly value: Uint8Array }[];
+  };
+  const details = status.details.map((detail) => {
+    if (detail.type_url !== ERROR_INFO) return { type_url: detail.type_url, value: detail.value };
+    const info = ErrorInfo.decode(detail.value) as unknown as {
+      readonly reason: string;
+      readonly domain: string;
+      readonly metadata: Readonly<Record<string, string>>;
+    };
+    const metadata = Object.fromEntries(Object.entries(info.metadata).map(([key, text]) => [key, maskIds(text, ids)]));
+    return {
+      type_url: detail.type_url,
+      value: ErrorInfo.encode({ reason: info.reason, domain: info.domain, metadata }).finish(),
+    };
+  });
+  return Status.encode({ code: status.code, message: maskIds(status.message, ids), details }).finish();
+}
+
+/**
+ * The JSON text of one capture: the header, then the answer with the ids masked and the authorization metadata
+ * written <token>. Every bytes value is read as Latin-1 before it is written, so the token or a client id inside one
+ * stops the write as it does in the text.
+ */
+export function captureText(
+  name: string,
+  header: Readonly<Record<string, unknown>>,
+  answer: SparkCaptureAnswer,
+  ids: SparkCaptureIds,
+  secrets: readonly string[],
+): string {
+  const holdsToken = (text: string) => secrets.some((secret) => secret !== "" && text.includes(secret));
+  const check = (bytes: Uint8Array) => {
+    const text = Buffer.from(bytes).toString("latin1");
+    if (holdsToken(text)) throw new Error(`${name}: the capture would hold the token; nothing was written`);
+    if (clientIds(ids).some((id) => text.includes(id))) {
+      throw new Error(`${name}: a bytes value would hold a client-chosen id; nothing was written`);
+    }
+  };
+  const status = answer.outcome === "error" ? answer.metadata["grpc-status-details-bin"] : undefined;
+  const body =
+    answer.outcome === "pass"
+      ? { outcome: "pass", payload: answer.payload }
+      : {
+          outcome: "error",
+          code: answer.code,
+          details: answer.details,
+          metadata: {
+            ...answer.metadata,
+            ...(status instanceof Uint8Array ? { "grpc-status-details-bin": maskStatusDetails(status, ids) } : {}),
+            ...("authorization" in answer.metadata ? { authorization: "<token>" } : {}),
+          },
+        };
+  const text = maskIds(`${JSON.stringify(encode({ $captured: header, ...body }, check), null, 2)}\n`, ids);
+  if (holdsToken(text)) throw new Error(`${name}: the capture would hold the token; nothing was written`);
+  return text;
 }
 
 let sparkVersion = "";
@@ -276,7 +412,6 @@ function writeCapture(
     throw new Error(`${name}: expected ${expected}, Spark answered ${detail}; nothing was written`);
   }
   const { image, digest } = SPARK_SERVICE_IMAGES[ctx.service];
-  const shown = withoutCatalogValues(rpc, request, answer);
   const header = {
     service: ctx.service,
     image,
@@ -286,24 +421,9 @@ function writeCapture(
     runtime: `bun ${Bun.version}`,
     rpc: `SparkConnectService/${rpc}`,
     surface,
-    request: encode(request),
+    request: decodedRequest(rpc, request),
   };
-  const body =
-    shown.outcome === "pass"
-      ? { outcome: "pass", payload: encode(shown.payload) }
-      : {
-          outcome: "error",
-          code: shown.code,
-          details: shown.details,
-          metadata: encode({
-            ...shown.metadata,
-            ...("authorization" in shown.metadata ? { authorization: "<token>" } : {}),
-          }),
-        };
-  const text = maskIds(`${JSON.stringify({ $captured: header, ...body }, null, 2)}\n`, ids);
-  if (ctx.secrets.some((secret) => text.includes(secret))) {
-    throw new Error(`${name}: the capture would hold the token; nothing was written`);
-  }
+  const text = captureText(name, header, withoutCatalogValues(rpc, request, answer), ids, ctx.secrets);
   const bytes = Buffer.byteLength(text);
   if (bytes > MAX_CAPTURE_BYTES)
     throw new Error(`${name}: ${bytes} bytes, above the 2 MB capture bound; nothing was written`);
@@ -329,9 +449,13 @@ async function runEntry(ctx: Context, entry: SparkCaptureEntry): Promise<void> {
     if (conf.outcome === "error")
       throw new Error(`${entry.name}: the Config set of ${entry.conf.map(([key]) => key).join(", ")} failed`);
   }
-  for (const sql of entry.before ?? []) {
+  for (const sql of entry.uncaptured ?? []) {
     // oxlint-disable-next-line no-await-in-loop -- each statement reads what the one before it made in the session.
     await runUncaptured(ctx, ids, sql, token);
+  }
+  for (const statement of entry.before ?? []) {
+    // oxlint-disable-next-line no-await-in-loop -- each statement reads what the one before it made in the session.
+    await runBefore(ctx, ids, statement, `${surface}: the statement run before it, command step`, token);
   }
   switch (action.kind) {
     case "version": {
@@ -495,20 +619,22 @@ async function runEntry(ctx: Context, entry: SparkCaptureEntry): Promise<void> {
     }
     case "fetch-error-details": {
       const run = newRun(ids);
-      const failed = await executePlan(ctx, commandRequest(ids, action.sql, run.operation, run.tag), token);
+      const first = commandRequest(ids, action.sql, run.operation, run.tag);
+      const failed = await executePlan(ctx, first, token);
+      writeCapture(ctx, entry.name, "ExecutePlan", `${surface}: command step`, first, failed, ids, entry.expect);
       if (failed.outcome !== "error") throw new Error(`${entry.name}: the statement did not fail`);
-      const errorId = errorInfoOf(failed.metadata["grpc-status-details-bin"])?.metadata.errorId;
+      const errorId = statusDetailsOf(failed.metadata["grpc-status-details-bin"])?.errorInfo?.metadata.errorId;
       if (errorId === undefined) throw new Error(`${entry.name}: the failure carried no errorId`);
       const request = { ...base(ids), error_id: errorId };
       writeCapture(
         ctx,
-        entry.name,
+        `${entry.name}-details` as SparkCaptureName,
         "FetchErrorDetails",
-        surface,
+        `${surface}: FetchErrorDetails of its errorId`,
         request,
         await unary(ctx, "FetchErrorDetails", request, token),
         ids,
-        entry.expect,
+        "pass",
       );
       return;
     }
@@ -545,20 +671,34 @@ const RPC_TYPES = protobuf.Root.fromJSON({
   },
 });
 
-function errorInfoOf(
-  bytes: unknown,
-): { readonly reason: string; readonly metadata: Readonly<Record<string, string>> } | undefined {
+/** A grpc-status-details-bin value, as bytes or as a capture stores it: the Status code, message and ErrorInfo. */
+export function statusDetailsOf(bytes: unknown):
+  | {
+      readonly code: number;
+      readonly message: string;
+      readonly errorInfo: { readonly reason: string; readonly metadata: Readonly<Record<string, string>> } | undefined;
+    }
+  | undefined {
   const raw = bytes instanceof Uint8Array ? bytes : (bytes as { readonly $bytes?: string } | undefined)?.$bytes;
   if (raw === undefined) return undefined;
   const buffer = typeof raw === "string" ? Buffer.from(raw, "base64") : raw;
   const status = RPC_TYPES.lookupType("google.rpc.Status").decode(buffer) as unknown as {
+    readonly code: number;
+    readonly message: string;
     readonly details: readonly { readonly type_url: string; readonly value: Uint8Array }[];
   };
-  const info = status.details.find((detail) => detail.type_url === "type.googleapis.com/google.rpc.ErrorInfo");
-  if (info === undefined) return undefined;
-  return RPC_TYPES.lookupType("google.rpc.ErrorInfo").decode(info.value) as unknown as {
-    readonly reason: string;
-    readonly metadata: Readonly<Record<string, string>>;
+  const info = status.details.find((detail) => detail.type_url === ERROR_INFO);
+  const decoded =
+    info === undefined
+      ? undefined
+      : (RPC_TYPES.lookupType("google.rpc.ErrorInfo").decode(info.value) as unknown as {
+          readonly reason: string;
+          readonly metadata: Readonly<Record<string, string>>;
+        });
+  return {
+    code: status.code,
+    message: status.message,
+    errorInfo: decoded === undefined ? undefined : { reason: decoded.reason, metadata: { ...decoded.metadata } },
   };
 }
 
@@ -665,7 +805,8 @@ function answerLines(): string[] {
     `outcome ${stored("4.2.0", "show-user-functions-quoted")?.outcome ?? "missing"}; the names are in the Arrow answer`,
   );
   const bound = stored("4.2.0", "command-over-batch-bound");
-  const info = bound?.metadata === undefined ? undefined : errorInfoOf(bound.metadata["grpc-status-details-bin"]);
+  const info =
+    bound?.metadata === undefined ? undefined : statusDetailsOf(bound.metadata["grpc-status-details-bin"])?.errorInfo;
   fact(
     "O16",
     "`4.2.0/command-over-batch-bound`",
@@ -686,8 +827,9 @@ export function renderSparkFixturesReadme(): string {
     "# Apache Spark captures",
     "",
     "Answers Apache Spark gave to the provider's calls, written by `tests/live/spark-evidence.ts` from the services of `database-compose.yml` (spec 10.3).",
-    'Each file is one RPC exchange: a `$captured` header, the outcome, and the decoded answer with every bytes field as `{"$bytes": "<base64>"}`, Arrow bodies byte for byte.',
-    "Client-chosen ids are written `<session>`, `<operation>` and `<tag>`, the token `<token>`, and every value under `spark.sql.catalog.` `<value>`.",
+    'Each file is one RPC exchange: a `$captured` header whose request is written as the provider\'s codec reads it back, the outcome, and the decoded answer with every bytes field as `{"$bytes": "<base64>"}`, Arrow bodies byte for byte.',
+    "Client-chosen ids are written `<session>`, `<operation>` and `<tag>`, inside a `grpc-status-details-bin` too, whose Status message and ErrorInfo values are then re-encoded; the token is written `<token>`, and every Config value whose full key lies under `spark.sql.catalog.` `<value>`.",
+    "Every statement an entry runs before its capture that the replay sends is captured under its own name, and a FetchErrorDetails capture and its failure come from one run, so the errorIds pair.",
     "Never edit a capture by hand: start the service, run `bun tests/live/spark-evidence.ts --setup <service>` and `--capture <service>`, then `--readme`.",
     "",
     "## BUILT cases",
@@ -727,13 +869,43 @@ export function renderSparkFixturesReadme(): string {
 
 // -- the command ----------------------------------------------------------------------------------------------------
 
-function checkContainer(service: SparkLiveService): void {
-  const { image, digest } = SPARK_SERVICE_IMAGES[service];
-  const running = execFileSync("docker", ["inspect", "--format", "{{.Config.Image}}", CONTAINER_OF[service]], {
-    encoding: "utf8",
-  }).trim();
-  if (running !== `${image}@${digest}`)
-    throw new Error(`${CONTAINER_OF[service]} runs ${running}, not the pinned ${image}@${digest}`);
+/**
+ * The address the harness dials: the target, once `docker port` lists it among the loopback addresses the fixture
+ * container publishes (localhost read as 127.0.0.1), so a loopback port that leads anywhere else is refused.
+ */
+export function fixtureAddress(
+  container: string,
+  target: { readonly host: string; readonly port: number },
+  published: string,
+): string {
+  const host = target.host === "localhost" ? "127.0.0.1" : target.host;
+  const address = host.includes(":") ? `[${host}]:${target.port}` : `${host}:${target.port}`;
+  const listed = published
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  if (!/^(127\.0\.0\.1|\[::1\]):\d+$/.test(address) || !listed.includes(address)) {
+    throw new Error(
+      `${container} does not publish the target ${address} (it publishes ${listed.join(", ") || "nothing"}); the harness reaches only the fixture's containers`,
+    );
+  }
+  return address;
+}
+
+function docker(args: readonly string[]): string {
+  return execFileSync("docker", [...args], { encoding: "utf8" }).trim();
+}
+
+/** The fixture container's address for `service`, after every container it reaches is found running its pinned image. */
+function fixtureTarget(service: SparkLiveService, args: SparkLiveArguments): string {
+  const reached =
+    service === "spark-tls" ? [SPARK_FIXTURE_CONTAINERS["spark-tls"], SPARK_FIXTURE_CONTAINERS["spark-auth"]] : [];
+  for (const { container, image } of [SPARK_FIXTURE_CONTAINERS[service], ...reached]) {
+    const running = docker(["inspect", "--format", "{{.Config.Image}}", container]);
+    if (running !== image) throw new Error(`${container} runs ${running}, not the pinned ${image}`);
+  }
+  const { container, port } = SPARK_FIXTURE_CONTAINERS[service];
+  return fixtureAddress(container, args.targets[service], docker(["port", container, `${port}/tcp`]));
 }
 
 async function readVersion(ctx: Context, token: Token): Promise<string> {
@@ -768,12 +940,18 @@ async function main(argv: readonly string[]): Promise<number> {
     return args.exitCode;
   }
   const service = value as SparkLiveService;
-  checkContainer(service);
+  let address: string;
+  try {
+    address = fixtureTarget(service, args);
+  } catch (error) {
+    console.error(maskSparkLive(error instanceof Error ? error.message : String(error), sparkLiveSecrets(args)));
+    return 1;
+  }
   const ctx: Context = {
     args,
     service,
     version: VERSION_OF[service],
-    client: openClient(args, service),
+    client: openClient(args, service, address),
     secrets: sparkLiveSecrets(args),
   };
   const token: Token = service === "spark-auth" || service === "spark-tls" ? "configured" : "none";
@@ -786,7 +964,7 @@ async function main(argv: readonly string[]): Promise<number> {
           "exec",
           "-u",
           "0",
-          "libredb-spark",
+          SPARK_FIXTURE_CONTAINERS.spark.container,
           "sh",
           "-c",
           "mkdir -p /tmp/studio-unreadable && printf 'a\\n1\\n' > /tmp/studio-unreadable/data.csv && chmod 000 /tmp/studio-unreadable/data.csv",
