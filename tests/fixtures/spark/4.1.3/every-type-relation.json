@@ -7,7 +7,7 @@
     "date": "2026-10-13T11:07:13.018Z",
     "runtime": "bun 1.4.2",
     "rpc": "SparkConnectService/ExecutePlan",
-    "surface": "every-type SELECT: relation step: relation step",
+    "surface": "every-type SELECT: relation step",
     "request": {
       "request_options": [
         {

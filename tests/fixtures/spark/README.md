@@ -66,8 +66,8 @@ The integration replay builds two cases from these captures and labels them: the
 | `error-permission-denied` | spark | SparkConnectService/ExecutePlan | a file the server's user cannot read: command step | error | 2026-10-13T11:06:33.839Z | bun 1.4.2 |
 | `error-syntax-details` | spark | SparkConnectService/FetchErrorDetails | a syntax error with ErrorInfo: FetchErrorDetails of its errorId | pass | 2026-10-13T11:06:33.526Z | bun 1.4.2 |
 | `error-syntax` | spark | SparkConnectService/ExecutePlan | a syntax error with ErrorInfo: command step | error | 2026-10-13T11:06:33.504Z | bun 1.4.2 |
-| `every-type-command` | spark | SparkConnectService/ExecutePlan | every-type SELECT: command step: command step | pass | 2026-10-13T11:06:32.189Z | bun 1.4.2 |
-| `every-type-relation` | spark | SparkConnectService/ExecutePlan | every-type SELECT: relation step: relation step | pass | 2026-10-13T11:06:32.699Z | bun 1.4.2 |
+| `every-type-command` | spark | SparkConnectService/ExecutePlan | every-type SELECT: command step | pass | 2026-10-13T11:06:32.189Z | bun 1.4.2 |
+| `every-type-relation` | spark | SparkConnectService/ExecutePlan | every-type SELECT: relation step | pass | 2026-10-13T11:06:32.699Z | bun 1.4.2 |
 | `explain-formatted` | spark | SparkConnectService/ExecutePlan | EXPLAIN FORMATTED of a never-run SELECT: command step | pass | 2026-10-13T11:06:32.914Z | bun 1.4.2 |
 | `large-var-types-refused-command` | spark | SparkConnectService/ExecutePlan | a SELECT after a session SET of useLargeVarTypes=true: command step | pass | 2026-10-13T11:06:32.946Z | bun 1.4.2 |
 | `large-var-types-refused` | spark | SparkConnectService/ExecutePlan | a SELECT after a session SET of useLargeVarTypes=true: relation step | pass | 2026-10-13T11:06:33.007Z | bun 1.4.2 |
@@ -128,8 +128,8 @@ The integration replay builds two cases from these captures and labels them: the
 | `connect-current-namespace` | spark-4-1 | SparkConnectService/ExecutePlan | connect: SHOW CURRENT NAMESPACE on the metadata session: command step | pass | 2026-10-13T11:07:12.242Z | bun 1.4.2 |
 | `connect-session-setup` | spark-4-1 | SparkConnectService/Config | connect: the metadata session's Config set of nine pairs | pass | 2026-10-13T11:07:12.187Z | bun 1.4.2 |
 | `connect-version` | spark-4-1 | SparkConnectService/AnalyzePlan | connect: AnalyzePlan spark_version on a fresh session | pass | 2026-10-13T11:07:12.180Z | bun 1.4.2 |
-| `every-type-command` | spark-4-1 | SparkConnectService/ExecutePlan | every-type SELECT: command step: command step | pass | 2026-10-13T11:07:12.387Z | bun 1.4.2 |
-| `every-type-relation` | spark-4-1 | SparkConnectService/ExecutePlan | every-type SELECT: relation step: relation step | pass | 2026-10-13T11:07:13.018Z | bun 1.4.2 |
+| `every-type-command` | spark-4-1 | SparkConnectService/ExecutePlan | every-type SELECT: command step | pass | 2026-10-13T11:07:12.387Z | bun 1.4.2 |
+| `every-type-relation` | spark-4-1 | SparkConnectService/ExecutePlan | every-type SELECT: relation step | pass | 2026-10-13T11:07:13.018Z | bun 1.4.2 |
 | `explain-formatted` | spark-4-1 | SparkConnectService/ExecutePlan | EXPLAIN FORMATTED of a never-run SELECT: command step | pass | 2026-10-13T11:07:13.297Z | bun 1.4.2 |
 | `large-var-types-refused-command` | spark-4-1 | SparkConnectService/ExecutePlan | a SELECT after a session SET of useLargeVarTypes=true: command step | pass | 2026-10-13T11:07:13.344Z | bun 1.4.2 |
 | `large-var-types-refused` | spark-4-1 | SparkConnectService/ExecutePlan | a SELECT after a session SET of useLargeVarTypes=true: relation step | pass | 2026-10-13T11:07:13.423Z | bun 1.4.2 |
