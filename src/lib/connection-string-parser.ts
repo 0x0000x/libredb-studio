@@ -127,7 +127,8 @@ export interface ParsedConnection {
   discardPaste?: true;
   /**
    * A sentence the form shows beside a successful paste, for a parameter that was applied with a meaning the field
-   * alone does not show.
+   * alone does not show. An Apache Spark `sc://` paste also writes its not-applied sentence here, and sets neither
+   * `ignoredParameters` nor `unnamedParameters`, which the form shows in a sentence that names Databend.
    */
   notice?: string;
   /**

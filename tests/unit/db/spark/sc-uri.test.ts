@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { validateHost, validatePort } from "@/lib/db/http/endpoint";
 import { parseSparkConnectUri, SPARK_PASTE_SENTENCES } from "@/lib/db/providers/sql/spark/sc-uri";
+
+/** A host of 253 characters, the longest the host rules take, in labels short enough that only its length counts. */
+const HOST_253 = `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(61)}`;
+/** One character longer, so the length check alone refuses it. */
+const HOST_254 = `${HOST_253}d`;
 
 /** The sc:// reader of spec 3.2: Spark's documented grammar sc://host[:port][/][;key=value]*, pure and type-only. */
 describe("parseSparkConnectUri", () => {
@@ -24,7 +30,7 @@ describe("parseSparkConnectUri", () => {
     expect(parseSparkConnectUri("sc://[FD00::7]")).toMatchObject({ host: "[fd00::7]", port: "15002" });
   });
 
-  test("token fills Token; use_ssl=true is verify-system and use_ssl=false is disable", () => {
+  test("token fills Token; use_ssl=true turns TLS on and use_ssl=false leaves it to the token rule", () => {
     expect(parseSparkConnectUri("sc://h:1/;use_ssl=true;token=abc")).toEqual({
       type: "spark",
       host: "h",
@@ -32,10 +38,63 @@ describe("parseSparkConnectUri", () => {
       password: "abc",
       sslMode: "verify-system",
     });
-    expect(parseSparkConnectUri("sc://h;use_ssl=false;token=abc")).toMatchObject({
+    // Spark's 4.2.0 Python and Scala clients use TLS whenever a token is set and the host is not literally localhost.
+    expect(parseSparkConnectUri("sc://h;use_ssl=false;token=abc")).toEqual({
+      type: "spark",
+      host: "h",
+      port: "15002",
       password: "abc",
+      sslMode: "verify-system",
+    });
+    expect(parseSparkConnectUri("sc://localhost;use_ssl=false;token=abc").sslMode).toBe("disable");
+    expect(parseSparkConnectUri("sc://h;use_ssl=false")).toEqual({
+      type: "spark",
+      host: "h",
+      port: "15002",
       sslMode: "disable",
     });
+    expect(parseSparkConnectUri("sc://localhost;use_ssl=true").sslMode).toBe("verify-system");
+  });
+
+  test("reads use_ssl=true and use_ssl=false in any case, as Spark's clients do", () => {
+    expect(parseSparkConnectUri("sc://h;use_ssl=TRUE")).toEqual({
+      type: "spark",
+      host: "h",
+      port: "15002",
+      sslMode: "verify-system",
+    });
+    expect(parseSparkConnectUri("sc://localhost;use_ssl=True;token=a")).toEqual({
+      type: "spark",
+      host: "localhost",
+      port: "15002",
+      password: "a",
+      sslMode: "verify-system",
+    });
+    expect(parseSparkConnectUri("sc://h;use_ssl=FALSE")).toEqual({
+      type: "spark",
+      host: "h",
+      port: "15002",
+      sslMode: "disable",
+    });
+  });
+
+  test("percent-decodes the token, as Spark's clients do", () => {
+    expect(parseSparkConnectUri("sc://h;token=a%2Bb%2Fc%3D%3D")).toEqual({
+      type: "spark",
+      host: "h",
+      port: "15002",
+      password: "a+b/c==",
+      sslMode: "verify-system",
+    });
+    expect(parseSparkConnectUri("sc://h;token=a+b").password).toBe("a+b");
+  });
+
+  test("refuses a token whose percent escape does not decode, filling nothing and never repeating it", () => {
+    for (const text of ["sc://h;token=s3cret%zz", "sc://h;token=s3cret%", "sc://h;use_ssl=true;token=s3cret%FF"]) {
+      const parsed = parseSparkConnectUri(text);
+      expect(parsed).toEqual({ type: "spark", refusal: SPARK_PASTE_SENTENCES.tokenEscape });
+      expect(JSON.stringify(parsed)).not.toContain("s3cret");
+    }
   });
 
   test("a token without use_ssl means TLS, unless the host is literally localhost, as Spark's clients do", () => {
@@ -96,5 +155,68 @@ describe("parseSparkConnectUri", () => {
       expect(sentence).not.toContain("alice");
       expect(sentence).not.toContain("dapi1");
     }
+  });
+});
+
+/**
+ * The reader imports types only, so it holds a copy of endpoint.ts's host and port rules, as
+ * src/lib/connection-host-uri.ts does. These tests keep the copy from drifting, as
+ * tests/unit/lib/connection-host-uri.test.ts does for that one: everything the reader returns passes the Node-side
+ * validators unchanged, and everything they refuse the reader refuses too.
+ */
+describe("parseSparkConnectUri against validateHost and validatePort", () => {
+  const ACCEPTED = [
+    "sc://Spark.Example.Internal:15003",
+    "  sc://localhost/  ",
+    "sc://10.0.0.7;",
+    "sc://h:1/;use_ssl=true;token=abc",
+    "sc://spark_connect:15002",
+    "sc://xn--bcher-kva.example:65535",
+    "sc://h:08080",
+    "sc://[::1]:15002",
+    "sc://[FD00::7]",
+    "sc://[::ffff:127.0.0.1]:15002",
+    `sc://${HOST_253}`,
+  ];
+
+  test.each(ACCEPTED)("%s returns a host and port the provider accepts unchanged", (text) => {
+    const parsed = parseSparkConnectUri(text);
+    expect(parsed.refusal).toBeUndefined();
+    expect(validateHost(parsed.host)).toBe(parsed.host as string);
+    expect(String(validatePort(parsed.port))).toBe(parsed.port as string);
+  });
+
+  const REFUSED_BY_VALIDATE_HOST = [
+    "[fe80::1%eth0]",
+    // Written in IPv6 characters and still no IPv6 address: URL.canParse refuses these, not the character check.
+    "[1:2]",
+    "[1.2.3.4]",
+    "127.1",
+    "0x7f",
+    "a.0x10",
+    "1.2.3.4.5",
+    "bücher.example",
+    "１２７.0.0.1",
+    "-a.example",
+    "a..b",
+    `${"a".repeat(64)}.example`,
+    `${"a.".repeat(127)}a`,
+    HOST_254,
+    "under score.example",
+  ];
+
+  test.each(REFUSED_BY_VALIDATE_HOST)("%s is refused by validateHost and by the reader", (host) => {
+    expect(() => validateHost(host)).toThrow();
+    expect(parseSparkConnectUri(`sc://${host}:1`)).toEqual({ type: "spark", refusal: SPARK_PASTE_SENTENCES.host });
+  });
+
+  test.each(["0", "65536", "000001", "1.5"])("port %s is refused by validatePort and by the reader", (port) => {
+    expect(() => validatePort(port)).toThrow();
+    expect(parseSparkConnectUri(`sc://h:${port}`)).toEqual({ type: "spark", refusal: SPARK_PASTE_SENTENCES.port });
+  });
+
+  test("a trailing dot, which validateHost accepts, is refused by the reader on purpose", () => {
+    expect(validateHost("h.example.")).toBe("h.example.");
+    expect(parseSparkConnectUri("sc://h.example.:1")).toEqual({ type: "spark", refusal: SPARK_PASTE_SENTENCES.host });
   });
 });

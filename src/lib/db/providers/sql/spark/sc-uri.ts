@@ -5,6 +5,10 @@ import type { ParsedConnection } from "@/lib/connection-string-parser";
  * `sc://host[:port][/][;key=value]*`, the scheme fixed, the path empty, parameter names case-sensitive, port 15002 by
  * default. Pure, with type-only imports: `src/lib/connection-string-parser.ts` imports it, and the browser carries
  * that module. A refusal fills nothing and never repeats the text it refuses.
+ *
+ * `token` and `use_ssl` are read as Spark's 4.2.0 Python and Scala clients read them: the token percent-decoded,
+ * `use_ssl` true or false in any case, and TLS on when `use_ssl` is true or when a token is set and the host is not
+ * literally `localhost`, so `use_ssl=false` beside a token turns TLS off on `localhost` only.
  */
 export const SPARK_PASTE_SENTENCES = Object.freeze({
   pathNotEmpty: "A Spark Connect address has no path: remove everything between the host and the first ;.",
@@ -15,6 +19,7 @@ export const SPARK_PASTE_SENTENCES = Object.freeze({
   scheme: "A Spark Connect address starts with sc://.",
   host: "The address names no valid host: expected a host name, an IPv4 address or an IPv6 address in brackets.",
   port: "The address names no valid port: expected an integer from 1 to 65535.",
+  tokenEscape: "The token in the address is not valid percent-encoding: write a % sign inside the token as %25.",
 });
 
 const SCHEME = "sc://";
@@ -30,8 +35,11 @@ const NAMED_NOT_APPLIED: ReadonlySet<string> = new Set([
   "session_id",
   "grpc_max_message_size",
 ]);
+/** The `use_ssl` values the paste applies: Spark's clients compare them without regard to case. */
+const USE_SSL_VALUE = /^(?:true|false)$/i;
 
-// The host and port rules of src/lib/connection-host-uri.ts:37-45, copied because this module imports types only.
+// The host and port rules of src/lib/connection-host-uri.ts:37-45, copied because this module imports types only;
+// tests/unit/db/spark/sc-uri.test.ts holds every host and port it returns to validateHost and validatePort.
 const LABEL = /^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/i;
 const NUMERIC_LABEL = /^(?:\d+|0x[0-9a-f]*)$/i;
 const IPV4 = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
@@ -92,6 +100,16 @@ function portOf(text: string): string | null {
   return value >= 1 && value <= MAX_PORT ? String(value) : null;
 }
 
+/** A parameter value percent-decoded, as Spark's clients read it, or null where an escape does not decode. */
+function percentDecoded(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    // On a string, decodeURIComponent throws only URIError: a % not followed by two hex digits, or bytes not UTF-8.
+    return null;
+  }
+}
+
 function notAppliedNotice(names: readonly string[], unnamed: number): string {
   const counted = `${unnamed} ${names.length > 0 ? "other " : ""}parameter${unnamed === 1 ? "" : "s"}`;
   const listed = [names.join(", "), unnamed > 0 ? counted : ""].filter(Boolean).join(" and ");
@@ -118,7 +136,7 @@ export function parseSparkConnectUri(text: string): ParsedConnection {
   if (port === null) return refused(SPARK_PASTE_SENTENCES.port);
 
   let token: string | undefined;
-  let useSsl: boolean | undefined;
+  let useSsl = false;
   const named: string[] = [];
   let unnamed = 0;
   const parameters = semicolon === -1 ? [] : rest.slice(semicolon + 1).split(";");
@@ -128,9 +146,11 @@ export function parseSparkConnectUri(text: string): ParsedConnection {
     const key = equals === -1 ? "" : part.slice(0, equals);
     const value = part.slice(equals + 1);
     if (key === "token") {
-      token = value === "" ? undefined : value;
-    } else if (key === "use_ssl" && (value === "true" || value === "false")) {
-      useSsl = value === "true";
+      const decoded = percentDecoded(value);
+      if (decoded === null) return refused(SPARK_PASTE_SENTENCES.tokenEscape);
+      token = decoded === "" ? undefined : decoded;
+    } else if (key === "use_ssl" && USE_SSL_VALUE.test(value)) {
+      useSsl = value.toLowerCase() === "true";
     } else if (key === "use_ssl" || NAMED_NOT_APPLIED.has(key)) {
       if (!named.includes(key)) named.push(key);
     } else {
@@ -138,15 +158,9 @@ export function parseSparkConnectUri(text: string): ParsedConnection {
       unnamed += 1;
     }
   }
-  // Spark's 4.2.0 Python and Scala clients turn TLS on with a token unless the host is literally localhost.
+  // Spark's 4.2.0 Python and Scala clients turn TLS on with use_ssl=true, or with a token on any host but localhost.
   const sslMode: ParsedConnection["sslMode"] =
-    useSsl !== undefined
-      ? useSsl
-        ? "verify-system"
-        : "disable"
-      : token !== undefined && host !== "localhost"
-        ? "verify-system"
-        : "disable";
+    useSsl || (token !== undefined && host !== "localhost") ? "verify-system" : "disable";
   return {
     type: "spark",
     host,
