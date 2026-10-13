@@ -15,9 +15,10 @@
  * - `apache/spark:4.1.3@sha256:bf9d035a7c32a8ca46aa58d6348182ffd7d2dff6409206ecfbb3915ff1fef211`, whose AnalyzePlan
  *   answers the version "4.1.3" (service `spark-4-1`, into `tests/fixtures/spark/4.1.3/`).
  * The digests are in each capture's own header, with the service that answered it: the provenance test below holds
- * them to SPARK_SERVICE_IMAGES and finds each capture's row in `tests/fixtures/spark/README.md`, which lists every
- * capture with its service, RPC, date and runtime and no digest, and `tests/unit/db/spark/capture-catalog.test.ts`
- * holds those pins to database-compose.yml.
+ * them to SPARK_SERVICE_IMAGES, where spark-tls carries the pin of spark-auth, the server behind its proxy, and finds
+ * each capture's row in the section of its version in `tests/fixtures/spark/README.md`, which lists every capture with
+ * its service, RPC, date and runtime and no digest. `tests/unit/db/spark/capture-catalog.test.ts` holds the spark,
+ * spark-4-1 and spark-auth pins to database-compose.yml.
  *
  * What is BUILT rather than read from a capture, each labelled where it is built:
  * - the ids: the replay writes the request's own session, operation and tag ids into the echo fields of the captured
@@ -205,11 +206,17 @@ function withNamespaces(base: SparkWireTransport, spellings: readonly string[]):
 }
 
 describe("provenance", () => {
-  test("every capture carries its service's pinned image and digest, and tests/fixtures/spark/README.md lists it", () => {
+  test("every capture carries its service's pinned image and digest, spark-tls's being spark-auth's, and tests/fixtures/spark/README.md lists it", () => {
+    // spark-tls runs no Spark of its own: its captures are the answers of spark-auth's server, behind the proxy.
+    expect(SPARK_SERVICE_IMAGES["spark-tls"]).toStrictEqual(SPARK_SERVICE_IMAGES["spark-auth"]);
     const readme = readFileSync(join(FIXTURES, "README.md"), "utf8");
     let read = 0;
     for (const version of ["4.2.0", "4.1.3"] as const) {
-      const section = readme.slice(readme.indexOf(`## ${version}`));
+      // The version's section ends at the next heading, so a row is found only under its own version.
+      const start = readme.indexOf(`\n## ${version}\n`);
+      expect(start).toBeGreaterThan(-1);
+      const end = readme.indexOf("\n## ", start + 1);
+      const section = readme.slice(start, end === -1 ? undefined : end);
       for (const file of readdirSync(join(FIXTURES, version))) {
         const name = file.replace(/\.json$/, "") as SparkCaptureName;
         expect(SPARK_CAPTURE_NAMES).toContain(name);
