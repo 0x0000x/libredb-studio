@@ -231,7 +231,8 @@ The provider also keeps one metadata session for the tree, the overview and heal
 
 At most 8 of the statements the provider writes run on one connection's metadata session at once, and the rest wait for a slot, served in arrival order.
 A statement's wait for a slot and for the metadata session's setup counts against the connection's query timeout.
-One still waiting at its deadline is refused with `The statement was not sent: the connection's query timeout (<n> ms) passed before Studio could send it.`, and one still waiting when the connection's close begins is refused with `The query was cancelled.`
+One never sent whose deadline passes while it waits for a slot or for the metadata session's setup, or at its send, is refused with `The statement was not sent: the connection's query timeout (<n> ms) passed before Studio could send it.`; for one sent once already, on a session the server then closed, a deadline that passes before it is sent again reads the lost-session sentence below instead.
+One still waiting when the connection's close begins is refused with `The query was cancelled.`
 
 Every new session starts with one Config call that sets `spark.sql.variable.substitute=false`, `spark.sql.execution.arrow.compression.codec=none`, `spark.sql.execution.arrow.useLargeVarTypes=false`, `spark.connect.session.resultChunking.maxChunkSize=4194304`, `spark.sql.execution.arrow.maxRecordsPerBatch=1000`, `spark.connect.progress.reportInterval=2s` and `spark.sql.connect.enrichError.enabled=true`.
 Substitution is off so that `${...}` is never expanded and the text Spark parses is the text the confirmation gate read; Arrow compression is off because Studio reads only uncompressed results.
@@ -251,7 +252,8 @@ Global temp views live in `global_temp` and are shared by every client of the Sp
 
 The session id a server answers is sent back with every later call of that session, so a server restart during a request is caught and reported, never retried: `The Spark server restarted during this request, and the session it held is gone. Run it again.`
 A session Spark closed by idle expiry reads `Spark closed the session this request was using (it idled out, or the server restarted). Run it again.`
-The metadata session is set up again once when the server closed it, and its read is repeated once; when that fails too: `Studio's Spark session for the tree and the panels was closed by the server (it idled out or the server restarted), and a new one could not complete the read.`
+The metadata session is set up again once when the server closed it, and its read is repeated once on the new session.
+When the repeated read meets a closed session again, or a statement's deadline passes before it is sent again, while it waits for the new session's setup or at the send itself, the read fails with `Studio's Spark session for the tree and the panels was closed by the server (it idled out or the server restarted), and a new one could not complete the read.`
 A release that cannot reach the server is logged and left to Spark's 60-minute idle timeout.
 
 ## 5. How a statement runs
@@ -279,6 +281,7 @@ A run that starts once its connection's close began is refused as cancelled befo
 The connection's query timeout bounds each run: `The statement ran past the connection's query timeout (<n> ms); Studio asked Spark to stop it.`
 A run whose deadline passes before Studio sends it, such as while its session is still being set up, is not sent, and no Interrupt follows: `The statement was not sent: the connection's query timeout (<n> ms) passed before Studio could send it.`
 A deadline that passes between the two steps sends no second ExecutePlan call, and the run's Interrupt follows, with the first of these two sentences.
+A metadata statement sent once already, on a metadata session the server closed, is never refused with the not-sent sentence: a deadline that passes before it is sent again reads the lost-session sentence of [section 4](#4-sessions-and-scripts).
 A dropped connection reads `The connection to Spark dropped while the statement ran. Studio asked Spark to stop it; run it again.`, and any other failure of the stream `The connection to Spark failed while the statement ran (<status text>). Studio asked Spark to stop it; run it again.`
 
 ## 6. Results
@@ -416,7 +419,7 @@ A caller's limit at or below 1,000 bounds the read and keeps the caller's own tr
 A limit that is not a whole number above 0 is refused before any statement: `An Apache Spark bulk column read limit must be a positive whole number, received <limit>.`
 An object Spark answers `TABLE_OR_VIEW_NOT_FOUND` for, one dropped since the listing, is left out, and any other failure fails the whole read.
 For functions the read sends no statement and answers no details.
-The whole read runs under one deadline, the connection's query timeout from the read's start: each statement runs in the time left, and once it is up the read fails with a timeout sentence of [section 5](#5-how-a-statement-runs) and sends nothing more.
+The whole read runs under one deadline, the connection's query timeout from the read's start: each statement runs in the time left, and once it is up the read fails with a timeout sentence of [section 5](#5-how-a-statement-runs), or with the lost-session sentence of [section 4](#4-sessions-and-scripts) for a statement sent once on a session the server closed, and sends nothing more.
 
 Definitions come from `SHOW CREATE TABLE`.
 Only the refusals Spark gives for an object it holds but cannot print become the definition's unavailable sentence, in Spark's own text:
@@ -595,7 +598,7 @@ Each failure becomes one of the repository's error classes at the provider bound
 | `receive-cap` | a message over 16 MiB | `QueryError` | [section 5](#5-how-a-statement-runs), [section 6.3](#63-budgets), and for a control call `Spark sent an answer larger than Studio reads in one message (16 MiB), so this request could not complete.` |
 | `command-batch-bound` | Spark's own one-batch bound on a command answer | `QueryError` | `Spark answers a command in one Arrow batch, and this answer is larger than the batch size this server allows (spark.connect.grpc.arrow.maxBatchSize). Narrow it, for example with LIKE or IN.` |
 | `batch-too-large` | the stream bound before any batch arrived whole | `QueryError` | [section 6.3](#63-budgets) |
-| `deadline` | the query timeout, while the statement ran or before Studio could send it | `QueryError` | [section 5](#5-how-a-statement-runs) |
+| `deadline` | the query timeout, while the statement ran, before Studio could send it, or before Studio could send again a metadata statement sent once on a session the server closed | `QueryError` | [section 5](#5-how-a-statement-runs); for a statement sent again, the lost-session sentence of [section 4](#4-sessions-and-scripts) |
 | `cancelled` | Stop, a closed tab, Spark's `OPERATION_CANCELED`, or a statement that starts or waits once the connection's close began | `QueryCancelledError` | `The query was cancelled.` |
 | `session-closed`, `session-changed` | `INVALID_HANDLE.SESSION_CLOSED`, `SESSION_NOT_FOUND`, `SESSION_CHANGED` | `QueryError` | [section 4](#4-sessions-and-scripts) |
 | `unimplemented`, `version` | not a Spark Connect server, or below the floor | `ConnectionError` | [section 2.4](#24-test-connection) |
