@@ -1191,6 +1191,10 @@ describe("readSqlSpan: line comments a carriage return ends", () => {
     expect(spanOf("-- a \\\rb\nSELECT 1", 0, SPARK)).toBe("line-comment|-- a \\\r");
   });
 
+  test("a comment a backslash continued past a line feed ends at the next lone carriage return", () => {
+    expect(spanOf("-- a \\\nb\rSELECT 1", 0, SPARK)).toBe("line-comment|-- a \\\nb\r");
+  });
+
   test("absent: a lone carriage return is comment text, so the comment runs to the line feed or the end of the text", () => {
     expect(spanOf("-- a\rb\nSELECT 1", 0)).toBe("line-comment|-- a\rb\n");
     const sql = "SELECT 1 -- a\rDROP TABLE t";

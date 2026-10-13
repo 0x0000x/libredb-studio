@@ -2465,6 +2465,9 @@ describe("a confirmConfigKeys key set or reset", () => {
     "SET",
     "RESET spark.sql.shuffle.partitions",
     "SELECT 'SET spark.sql.variable.substitute=true'",
+    // A SET without `=` only shows the key's value.
+    "SET spark.sql.variable.substitute",
+    "SET spark.sql.defaultCatalog;",
   ])("does not ask for %j", (sql) => {
     expect(writesUnderGrammar(sql, KEYS)).toBe(false);
   });
@@ -2474,25 +2477,45 @@ describe("a confirmConfigKeys key set or reset", () => {
     expect(writesUnderGrammar("SET spark.sql.variable.substitute=true", DEFAULT_SQL_GRAMMAR)).toBe(false);
   });
 
-  // Spark takes the key from the text after the keyword through `String.trim`, which removes every character at or
-  // below U+0020, and reads a double-quoted key as the key where `spark.sql.ansi.doubleQuotedIdentifiers` is on
-  // (`SparkSqlParser.scala` and `parsers.scala`, v4.2.0), so the key is read the same way here.
+  // Spark takes an unquoted key from the text after the keyword through `String.trim`, which removes every character
+  // at or below U+0020. A key in backticks, or in double quotes where Spark reads double quotes as identifier quotes
+  // (`spark.sql.ansi.enabled` and `spark.sql.ansi.doubleQuotedIdentifiers` both on), is one token, and the white space
+  // and comments around it are hidden (`SparkSqlParser.scala`, `parsers.scala` and `SqlBaseLexer.g4`, v4.2.0), so the
+  // key is read the same way here.
   test.each([
     "SET\u0001spark.sql.variable.substitute=true",
     "RESET spark.sql.variable.substitute\u001f",
     "RESET\u0001",
     'SET "spark.sql.variable.substitute"=true',
     'RESET "spark.sql.defaultCatalog"',
+    "SET `spark.sql.variable.substitute`/**/=true",
+    "SET `spark.sql.variable.substitute`/**/=`true`",
+    "RESET `spark.sql.variable.substitute`-- note",
+    "RESET `spark.sql.defaultCatalog`/**/",
+    "SET `spark.sql.variable.substitute`=true",
+    "SET　`spark.sql.defaultCatalog`=`lake`",
+    'SET "spark.sql.variable.substitute"/**/=true',
   ])("asks for %j, the key read as Spark reads it", (sql) => {
     expect(writesUnderGrammar(sql, KEYS)).toBe(true);
   });
 
-  test.each(["SET\u0001spark.sql.shuffle.partitions=8", 'SET "spark.sql.variable.substitute.depth"=40'])(
-    "does not ask for %j, the key read as Spark reads it",
-    (sql) => {
-      expect(writesUnderGrammar(sql, KEYS)).toBe(false);
-    },
-  );
+  test.each([
+    "SET\u0001spark.sql.shuffle.partitions=8",
+    'SET "spark.sql.variable.substitute.depth"=40',
+    // A quoted key with no `=` after it, past white space and comments, only shows the value; Spark refuses the last.
+    "SET `spark.sql.variable.substitute`",
+    "SET `spark.sql.variable.substitute` /* c */;",
+    "SET `spark.sql.defaultCatalog`x=lake",
+  ])("does not ask for %j, the key read as Spark reads it", (sql) => {
+    expect(writesUnderGrammar(sql, KEYS)).toBe(false);
+  });
+
+  test("a doubled quote inside a quoted key is one quote, as Spark reads it", () => {
+    const QUOTED: SqlGrammar = { ...DEFAULT_SQL_GRAMMAR, confirmConfigKeys: ["a`b", 'a"b'] };
+    expect(writesUnderGrammar("SET `a``b`=1", QUOTED)).toBe(true);
+    expect(writesUnderGrammar('SET "a""b"=1', QUOTED)).toBe(true);
+    expect(writesUnderGrammar("SET `a````b`=1", QUOTED)).toBe(false);
+  });
 });
 
 // Spark's row: the forms that replace or overwrite data, load code, start a process, call a Java method, run text the
@@ -2526,6 +2549,14 @@ describe("Apache Spark's confirmation forms", () => {
     "SET spark.sql.defaultCatalog=lake",
     "SET spark.sql.catalog.lake=org.apache.iceberg.spark.SparkCatalog",
     "RESET",
+    // A quoted key is one token, read past the white space and comments Spark hides.
+    "SET `spark.sql.variable.substitute`/**/=true",
+    "SET `spark.sql.variable.substitute`/**/=`true`",
+    "RESET `spark.sql.variable.substitute`-- note",
+    "RESET `spark.sql.defaultCatalog`/**/",
+    "SET `spark.sql.variable.substitute`=true",
+    "SET　`spark.sql.defaultCatalog`=`lake`",
+    'SET "spark.sql.variable.substitute"/**/=true',
   ])("asks for %j", (sql) => {
     expect(isDangerousQuery(sql, "spark")).toBe(true);
   });
@@ -2568,6 +2599,12 @@ describe("Apache Spark's confirmation forms", () => {
     "USE NAMESPACE studio",
     "SET CATALOG 'lake'",
     "CACHE TABLE t",
+    // A SET without `=` only shows the key's value, and these forms name no listed key.
+    "SET spark.sql.variable.substitute",
+    "SET `spark.sql.defaultCatalog`",
+    "SET VAR x = 1",
+    "SET PATH = DEFAULT_PATH",
+    "SET -v",
   ])("does not ask for %j", (sql) => {
     expect(isDangerousQuery(sql, "spark")).toBe(false);
   });

@@ -661,10 +661,12 @@ describe("dollarTags and doubleQuoteBackslashEscapes", () => {
 // Four facts only Spark's lexer has, each absent (false) on every other row: raw strings (`rawStrings`), optimizer
 // hints lexed as code (`hintsAreCode`), a `--` comment a backslash continues (`lineCommentBackslashContinues`) and one
 // a lone carriage return ends (`lineCommentEndsAtCarriageReturn`).
-describe("rawStrings and hintsAreCode", () => {
-  test("the compatibility default declares neither", () => {
+describe("the reader facts only Spark's row declares", () => {
+  test("the compatibility default declares none of the four", () => {
     expect(DEFAULT_SQL_GRAMMAR.rawStrings).toBeUndefined();
     expect(DEFAULT_SQL_GRAMMAR.hintsAreCode).toBeUndefined();
+    expect(DEFAULT_SQL_GRAMMAR.lineCommentBackslashContinues).toBeUndefined();
+    expect(DEFAULT_SQL_GRAMMAR.lineCommentEndsAtCarriageReturn).toBeUndefined();
   });
 
   test.each((Object.keys(GRAMMAR_COVERAGE) as DatabaseType[]).filter((type) => type !== "spark"))(

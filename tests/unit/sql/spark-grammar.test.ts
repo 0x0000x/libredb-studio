@@ -80,6 +80,7 @@ describe("the Spark grammar", () => {
     // statement's own clause and the bound follows it, and the keywords after the comment are read.
     expect(units("SELECT 1 -- note\r; DROP TABLE t")).toHaveLength(2);
     expect(units("SELECT 1 -- note \\\r; DROP TABLE t")).toHaveLength(2);
+    expect(units("SELECT 1 -- a \\\nb\r; DROP TABLE t")).toStrictEqual(["SELECT 1 -- a \\\nb", "DROP TABLE t"]);
     expect(limited("SELECT * FROM t -- note\rWHERE x = 1")).toBe("SELECT * FROM t -- note\rWHERE x = 1 LIMIT 500");
     expect(readLeadingKeyword("-- note\rDELETE FROM t", grammar)?.keyword).toBe("DELETE");
     expect(readOperativeKeyword("WITH c AS (SELECT 1) -- note\rINSERT INTO u\nSELECT 1", grammar)?.keyword).toBe(
@@ -96,6 +97,9 @@ describe("the Spark grammar", () => {
   test("one statement per unit, and BEGIN is the leading keyword of a block the provider refuses", () => {
     expect(grammar.script).toBe(DEFAULT_SQL_GRAMMAR.script);
     expect(readLeadingKeyword("BEGIN SELECT 1; END", grammar)?.keyword).toBe("BEGIN");
+    // A BEGIN block holding raw strings still reads BEGIN, and a hint before BEGIN is code, so no keyword leads.
+    expect(readLeadingKeyword("BEGIN SELECT r'\\'; DROP TABLE t; SELECT '\\''; END", grammar)?.keyword).toBe("BEGIN");
+    expect(readLeadingKeyword("/*+ x */ BEGIN SELECT 1; END", grammar)).toBeNull();
   });
 
   test("a trailing OFFSET follows the row bound, and LIMIT before OFFSET reads as bounded", () => {

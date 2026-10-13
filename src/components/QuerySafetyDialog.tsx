@@ -747,13 +747,11 @@ function codeFormInText(text: string, form: ConfirmCodeForm, grammar: SqlGrammar
 }
 
 /**
- * The session key a SET or RESET names: the code text after the keyword, past whitespace and comments, up to `=`,
- * white space, `;` or the end, with one pair of enclosing backticks or double quotes removed; `""` where no key
- * follows. Spark reads a SET's key the same way, as the raw text up to `=`, trimmed by `String.trim`, which removes
- * every character at or below U+0020, so each of those counts as white space here; and where
- * `spark.sql.ansi.doubleQuotedIdentifiers` is on, Spark reads a double-quoted key as the key.
+ * The first index at or after `from` past white space and comments, the text Spark's lexer hides from its parser.
+ * White space is every character JavaScript's `\s` matches, which holds every one Spark's lexer counts (U+00A0 and
+ * U+3000 among them), and every character at or below U+0020, which Spark's `String.trim` of an unquoted key removes.
  */
-function configKeyAfter(text: string, from: number, grammar: SqlGrammar): string {
+function pastHiddenText(text: string, from: number, grammar: SqlGrammar): number {
   let i = from;
   while (i < text.length) {
     const span = readSqlSpan(text, i, grammar);
@@ -762,20 +760,41 @@ function configKeyAfter(text: string, from: number, grammar: SqlGrammar): string
       (span.kind === "whitespace" || span.kind === "line-comment" || span.kind === "block-comment")
     ) {
       i = span.end;
-    } else if (text[i] <= " ") {
+    } else if (text[i] <= " " || /\s/.test(text[i])) {
       i++;
     } else {
       break;
     }
   }
-  let end = i;
-  while (end < text.length && text[end] > " " && !/[=\s;]/.test(text[end])) end++;
-  const key = text.slice(i, end);
-  const quote = key[0];
-  return key.length > 2 && (quote === "`" || quote === '"') && key.endsWith(quote) ? key.slice(1, -1) : key;
+  return i;
 }
 
-/** Whether a SET or RESET names a key of `grammar.confirmConfigKeys`, or is a RESET of every key. */
+/**
+ * The session key a SET or RESET names, read past white space and comments (`pastHiddenText`), and the index after
+ * it; the key is `""` where none follows. A key in backticks, or in double quotes where Spark reads double quotes as
+ * identifier quotes (`spark.sql.ansi.enabled` and `spark.sql.ansi.doubleQuotedIdentifiers` both on), is one token, as
+ * Spark's `configKey` rule reads it: the inner text of the closed run, a doubled quote collapsed to one, and nothing
+ * after the closing quote. Studio reads double quotes that way under every setting, so such a key asks whether or not
+ * the session reads it as a key. Any other key is the code text up to `=`, white space, `;` or the end: Spark reads it
+ * as the raw text up to `=`, trimmed by `String.trim`, which removes every character at or below U+0020, so each of
+ * those ends the key here.
+ */
+function configKeyAfter(text: string, from: number, grammar: SqlGrammar): { key: string; end: number } {
+  const start = pastHiddenText(text, from, grammar);
+  const quote = text[start];
+  const span = readSqlSpan(text, start, grammar);
+  if (span?.kind === "quoted-identifier" && span.terminated && (quote === "`" || quote === '"')) {
+    return { key: text.slice(start + 1, span.end - 1).replaceAll(quote + quote, quote), end: span.end };
+  }
+  let end = start;
+  while (end < text.length && text[end] > " " && !/[=\s;]/.test(text[end])) end++;
+  return { key: text.slice(start, end), end };
+}
+
+/**
+ * Whether a SET or RESET names a key of `grammar.confirmConfigKeys`, or is a RESET of every key. A SET asks only when
+ * `=` follows the key, past white space and comments: without it, the SET only shows the key's value.
+ */
 function configKeyAsks(
   text: string,
   reading: NonNullable<ReturnType<typeof readOperativeKeyword>>,
@@ -783,8 +802,10 @@ function configKeyAsks(
 ): boolean {
   const keys = grammar.confirmConfigKeys;
   if (keys === undefined || (reading.keyword !== "SET" && reading.keyword !== "RESET")) return false;
-  const key = configKeyAfter(text, reading.end, grammar).toLowerCase();
-  if (key === "") return reading.keyword === "RESET";
+  const { key: named, end } = configKeyAfter(text, reading.end, grammar);
+  if (named === "") return reading.keyword === "RESET";
+  if (reading.keyword === "SET" && text[pastHiddenText(text, end, grammar)] !== "=") return false;
+  const key = named.toLowerCase();
   return keys.some((entry) => {
     const wanted = entry.toLowerCase();
     return wanted.endsWith(".") ? key.startsWith(wanted) : key === wanted;

@@ -312,10 +312,16 @@ export interface SqlGrammar {
   readonly confirmCodeForms?: readonly ConfirmCodeForm[];
   /**
    * Session configuration keys whose SET or RESET asks for a confirmation, compared without case; an entry ending in
-   * `.` matches every key under it. Read where the operative keyword is SET or RESET: the key is the code text after
-   * the keyword up to `=`, white space, `;` or the end, one pair of enclosing backticks or double quotes removed, and
-   * every character at or below U+0020 counts as white space, as Spark's `String.trim` of that text reads it. A RESET
-   * with no key, which restores every key, asks too. Absent means none.
+   * `.` matches every key under it. Read where the operative keyword is SET or RESET, past white space and comments,
+   * which Spark's lexer hides; white space is every character JavaScript's `\s` matches and every character at or
+   * below U+0020. A key in backticks, or in double quotes where Spark reads double quotes as identifier quotes
+   * (`spark.sql.ansi.enabled` and `spark.sql.ansi.doubleQuotedIdentifiers` both on), is one token, as Spark's
+   * `configKey` rule reads it: its inner text, a doubled quote collapsed to one, and nothing after the closing quote.
+   * Studio reads double quotes that way under every setting, so such a key asks whether or not the session reads it
+   * as a key. Any other key is the code text up to `=`, white space, `;` or the end, as Spark's `String.trim` of that
+   * text reads it. A SET asks only when `=` follows the key, past white space and comments, since a SET without `=`
+   * only shows the key's value; a RESET of a listed key asks, and so does a RESET with no key, which restores every
+   * key. Absent means none.
    */
   readonly confirmConfigKeys?: readonly string[];
 }
