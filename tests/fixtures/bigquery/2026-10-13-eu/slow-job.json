@@ -1,0 +1,329 @@
+{
+  "scenario": "slow-job",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT COUNT(*) AS n FROM UNNEST(GENERATE_ARRAY(1, 100000)) AS a CROSS JOIN UNNEST(GENERATE_ARRAY(1, 100000)) AS b",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 1,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          },
+          "useQueryCache": false
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-18>",
+            "location": "EU"
+          },
+          "jobComplete": false,
+          "queryId": "<job-18>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "location": "EU",
+          "creationTime": "1791876491547",
+          "startTime": "1791876491557",
+          "statementType": "SELECT"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/queries/<job-18>?maxResults=1000&timeoutMs=1&location=EU"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#getQueryResultsResponse",
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-18>",
+            "location": "EU"
+          },
+          "jobComplete": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT job_id, user_email, state, query, creation_time, start_time, TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), COALESCE(start_time, creation_time), MILLISECOND) AS ms FROM `demo-project`.`region-eu`.INFORMATION_SCHEMA.JOBS_BY_PROJECT WHERE creation_time > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 DAY) AND state != 'DONE' AND job_id = '<job-18>' ORDER BY creation_time LIMIT 50",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "job_id",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "user_email",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "state",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "query",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "creation_time",
+                "type": "TIMESTAMP",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "start_time",
+                "type": "TIMESTAMP",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "ms",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-19>",
+            "location": "EU"
+          },
+          "totalRows": "1",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "<job-18>"
+                },
+                {
+                  "v": "<user-1>"
+                },
+                {
+                  "v": "RUNNING"
+                },
+                {
+                  "v": "SELECT COUNT(*) AS n FROM UNNEST(GENERATE_ARRAY(1, 100000)) AS a CROSS JOIN UNNEST(GENERATE_ARRAY(1, 100000)) AS b"
+                },
+                {
+                  "v": "1791876491547000"
+                },
+                {
+                  "v": "1791876491557000"
+                },
+                {
+                  "v": "8090"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "193771194",
+          "jobComplete": true,
+          "cacheHit": false,
+          "queryId": "<job-19>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "193986560",
+          "totalSlotMs": "871",
+          "location": "EU",
+          "creationTime": "1791876499394",
+          "startTime": "1791876499635",
+          "endTime": "1791876500264",
+          "pageRowCount": "1",
+          "statementType": "SELECT"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/jobs/<job-18>/cancel?location=EU"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#jobCancelResponse",
+          "job": {
+            "kind": "bigquery#job",
+            "id": "demo-project:EU.<job-18>",
+            "selfLink": "https://bigquery.googleapis.com/bigquery/v2/projects/demo-project/jobs/<job-18>?location=EU",
+            "configuration": {
+              "query": {
+                "query": "SELECT COUNT(*) AS n FROM UNNEST(GENERATE_ARRAY(1, 100000)) AS a CROSS JOIN UNNEST(GENERATE_ARRAY(1, 100000)) AS b",
+                "writeDisposition": "WRITE_TRUNCATE",
+                "priority": "INTERACTIVE",
+                "useQueryCache": false,
+                "useLegacySql": false
+              },
+              "jobTimeoutMs": "120000",
+              "jobType": "QUERY"
+            },
+            "jobReference": {
+              "projectId": "demo-project",
+              "jobId": "<job-18>",
+              "location": "EU"
+            },
+            "statistics": {
+              "creationTime": "1791876491547",
+              "startTime": "1791876491557",
+              "query": {
+                "queryPlan": [
+                  {
+                    "name": "S00: Input",
+                    "id": "0",
+                    "startMs": "1791876491647",
+                    "endMs": "1791876491655",
+                    "waitMsAvg": "0",
+                    "waitMsMax": "0",
+                    "readMsAvg": "0",
+                    "readMsMax": "0",
+                    "computeMsAvg": "9",
+                    "computeMsMax": "9",
+                    "writeMsAvg": "1",
+                    "writeMsMax": "1",
+                    "shuffleOutputBytes": "0",
+                    "shuffleOutputBytesSpilled": "0",
+                    "recordsRead": "0",
+                    "recordsWritten": "1",
+                    "parallelInputs": "1",
+                    "completedParallelInputs": "1",
+                    "status": "COMPLETE",
+                    "steps": [
+                      {
+                        "kind": "COMPUTE",
+                        "substeps": [
+                          "$10 := generate_array(1, 100000)"
+                        ]
+                      },
+                      {
+                        "kind": "WRITE",
+                        "substeps": [
+                          "$10",
+                          "TO __stage00_output"
+                        ]
+                      }
+                    ],
+                    "slotMs": "13",
+                    "computeMode": "BIGQUERY"
+                  },
+                  {
+                    "name": "S01: Output",
+                    "id": "1",
+                    "startMs": "1791876491659",
+                    "inputStages": [
+                      "0"
+                    ],
+                    "waitMsAvg": "0",
+                    "waitMsMax": "0",
+                    "readMsAvg": "0",
+                    "readMsMax": "0",
+                    "computeMsAvg": "0",
+                    "computeMsMax": "0",
+                    "writeMsAvg": "0",
+                    "writeMsMax": "0",
+                    "shuffleOutputBytes": "0",
+                    "shuffleOutputBytesSpilled": "0",
+                    "recordsRead": "0",
+                    "recordsWritten": "0",
+                    "parallelInputs": "1",
+                    "completedParallelInputs": "0",
+                    "status": "RUNNING",
+                    "steps": [
+                      {
+                        "kind": "READ",
+                        "substeps": [
+                          "$10",
+                          "FROM __stage00_output"
+                        ]
+                      },
+                      {
+                        "kind": "AGGREGATE",
+                        "substeps": [
+                          "$1 := SUM_OF_COUNTS($20)"
+                        ]
+                      },
+                      {
+                        "kind": "AGGREGATE",
+                        "substeps": [
+                          "$20 := COUNT_STAR()"
+                        ]
+                      },
+                      {
+                        "kind": "COMPUTE",
+                        "substeps": [
+                          "$30 := generate_array(1, 100000)"
+                        ]
+                      },
+                      {
+                        "kind": "WRITE",
+                        "substeps": [
+                          "$1",
+                          "TO __stage01_output"
+                        ]
+                      }
+                    ],
+                    "slotMs": "0",
+                    "computeMode": "BIGQUERY"
+                  }
+                ],
+                "estimatedBytesProcessed": "0",
+                "timeline": [
+                  {
+                    "elapsedMs": "443",
+                    "totalSlotMs": "5143",
+                    "pendingUnits": "1",
+                    "completedUnits": "1",
+                    "activeUnits": "1",
+                    "estimatedRunnableUnits": "0"
+                  }
+                ],
+                "totalSlotMs": "5143",
+                "statementType": "SELECT"
+              },
+              "totalSlotMs": "5143"
+            },
+            "status": {
+              "state": "RUNNING"
+            },
+            "jobCreationReason": {
+              "code": "REQUESTED"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "scenario": "syntax-error",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELEC nope",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": {
+            "code": 400,
+            "message": "Syntax error: Unexpected identifier \"SELEC\" at [1:1]",
+            "errors": [
+              {
+                "message": "Syntax error: Unexpected identifier \"SELEC\" at [1:1]",
+                "domain": "global",
+                "reason": "invalidQuery",
+                "location": "q",
+                "locationType": "parameter"
+              }
+            ],
+            "status": "INVALID_ARGUMENT"
+          }
+        }
+      }
+    }
+  ]
+}

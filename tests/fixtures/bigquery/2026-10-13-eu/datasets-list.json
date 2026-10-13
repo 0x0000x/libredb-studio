@@ -1,0 +1,45 @@
+{
+  "scenario": "datasets-list",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/datasets?maxResults=1000&filter=labels.libredb-capture%3Amain"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#datasetList",
+          "datasets": [
+            {
+              "kind": "bigquery#dataset",
+              "id": "demo-project:archive",
+              "datasetReference": {
+                "datasetId": "archive",
+                "projectId": "demo-project"
+              },
+              "labels": {
+                "libredb-capture": "main"
+              },
+              "location": "EU",
+              "type": "DEFAULT"
+            },
+            {
+              "kind": "bigquery#dataset",
+              "id": "demo-project:shop",
+              "datasetReference": {
+                "datasetId": "shop",
+                "projectId": "demo-project"
+              },
+              "labels": {
+                "libredb-capture": "main"
+              },
+              "location": "EU",
+              "type": "DEFAULT"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

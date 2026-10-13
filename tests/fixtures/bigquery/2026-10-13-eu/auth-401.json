@@ -1,0 +1,51 @@
+{
+  "scenario": "auth-401",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT 1",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "error": {
+            "code": 401,
+            "message": "Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.",
+            "errors": [
+              {
+                "message": "Invalid Credentials",
+                "domain": "global",
+                "reason": "authError",
+                "location": "Authorization",
+                "locationType": "header"
+              }
+            ],
+            "status": "UNAUTHENTICATED",
+            "details": [
+              {
+                "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                "reason": "ACCESS_TOKEN_TYPE_UNSUPPORTED",
+                "metadata": {
+                  "method": "google.cloud.bigquery.v2.JobService.Query",
+                  "service": "bigquery.googleapis.com"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

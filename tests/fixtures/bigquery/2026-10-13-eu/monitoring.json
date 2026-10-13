@@ -1,0 +1,245 @@
+{
+  "scenario": "monitoring",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT COUNT(*) AS total, COUNTIF(cache_hit) AS cached FROM `demo-project`.`region-eu`.INFORMATION_SCHEMA.JOBS_BY_PROJECT WHERE creation_time > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR) AND job_type = 'QUERY' AND job_id IN ('<job-1>', '<job-2>', '<job-3>', '<job-4>', '<job-5>', '<job-6>', '<job-7>', '<job-8>', '<job-9>', '<job-10>', '<job-11>', '<job-12>', '<job-13>', '<job-14>', '<job-15>', '<job-16>', '<job-17>', '<job-18>', '<job-19>', '<job-20>')",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "total",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "cached",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-23>",
+            "location": "EU"
+          },
+          "totalRows": "1",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "20"
+                },
+                {
+                  "v": "3"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "1457448",
+          "jobComplete": true,
+          "cacheHit": false,
+          "queryId": "<job-23>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "20971520",
+          "totalSlotMs": "1092",
+          "location": "EU",
+          "creationTime": "1791877131066",
+          "startTime": "1791877131180",
+          "endTime": "1791877131694",
+          "pageRowCount": "1",
+          "statementType": "SELECT"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT query, COUNT(*) AS calls, SUM(TIMESTAMP_DIFF(end_time, start_time, MILLISECOND)) AS total_ms, MIN(TIMESTAMP_DIFF(end_time, start_time, MILLISECOND)) AS min_ms, MAX(TIMESTAMP_DIFF(end_time, start_time, MILLISECOND)) AS max_ms FROM `demo-project`.`region-eu`.INFORMATION_SCHEMA.JOBS_BY_PROJECT WHERE creation_time > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 DAY) AND job_type = 'QUERY' AND state = 'DONE' AND statement_type != 'SCRIPT' AND job_id IN ('<job-1>', '<job-2>', '<job-3>', '<job-4>', '<job-5>', '<job-6>', '<job-7>', '<job-8>', '<job-9>', '<job-10>', '<job-11>', '<job-12>', '<job-13>', '<job-14>', '<job-15>', '<job-16>', '<job-17>', '<job-18>', '<job-19>', '<job-20>') GROUP BY query ORDER BY total_ms DESC LIMIT 5",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "query",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "calls",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "total_ms",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "min_ms",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "max_ms",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-24>",
+            "location": "EU"
+          },
+          "totalRows": "5",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "SELECT COUNT(*) AS n FROM UNNEST(GENERATE_ARRAY(1, 100000)) AS a CROSS JOIN UNNEST(GENERATE_ARRAY(1, 100000)) AS b"
+                },
+                {
+                  "v": "1"
+                },
+                {
+                  "v": "28710"
+                },
+                {
+                  "v": "28710"
+                },
+                {
+                  "v": "28710"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "DELETE FROM shop.orders WHERE true"
+                },
+                {
+                  "v": "1"
+                },
+                {
+                  "v": "885"
+                },
+                {
+                  "v": "885"
+                },
+                {
+                  "v": "885"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "INSERT archive.orders_2023 (order_id, customer_id, placed_at, total) VALUES (1, 1, TIMESTAMP '2023-06-01 10:00:00+00', 9.50)"
+                },
+                {
+                  "v": "1"
+                },
+                {
+                  "v": "839"
+                },
+                {
+                  "v": "839"
+                },
+                {
+                  "v": "839"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "INSERT shop.customers (customer_id, name, address, tags) VALUES (1, 'Ada', STRUCT('Berlin', 10115), ['vip']), (2, 'Grace', STRUCT('Bonn', 53111), [])"
+                },
+                {
+                  "v": "1"
+                },
+                {
+                  "v": "787"
+                },
+                {
+                  "v": "787"
+                },
+                {
+                  "v": "787"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "INSERT shop.orders (order_id, customer_id, placed_at, total) VALUES (1, 1, TIMESTAMP '2026-10-01 10:00:00+00', 1.50), (2, 2, TIMESTAMP '2026-10-02 10:00:00+00', 2.50), (3, 1, TIMESTAMP '2026-10-03 10:00:00+00', 3.50), (4, 2, TIMESTAMP '2026-10-04 10:00:00+00', 4.50), (5, 1, TIMESTAMP '2026-10-05 10:00:00+00', 5.50), (6, 2, TIMESTAMP '2026-10-06 10:00:00+00', 6.50), (7, 1, TIMESTAMP '2026-10-07 10:00:00+00', 7.50)"
+                },
+                {
+                  "v": "1"
+                },
+                {
+                  "v": "737"
+                },
+                {
+                  "v": "737"
+                },
+                {
+                  "v": "737"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "210156761",
+          "jobComplete": true,
+          "cacheHit": false,
+          "queryId": "<job-24>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "210763776",
+          "totalSlotMs": "1218",
+          "location": "EU",
+          "creationTime": "1791877132288",
+          "startTime": "1791877132440",
+          "endTime": "1791877132989",
+          "pageRowCount": "5",
+          "statementType": "SELECT"
+        }
+      }
+    }
+  ]
+}

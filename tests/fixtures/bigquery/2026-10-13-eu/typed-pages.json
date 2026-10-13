@@ -1,0 +1,409 @@
+{
+  "scenario": "typed-pages",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT * FROM UNNEST([STRUCT(9007199254740993 AS order_id, TIMESTAMP_MICROS(1700000000123456) AS placed_at, STRUCT('Berlin' AS city, 10115 AS zip) AS ship, ['a', 'b'] AS tags, 12.5 AS total, true AS paid), (2, TIMESTAMP_MICROS(1700000100000000), ('Hamburg', 10115), ARRAY<STRING>[], 0.5, false), (3, TIMESTAMP_MICROS(1700000200000000), ('Bonn', 10115), ['c'], 7, true)]) ORDER BY placed_at",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 2,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "order_id",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "placed_at",
+                "type": "TIMESTAMP",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "ship",
+                "type": "RECORD",
+                "mode": "NULLABLE",
+                "fields": [
+                  {
+                    "name": "city",
+                    "type": "STRING",
+                    "mode": "NULLABLE"
+                  },
+                  {
+                    "name": "zip",
+                    "type": "INTEGER",
+                    "mode": "NULLABLE"
+                  }
+                ]
+              },
+              {
+                "name": "tags",
+                "type": "STRING",
+                "mode": "REPEATED"
+              },
+              {
+                "name": "total",
+                "type": "FLOAT",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "paid",
+                "type": "BOOLEAN",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-15>",
+            "location": "EU"
+          },
+          "totalRows": "3",
+          "pageToken": "<page-1>",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "9007199254740993"
+                },
+                {
+                  "v": "1700000000123456"
+                },
+                {
+                  "v": {
+                    "f": [
+                      {
+                        "v": "Berlin"
+                      },
+                      {
+                        "v": "10115"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "v": [
+                    {
+                      "v": "a"
+                    },
+                    {
+                      "v": "b"
+                    }
+                  ]
+                },
+                {
+                  "v": "12.5"
+                },
+                {
+                  "v": "true"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "2"
+                },
+                {
+                  "v": "1700000100000000"
+                },
+                {
+                  "v": {
+                    "f": [
+                      {
+                        "v": "Hamburg"
+                      },
+                      {
+                        "v": "10115"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "v": []
+                },
+                {
+                  "v": "0.5"
+                },
+                {
+                  "v": "false"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "0",
+          "jobComplete": true,
+          "cacheHit": true,
+          "queryId": "<job-15>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "0",
+          "location": "EU",
+          "creationTime": "1791876490128",
+          "startTime": "1791876490146",
+          "endTime": "1791876490237",
+          "pageRowCount": "2",
+          "statementType": "SELECT"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/queries/<job-15>?maxResults=2&location=EU&formatOptions.useInt64Timestamp=true"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#getQueryResultsResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "order_id",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "placed_at",
+                "type": "TIMESTAMP",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "ship",
+                "type": "RECORD",
+                "mode": "NULLABLE",
+                "fields": [
+                  {
+                    "name": "city",
+                    "type": "STRING",
+                    "mode": "NULLABLE"
+                  },
+                  {
+                    "name": "zip",
+                    "type": "INTEGER",
+                    "mode": "NULLABLE"
+                  }
+                ]
+              },
+              {
+                "name": "tags",
+                "type": "STRING",
+                "mode": "REPEATED"
+              },
+              {
+                "name": "total",
+                "type": "FLOAT",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "paid",
+                "type": "BOOLEAN",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-15>",
+            "location": "EU"
+          },
+          "totalRows": "3",
+          "pageToken": "<page-1>",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "9007199254740993"
+                },
+                {
+                  "v": "1700000000123456"
+                },
+                {
+                  "v": {
+                    "f": [
+                      {
+                        "v": "Berlin"
+                      },
+                      {
+                        "v": "10115"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "v": [
+                    {
+                      "v": "a"
+                    },
+                    {
+                      "v": "b"
+                    }
+                  ]
+                },
+                {
+                  "v": "12.5"
+                },
+                {
+                  "v": "true"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "2"
+                },
+                {
+                  "v": "1700000100000000"
+                },
+                {
+                  "v": {
+                    "f": [
+                      {
+                        "v": "Hamburg"
+                      },
+                      {
+                        "v": "10115"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "v": []
+                },
+                {
+                  "v": "0.5"
+                },
+                {
+                  "v": "false"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "0",
+          "jobComplete": true,
+          "cacheHit": true
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/queries/<job-15>?maxResults=2&location=EU&formatOptions.useInt64Timestamp=true&pageToken=<page-1>"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#getQueryResultsResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "order_id",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "placed_at",
+                "type": "TIMESTAMP",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "ship",
+                "type": "RECORD",
+                "mode": "NULLABLE",
+                "fields": [
+                  {
+                    "name": "city",
+                    "type": "STRING",
+                    "mode": "NULLABLE"
+                  },
+                  {
+                    "name": "zip",
+                    "type": "INTEGER",
+                    "mode": "NULLABLE"
+                  }
+                ]
+              },
+              {
+                "name": "tags",
+                "type": "STRING",
+                "mode": "REPEATED"
+              },
+              {
+                "name": "total",
+                "type": "FLOAT",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "paid",
+                "type": "BOOLEAN",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-15>",
+            "location": "EU"
+          },
+          "totalRows": "3",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "3"
+                },
+                {
+                  "v": "1700000200000000"
+                },
+                {
+                  "v": {
+                    "f": [
+                      {
+                        "v": "Bonn"
+                      },
+                      {
+                        "v": "10115"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "v": [
+                    {
+                      "v": "c"
+                    }
+                  ]
+                },
+                {
+                  "v": "7.0"
+                },
+                {
+                  "v": "true"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "0",
+          "jobComplete": true,
+          "cacheHit": true
+        }
+      }
+    }
+  ]
+}

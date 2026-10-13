@@ -322,10 +322,13 @@ describe("query", () => {
   test("no warning without processed bytes; DML affected rows; no location", async () => {
     fake.datasets = [];
     const provider = await connected();
-    fake.onQuery = async () => result({ affectedRows: 7 });
+    // BigQuery sends the table's schema with a DML answer.
+    fake.onQuery = async () => result({ affectedRows: 7, fields: [{ name: "id", type: "INTEGER" }] });
     const r = await provider.query("DELETE FROM t WHERE true");
     expect(fake.calls.at(-1)?.options.location).toBeUndefined();
     expect(r.rowCount).toBe(7);
+    expect(r.fields).toEqual([]);
+    expect(r.columnTypes).toBeUndefined();
     expect(r.warnings).toBeUndefined();
   });
 
@@ -600,7 +603,6 @@ describe("object surface via REST fallback", () => {
 
 describe("monitoring", () => {
   function monitoringAnswers(sql: string): Promise<BigQueryQueryResult> {
-    if (sql.includes("COUNT(*) AS tables")) return Promise.resolve(result({ rows: [{ tables: 3, bytes: 4096 }] }));
     if (sql.includes("COUNTIF(cache_hit)")) return Promise.resolve(result({ rows: [{ total: 3600, cached: 900 }] }));
     if (sql.includes("GROUP BY query"))
       return Promise.resolve(
@@ -637,7 +639,14 @@ describe("monitoring", () => {
         }),
       );
     if (sql.includes("GROUP BY table_schema"))
-      return Promise.resolve(result({ rows: [{ table_schema: "sales", bytes: 2048 }, { table_schema: "logs" }] }));
+      return Promise.resolve(
+        result({
+          rows: [
+            { table_schema: "sales", tables: 2, bytes: 4096 },
+            { table_schema: "logs", tables: 1 },
+          ],
+        }),
+      );
     return Promise.resolve(result());
   }
 
@@ -699,7 +708,7 @@ describe("monitoring", () => {
     await provider.getTableStats();
 
     expect(await provider.getStorageStats()).toEqual([
-      { name: "sales", location: "EU", size: "2 KB", sizeBytes: 2048 },
+      { name: "sales", location: "EU", size: "4 KB", sizeBytes: 4096 },
       { name: "logs", location: "EU", size: "0 B", sizeBytes: 0 },
     ]);
 
@@ -713,16 +722,31 @@ describe("monitoring", () => {
     await expect(provider.runMaintenance("vacuum")).rejects.toBeInstanceOf(QueryError);
   });
 
-  test("results are cached for a minute", async () => {
+  test("JOBS reads are cached for a minute, TABLE_STORAGE reads for fifteen", async () => {
     const provider = await connected();
     fake.onQuery = async (sql) => monitoringAnswers(sql);
     const now = spyOn(Date, "now").mockReturnValue(1_000_000);
+    await provider.getPerformanceMetrics();
     await provider.getOverview();
-    await provider.getOverview();
-    expect(fake.calls.length).toBe(2);
-    now.mockReturnValue(1_000_000 + 60_001);
+    await provider.getPerformanceMetrics();
     await provider.getOverview();
     expect(fake.calls.length).toBe(3);
+    now.mockReturnValue(1_000_000 + 60_001);
+    await provider.getPerformanceMetrics();
+    await provider.getOverview();
+    expect(fake.calls.length).toBe(4);
+    now.mockReturnValue(1_000_000 + 15 * 60_000 + 1);
+    await provider.getOverview();
+    expect(fake.calls.length).toBe(5);
+  });
+
+  test("the overview and the storage panel share one TABLE_STORAGE read", async () => {
+    const provider = await connected();
+    fake.onQuery = async (sql) => monitoringAnswers(sql);
+    const before = fake.calls.length;
+    await provider.getOverview();
+    await provider.getStorageStats();
+    expect(fake.calls.length).toBe(before + 1);
   });
 
   test("the cache drops expired entries and holds at most 50", async () => {
@@ -732,11 +756,17 @@ describe("monitoring", () => {
     const now = spyOn(Date, "now").mockReturnValue(1_000_000);
     for (let i = 0; i < 55; i++) await provider.getTableStats({ schema: `s${i}` });
     expect(cache.size).toBe(50);
-    now.mockReturnValue(1_000_000 + 60_001);
+    now.mockReturnValue(1_000_000 + 15 * 60_000 + 1);
     await provider.getTableStats({ schema: "fresh" });
     expect(cache.size).toBe(1);
     await provider.disconnect();
     expect(cache.size).toBe(0);
+  });
+
+  test("a project with no tables reads 0 B, not N/A", async () => {
+    const provider = await connected();
+    fake.onQuery = async () => result({ rows: [] });
+    expect(await provider.getOverview()).toMatchObject({ databaseSize: "0 B", databaseSizeBytes: 0, tableCount: 0 });
   });
 
   test("no location: everything empty", async () => {

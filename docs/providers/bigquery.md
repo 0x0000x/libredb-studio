@@ -107,7 +107,7 @@ connections:
   - id: "bq-integration"
     name: "BigQuery integration"
     type: "bigquery"
-    database: "rmt-integration"          # project id
+    database: "example-integration"      # project id
     schema: "analytics"                  # optional default dataset
     location: "EU"                       # optional; detected when absent
     password: "${BQ_INTEGRATION_SA_JSON}"
@@ -118,7 +118,7 @@ connections:
   - id: "bq-production"
     name: "BigQuery production"
     type: "bigquery"
-    database: "rmt-production"
+    database: "example-production"
     roles: ["admin"]
     managed: true
 ```
@@ -230,7 +230,11 @@ The absence is `bigquery`'s entry in `EXPECTED_EDIT_ABSTAINERS` (`tests/helpers/
 
 ## 8. Monitoring
 
-The monitoring panels read the region `INFORMATION_SCHEMA` views for the detected location, cached for 60 s because the panel polls every 30 s and every read bills the 10 MB minimum; a failed read is not cached, so the next poll retries.
+The monitoring panels read the region `INFORMATION_SCHEMA` views for the detected location; a failed read is not cached, so the next poll retries.
+`JOBS_BY_PROJECT` reads are cached for 60 s, because the panel polls every 30 s and every read bills the 10 MB minimum.
+`TABLE_STORAGE` reads are cached for 15 minutes: a project-wide read scans the whole view, which a dry run estimated at about 1.2 GB in a project with many datasets.
+The view prunes by where `table_schema` sorts, so a read filtered to one dataset estimated between about 70 MB and the full 1.2 GB depending on its name; the recorded reads of `tests/live/bigquery-evidence.ts` billed 0 bytes.
+The overview and the storage panel share one read, grouped by dataset.
 
 | Panel           | Source                       | Notes                                                                   |
 | --------------- | ---------------------------- | ----------------------------------------------------------------------- |
@@ -239,27 +243,29 @@ The monitoring panels read the region `INFORMATION_SCHEMA` views for the detecte
 | Slow queries    | `JOBS_BY_PROJECT`, last 24 h | Grouped by query text, ordered by total run time; `rows` is always 0    |
 | Active sessions | `JOBS_BY_PROJECT`            | Jobs not yet `DONE`; the job id is the session id                       |
 | Tables          | `TABLE_STORAGE`              | Rows and logical bytes, the largest 500                                 |
-| Storage         | `TABLE_STORAGE`              | Logical bytes per dataset                                               |
+| Storage         | `TABLE_STORAGE`              | Logical bytes per dataset, from the overview's read                     |
 
 Uptime, connections and indexes have no BigQuery counterpart and stay empty.
 
 ## 9. Tests
 
-| Test                                             | Covers                                                                                                                               |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `tests/unit/db/bigquery/decode.test.ts`          | Cell decoding, the dry-run strategy, job location selection                                                                          |
-| `tests/integration/db/bigquery-provider.test.ts` | The provider, transport and auth end to end over a fake REST server: connect, query, object surface (shared conformance), monitoring |
-| `tests/unit/db/bigquery/provider.test.ts`        | The provider over a fake transport                                                                                                   |
-| `tests/unit/db/bigquery/transport.test.ts`       | The REST envelope: `jobs.query`, the dry run, paging, job cancel, token lanes                                                        |
-| `tests/unit/db/bigquery/credentials.test.ts`     | Credential resolution order and the server-credentials opt-in                                                                        |
-| `tests/unit/db/bigquery/token-source.test.ts`    | Token minting, caching and single-flight refresh                                                                                     |
-| `tests/unit/sql-completions.test.ts`             | Qualified table labels                                                                                                               |
-| `tests/unit/sql/bigquery-grammar.test.ts`        | The BigQuery statement grammar: triple quotes, `#` comments, escapes, subscripts                                                     |
-| `tests/live/bigquery-live-check.ts`              | Hand-run, against goccy/bigquery-emulator; not in `bun run test` (see below)                                                         |
+| Test                                             | Covers                                                                                                                                                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/db/bigquery/decode.test.ts`          | Cell decoding, the dry-run strategy, job location selection                                                                                                                     |
+| `tests/integration/db/bigquery-provider.test.ts` | The provider, transport and auth end to end, replaying the live captures of `tests/fixtures/bigquery/`: connect, query, object surface (shared conformance), monitoring         |
+| `tests/unit/db/bigquery/provider.test.ts`        | The provider over a fake transport                                                                                                                                              |
+| `tests/unit/db/bigquery/transport.test.ts`       | The REST envelope: `jobs.query`, the dry run, paging, job cancel, token lanes                                                                                                   |
+| `tests/unit/db/bigquery/credentials.test.ts`     | Credential resolution order and the server-credentials opt-in                                                                                                                   |
+| `tests/unit/db/bigquery/token-source.test.ts`    | Token minting, caching and single-flight refresh                                                                                                                                |
+| `tests/unit/sql-completions.test.ts`             | Qualified table labels                                                                                                                                                          |
+| `tests/unit/sql/bigquery-grammar.test.ts`        | The BigQuery statement grammar: triple quotes, `#` comments, escapes, subscripts                                                                                                |
+| `tests/live/bigquery-live-check.ts`              | Hand-run, against goccy/bigquery-emulator; not in `bun run test` (see below)                                                                                                    |
+| `tests/live/bigquery-evidence.ts`                | Hand-run, against a live project; records and scrubs the captures the integration test replays ([`tests/fixtures/bigquery/README.md`](../../tests/fixtures/bigquery/README.md)) |
 
 ### 9.1 Live check against the emulator
 
 [goccy/bigquery-emulator](https://github.com/goccy/bigquery-emulator) answers the REST API locally, and the server sends every API request to it when `BIGQUERY_EMULATOR_HOST` (`host:port`, plain HTTP) is set in the server's environment; it is never a connection field.
+While it is set the server mints no token and sends no `authorization` header, whatever credential the connection holds; the password field is still required and still parsed, so put a placeholder access token (20 or more URL-safe characters) or a key JSON there; neither is sent.
 `tests/live/bigquery-live-check.ts` runs the real provider and transport against it and exits non-zero on any failure:
 
 ```bash
@@ -270,4 +276,4 @@ BIGQUERY_EMULATOR_HOST=127.0.0.1:9050 bun tests/live/bigquery-live-check.ts
 It covers connect, `datasets.list`, `tables.list` and `tables.get` (tables, views and their columns), typed cells, a 12,000-row result, and a query across two pages: `jobs.query`, then `getQueryResults` with the page token.
 The emulator's `jobs.query` answers every row and no `pageToken` (it ignores `maxResults`, `server/handler.go` at v0.8.1), so for the paging check the script puts a pass-through proxy in front of it that cuts the first answer at `maxResults` as BigQuery does; every later page is the emulator's own `getQueryResults` answer.
 
-It does not cover, so these stay covered by the fake REST server only: dry runs and bytes processed (the emulator runs a `dryRun` query and reports no bytes), region-level `INFORMATION_SCHEMA` (refused, so the catalog comes from the REST fallback there), monitoring, job cancel, locations, and authentication (any bearer token is accepted).
+It does not cover, so these stay covered by the replayed captures only: dry runs and bytes processed (the emulator runs a `dryRun` query and reports no bytes), region-level `INFORMATION_SCHEMA` (refused, so the catalog comes from the REST fallback there), monitoring, job cancel, locations, and authentication (the emulator checks none, so none is sent).

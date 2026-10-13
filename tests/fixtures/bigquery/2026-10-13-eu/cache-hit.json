@@ -1,0 +1,128 @@
+{
+  "scenario": "cache-hit",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT COUNT(*) AS n FROM shop.orders",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "n",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-16>",
+            "location": "EU"
+          },
+          "totalRows": "1",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "7"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "0",
+          "jobComplete": true,
+          "cacheHit": false,
+          "queryId": "<job-16>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "0",
+          "totalSlotMs": "8",
+          "location": "EU",
+          "creationTime": "1791876490759",
+          "startTime": "1791876490814",
+          "endTime": "1791876490966",
+          "pageRowCount": "1",
+          "statementType": "SELECT"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT COUNT(*) AS n FROM shop.orders",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "n",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-17>",
+            "location": "EU"
+          },
+          "totalRows": "1",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "7"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "0",
+          "jobComplete": true,
+          "cacheHit": true,
+          "queryId": "<job-17>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "0",
+          "location": "EU",
+          "creationTime": "1791876491098",
+          "startTime": "1791876491149",
+          "endTime": "1791876491243",
+          "pageRowCount": "1",
+          "statementType": "SELECT"
+        }
+      }
+    }
+  ]
+}

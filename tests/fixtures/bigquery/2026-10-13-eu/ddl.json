@@ -1,0 +1,55 @@
+{
+  "scenario": "ddl",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "CREATE TABLE shop.refunds (refund_id INT64)",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "refund_id",
+                "type": "INTEGER"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-12>",
+            "location": "EU"
+          },
+          "totalBytesProcessed": "0",
+          "jobComplete": true,
+          "cacheHit": false,
+          "queryId": "<job-12>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "0",
+          "totalSlotMs": "0",
+          "location": "EU",
+          "creationTime": "1791876488374",
+          "startTime": "1791876488439",
+          "endTime": "1791876488537",
+          "statementType": "CREATE_TABLE"
+        }
+      }
+    }
+  ]
+}

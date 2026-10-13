@@ -108,6 +108,24 @@ describe("BIGQUERY_EMULATOR_HOST", () => {
     expect(lane?.opts).toMatchObject({ origin: { scheme: "http", host: "127.0.0.1", port: 9050 }, tls: null });
     expect(lane?.requests[0].url).toStartWith("http://127.0.0.1:9050/bigquery/v2/projects/p/datasets?");
   });
+
+  test("sends no credential: no token request and no authorization header, a key JSON notwithstanding", async () => {
+    api = () => json({ jobComplete: true, jobReference: { jobId: "j" } });
+    const key = {
+      type: "service_account",
+      client_email: "sa@p.iam.gserviceaccount.com",
+      private_key: "not a key",
+    } as const;
+    const bq = createBigQueryTransport("p", key, { BIGQUERY_EMULATOR_HOST: "127.0.0.1:9050" });
+    await bq.listDatasets(signal);
+    await bq.query("SELECT 1", opts);
+    expect(built.some((b) => b.opts.origin.host === "oauth2.googleapis.com")).toBe(false);
+    expect(tokenCount).toBe(0);
+    const lanes = built.filter((b) => b.opts.origin.port === 9050);
+    expect(lanes.length).toBeGreaterThan(0);
+    for (const lane of lanes) expect(lane.opts.headers ?? {}).not.toHaveProperty("authorization");
+    bq.close();
+  });
 });
 
 describe("bigquery query", () => {

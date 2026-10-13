@@ -1,0 +1,286 @@
+{
+  "scenario": "tables-get",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/datasets/shop/tables/orders"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#table",
+          "id": "demo-project:shop.orders",
+          "selfLink": "https://bigquery.googleapis.com/bigquery/v2/projects/demo-project/datasets/shop/tables/orders",
+          "tableReference": {
+            "projectId": "demo-project",
+            "datasetId": "shop",
+            "tableId": "orders"
+          },
+          "schema": {
+            "fields": [
+              {
+                "name": "order_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED"
+              },
+              {
+                "name": "customer_id",
+                "type": "INTEGER"
+              },
+              {
+                "name": "placed_at",
+                "type": "TIMESTAMP"
+              },
+              {
+                "name": "total",
+                "type": "NUMERIC"
+              }
+            ]
+          },
+          "numBytes": "280",
+          "numLongTermBytes": "0",
+          "numRows": "7",
+          "creationTime": "1791876479702",
+          "expirationTime": "1791962879702",
+          "lastModifiedTime": "1791876481360",
+          "type": "TABLE",
+          "location": "EU",
+          "numTotalLogicalBytes": "280",
+          "numActiveLogicalBytes": "280",
+          "numLongTermLogicalBytes": "0"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/datasets/shop/tables/customers"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#table",
+          "id": "demo-project:shop.customers",
+          "selfLink": "https://bigquery.googleapis.com/bigquery/v2/projects/demo-project/datasets/shop/tables/customers",
+          "tableReference": {
+            "projectId": "demo-project",
+            "datasetId": "shop",
+            "tableId": "customers"
+          },
+          "schema": {
+            "fields": [
+              {
+                "name": "customer_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED"
+              },
+              {
+                "name": "name",
+                "type": "STRING"
+              },
+              {
+                "name": "address",
+                "type": "RECORD",
+                "fields": [
+                  {
+                    "name": "city",
+                    "type": "STRING"
+                  },
+                  {
+                    "name": "zip",
+                    "type": "INTEGER"
+                  }
+                ]
+              },
+              {
+                "name": "tags",
+                "type": "STRING",
+                "mode": "REPEATED"
+              }
+            ]
+          },
+          "numBytes": "63",
+          "numLongTermBytes": "0",
+          "numRows": "2",
+          "creationTime": "1791876480035",
+          "expirationTime": "1791962880035",
+          "lastModifiedTime": "1791876483661",
+          "type": "TABLE",
+          "location": "EU",
+          "numTotalLogicalBytes": "63",
+          "numActiveLogicalBytes": "63",
+          "numLongTermLogicalBytes": "0"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/datasets/shop/tables/order_summary"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#table",
+          "id": "demo-project:shop.order_summary",
+          "selfLink": "https://bigquery.googleapis.com/bigquery/v2/projects/demo-project/datasets/shop/tables/order_summary",
+          "tableReference": {
+            "projectId": "demo-project",
+            "datasetId": "shop",
+            "tableId": "order_summary"
+          },
+          "schema": {
+            "fields": [
+              {
+                "name": "customer_id",
+                "type": "INTEGER"
+              },
+              {
+                "name": "spent",
+                "type": "NUMERIC"
+              }
+            ]
+          },
+          "numBytes": "0",
+          "numLongTermBytes": "0",
+          "numRows": "0",
+          "creationTime": "1791876484088",
+          "expirationTime": "1791962884088",
+          "lastModifiedTime": "1791876484088",
+          "type": "VIEW",
+          "view": {
+            "query": "SELECT customer_id, SUM(total) AS spent FROM shop.orders GROUP BY customer_id",
+            "useLegacySql": false
+          },
+          "location": "EU",
+          "numTotalLogicalBytes": "0",
+          "numActiveLogicalBytes": "0",
+          "numLongTermLogicalBytes": "0"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/datasets/shop/tables/daily_totals"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#table",
+          "id": "demo-project:shop.daily_totals",
+          "selfLink": "https://bigquery.googleapis.com/bigquery/v2/projects/demo-project/datasets/shop/tables/daily_totals",
+          "tableReference": {
+            "projectId": "demo-project",
+            "datasetId": "shop",
+            "tableId": "daily_totals"
+          },
+          "schema": {
+            "fields": [
+              {
+                "name": "day",
+                "type": "DATE"
+              },
+              {
+                "name": "total",
+                "type": "NUMERIC"
+              }
+            ]
+          },
+          "numBytes": "168",
+          "numLongTermBytes": "0",
+          "numRows": "7",
+          "creationTime": "1791876484504",
+          "expirationTime": "1791962884504",
+          "lastModifiedTime": "1791876486253",
+          "type": "MATERIALIZED_VIEW",
+          "location": "EU",
+          "materializedView": {
+            "query": "SELECT DATE(placed_at) AS day, SUM(total) AS total FROM shop.orders GROUP BY day",
+            "enableRefresh": true,
+            "refreshIntervalMs": "1800000"
+          },
+          "numTotalLogicalBytes": "168",
+          "numActiveLogicalBytes": "168",
+          "numLongTermLogicalBytes": "0",
+          "materializedViewStatus": {}
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/datasets/archive/tables/orders_2023"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#table",
+          "id": "demo-project:archive.orders_2023",
+          "selfLink": "https://bigquery.googleapis.com/bigquery/v2/projects/demo-project/datasets/archive/tables/orders_2023",
+          "tableReference": {
+            "projectId": "demo-project",
+            "datasetId": "archive",
+            "tableId": "orders_2023"
+          },
+          "schema": {
+            "fields": [
+              {
+                "name": "order_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED"
+              },
+              {
+                "name": "customer_id",
+                "type": "INTEGER"
+              },
+              {
+                "name": "placed_at",
+                "type": "TIMESTAMP"
+              },
+              {
+                "name": "total",
+                "type": "NUMERIC"
+              }
+            ]
+          },
+          "numBytes": "40",
+          "numLongTermBytes": "0",
+          "numRows": "1",
+          "creationTime": "1791876480400",
+          "expirationTime": "1791962880400",
+          "lastModifiedTime": "1791876482511",
+          "type": "TABLE",
+          "location": "EU",
+          "numTotalLogicalBytes": "40",
+          "numActiveLogicalBytes": "40",
+          "numLongTermLogicalBytes": "0"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/datasets/shop/tables/no_such_table"
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "error": {
+            "code": 404,
+            "message": "Not found: Table demo-project:shop.no_such_table",
+            "errors": [
+              {
+                "message": "Not found: Table demo-project:shop.no_such_table",
+                "domain": "global",
+                "reason": "notFound"
+              }
+            ],
+            "status": "NOT_FOUND"
+          }
+        }
+      }
+    }
+  ]
+}

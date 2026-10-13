@@ -1,0 +1,65 @@
+{
+  "scenario": "dry-run",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT * FROM shop.orders",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          },
+          "dryRun": true
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "order_id",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "customer_id",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "placed_at",
+                "type": "TIMESTAMP",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "total",
+                "type": "NUMERIC",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "location": "EU"
+          },
+          "totalBytesProcessed": "280",
+          "jobComplete": true,
+          "cacheHit": false,
+          "totalBytesBilled": "0",
+          "location": "EU",
+          "creationTime": "1791876488119",
+          "endTime": "1791876488291",
+          "statementType": "SELECT"
+        }
+      }
+    }
+  ]
+}

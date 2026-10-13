@@ -1,0 +1,214 @@
+{
+  "scenario": "storage",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT table_schema, COUNT(*) AS tables, SUM(total_logical_bytes) AS bytes FROM `demo-project`.`region-eu`.INFORMATION_SCHEMA.TABLE_STORAGE WHERE project_id = 'demo-project' AND NOT deleted AND STARTS_WITH(table_schema, '') GROUP BY table_schema ORDER BY bytes DESC",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "table_schema",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "tables",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "bytes",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-21>",
+            "location": "EU"
+          },
+          "totalRows": "2",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "3"
+                },
+                {
+                  "v": "511"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "archive"
+                },
+                {
+                  "v": "1"
+                },
+                {
+                  "v": "40"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "0",
+          "jobComplete": true,
+          "cacheHit": false,
+          "queryId": "<job-21>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "0",
+          "totalSlotMs": "3279",
+          "location": "EU",
+          "creationTime": "1791877116872",
+          "startTime": "1791877116974",
+          "endTime": "1791877117550",
+          "pageRowCount": "2",
+          "statementType": "SELECT"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT table_schema, table_name, total_rows, total_logical_bytes FROM `demo-project`.`region-eu`.INFORMATION_SCHEMA.TABLE_STORAGE WHERE project_id = 'demo-project' AND NOT deleted AND table_schema = 'shop' ORDER BY total_logical_bytes DESC LIMIT 500",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "table_schema",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "table_name",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "total_rows",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "total_logical_bytes",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-22>",
+            "location": "EU"
+          },
+          "totalRows": "3",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "orders"
+                },
+                {
+                  "v": "7"
+                },
+                {
+                  "v": "280"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "daily_totals"
+                },
+                {
+                  "v": "7"
+                },
+                {
+                  "v": "168"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "customers"
+                },
+                {
+                  "v": "2"
+                },
+                {
+                  "v": "63"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "0",
+          "jobComplete": true,
+          "cacheHit": false,
+          "queryId": "<job-22>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "0",
+          "totalSlotMs": "2229",
+          "location": "EU",
+          "creationTime": "1791877118053",
+          "startTime": "1791877118182",
+          "endTime": "1791877118777",
+          "pageRowCount": "3",
+          "statementType": "SELECT"
+        }
+      }
+    }
+  ]
+}

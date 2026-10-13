@@ -138,13 +138,15 @@ function decodeRows(fields: readonly BigQueryField[], rows: unknown): Record<str
   });
 }
 
+const emulatorHost = (env: Readonly<Record<string, string | undefined>>) => env.BIGQUERY_EMULATOR_HOST?.trim() || null;
+
 /** Env only, never a connection field: a user must not point a connection's token at another host. */
 export function apiOrigin(env: Readonly<Record<string, string | undefined>> = process.env): {
   scheme: "http" | "https";
   host: string;
   port: number;
 } {
-  const emulator = env.BIGQUERY_EMULATOR_HOST?.trim();
+  const emulator = emulatorHost(env);
   if (!emulator) return { scheme: "https", host: API_HOST, port: 443 };
   const url = new URL(emulator.includes("://") ? emulator : `http://${emulator}`);
   const scheme = url.protocol === "https:" ? "https" : "http";
@@ -161,30 +163,33 @@ export function createBigQueryTransport(
     throw new DatabaseConfigError("BigQuery project id is not a valid project id", "bigquery");
   }
   const tls = (identity: string) => ({ rejectUnauthorized: true, identity });
-  const origin = tokenOrigin(creds);
-  const oauth = createNodeTransport({
-    origin,
-    tls: origin.scheme === "https" ? tls(origin.host) : null,
-    maxSockets: 1,
-    // The metadata server answers only requests that carry this header.
-    headers: creds.type === "metadata" ? { "metadata-flavor": "Google" } : {},
-  });
-  const token = createTokenSource(creds, oauth);
   const api = apiOrigin(env);
+  const origin = tokenOrigin(creds);
+  // The emulator checks no credential, so none is minted and none leaves the process.
+  const oauth = emulatorHost(env)
+    ? null
+    : createNodeTransport({
+        origin,
+        tls: origin.scheme === "https" ? tls(origin.host) : null,
+        maxSockets: 1,
+        // The metadata server answers only requests that carry this header.
+        headers: creds.type === "metadata" ? { "metadata-flavor": "Google" } : {},
+      });
+  const token = oauth ? createTokenSource(creds, oauth) : async () => null;
   const base = `${new URL(`${api.scheme}://${api.host}:${api.port}`).origin}/bigquery/v2/projects/${encodeURIComponent(project)}`;
 
   // The node transport owns Authorization as a connection header, so each token gets its own transport.
   // A replaced one closes once its in-flight requests finish, since close() aborts them.
-  type Lane = { readonly token: string; readonly node: NodeTransport; inFlight: number };
+  type Lane = { readonly token: string | null; readonly node: NodeTransport; inFlight: number };
   const lanes = new Set<Lane>();
   let current: Lane | null = null;
   let closed = false;
-  const laneTransport = (bearer: string) =>
+  const laneTransport = (bearer: string | null) =>
     createNodeTransport({
       origin: api,
       tls: api.scheme === "https" ? tls(api.host) : null,
       maxSockets: 8,
-      headers: { authorization: `Bearer ${bearer}` },
+      headers: bearer === null ? {} : { authorization: `Bearer ${bearer}` },
     });
   const retire = (lane: Lane) => {
     if (lane !== current && lane.inFlight === 0) {
@@ -371,7 +376,7 @@ export function createBigQueryTransport(
       current = null;
       for (const held of lanes) held.node.close();
       lanes.clear();
-      oauth.close();
+      oauth?.close();
     },
   };
 }

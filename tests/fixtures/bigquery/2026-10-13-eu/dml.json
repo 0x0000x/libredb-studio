@@ -1,0 +1,74 @@
+{
+  "scenario": "dml",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "DELETE FROM shop.orders WHERE true",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "order_id",
+                "type": "INTEGER",
+                "mode": "REQUIRED"
+              },
+              {
+                "name": "customer_id",
+                "type": "INTEGER"
+              },
+              {
+                "name": "placed_at",
+                "type": "TIMESTAMP"
+              },
+              {
+                "name": "total",
+                "type": "NUMERIC"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-20>",
+            "location": "EU"
+          },
+          "totalBytesProcessed": "280",
+          "jobComplete": true,
+          "cacheHit": false,
+          "numDmlAffectedRows": "7",
+          "dmlStats": {
+            "deletedRowCount": "7",
+            "dmlMode": "COARSE_GRAINED_DML",
+            "fineGrainedDmlUnusedReason": "TABLE_NOT_ENROLLED"
+          },
+          "queryId": "<job-20>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "10485760",
+          "totalSlotMs": "1375",
+          "location": "EU",
+          "creationTime": "1791877118905",
+          "startTime": "1791877119332",
+          "endTime": "1791877120217",
+          "statementType": "DELETE"
+        }
+      }
+    }
+  ]
+}

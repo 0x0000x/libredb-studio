@@ -1,0 +1,514 @@
+{
+  "scenario": "catalog",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT table_schema, table_name, table_type FROM `demo-project`.`region-eu`.INFORMATION_SCHEMA.TABLES WHERE STARTS_WITH(table_schema, '')",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "table_schema",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "table_name",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "table_type",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-10>",
+            "location": "EU"
+          },
+          "totalRows": "5",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "archive"
+                },
+                {
+                  "v": "orders_2023"
+                },
+                {
+                  "v": "BASE TABLE"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "customers"
+                },
+                {
+                  "v": "BASE TABLE"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "daily_totals"
+                },
+                {
+                  "v": "MATERIALIZED VIEW"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "order_summary"
+                },
+                {
+                  "v": "VIEW"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "orders"
+                },
+                {
+                  "v": "BASE TABLE"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "10485760",
+          "jobComplete": true,
+          "cacheHit": false,
+          "queryId": "<job-10>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "10485760",
+          "totalSlotMs": "983",
+          "location": "EU",
+          "creationTime": "1791876487008",
+          "startTime": "1791876487074",
+          "endTime": "1791876487300",
+          "pageRowCount": "5",
+          "statementType": "SELECT"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT table_schema, table_name, column_name, data_type, is_nullable FROM `demo-project`.`region-eu`.INFORMATION_SCHEMA.COLUMNS WHERE STARTS_WITH(table_schema, '') ORDER BY table_schema, table_name, ordinal_position",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "table_schema",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "table_name",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "column_name",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "data_type",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "is_nullable",
+                "type": "STRING",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-11>",
+            "location": "EU"
+          },
+          "totalRows": "16",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "archive"
+                },
+                {
+                  "v": "orders_2023"
+                },
+                {
+                  "v": "order_id"
+                },
+                {
+                  "v": "INT64"
+                },
+                {
+                  "v": "NO"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "archive"
+                },
+                {
+                  "v": "orders_2023"
+                },
+                {
+                  "v": "customer_id"
+                },
+                {
+                  "v": "INT64"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "archive"
+                },
+                {
+                  "v": "orders_2023"
+                },
+                {
+                  "v": "placed_at"
+                },
+                {
+                  "v": "TIMESTAMP"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "archive"
+                },
+                {
+                  "v": "orders_2023"
+                },
+                {
+                  "v": "total"
+                },
+                {
+                  "v": "NUMERIC"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "customers"
+                },
+                {
+                  "v": "customer_id"
+                },
+                {
+                  "v": "INT64"
+                },
+                {
+                  "v": "NO"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "customers"
+                },
+                {
+                  "v": "name"
+                },
+                {
+                  "v": "STRING"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "customers"
+                },
+                {
+                  "v": "address"
+                },
+                {
+                  "v": "STRUCT<city STRING, zip INT64>"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "customers"
+                },
+                {
+                  "v": "tags"
+                },
+                {
+                  "v": "ARRAY<STRING>"
+                },
+                {
+                  "v": "NO"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "daily_totals"
+                },
+                {
+                  "v": "day"
+                },
+                {
+                  "v": "DATE"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "daily_totals"
+                },
+                {
+                  "v": "total"
+                },
+                {
+                  "v": "NUMERIC"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "order_summary"
+                },
+                {
+                  "v": "customer_id"
+                },
+                {
+                  "v": "INT64"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "order_summary"
+                },
+                {
+                  "v": "spent"
+                },
+                {
+                  "v": "NUMERIC"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "orders"
+                },
+                {
+                  "v": "order_id"
+                },
+                {
+                  "v": "INT64"
+                },
+                {
+                  "v": "NO"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "orders"
+                },
+                {
+                  "v": "customer_id"
+                },
+                {
+                  "v": "INT64"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "orders"
+                },
+                {
+                  "v": "placed_at"
+                },
+                {
+                  "v": "TIMESTAMP"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            },
+            {
+              "f": [
+                {
+                  "v": "shop"
+                },
+                {
+                  "v": "orders"
+                },
+                {
+                  "v": "total"
+                },
+                {
+                  "v": "NUMERIC"
+                },
+                {
+                  "v": "YES"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "10485760",
+          "jobComplete": true,
+          "cacheHit": false,
+          "queryId": "<job-11>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "10485760",
+          "totalSlotMs": "887",
+          "location": "EU",
+          "creationTime": "1791876487588",
+          "startTime": "1791876487686",
+          "endTime": "1791876487978",
+          "pageRowCount": "16",
+          "statementType": "SELECT"
+        }
+      }
+    }
+  ]
+}

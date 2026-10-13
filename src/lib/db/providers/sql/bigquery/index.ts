@@ -78,6 +78,8 @@ interface Catalog {
 }
 
 const MONITORING_TTL_MS = 60_000;
+/** Storage moves slowly and a project-wide TABLE_STORAGE read can bill a GB or more in a project with many datasets. */
+const STORAGE_TTL_MS = 15 * 60_000;
 const MONITORING_MAX_ROWS = 1_000;
 
 /** A GoogleSQL string literal: backslash escapes, quote never doubled. */
@@ -156,7 +158,8 @@ function columnType(field: BigQueryField): string {
 
 function resultOf(result: BigQueryQueryResult): QueryResult {
   const warnings = bytesWarning(result);
-  const fields = result.fields.map((f) => f.name);
+  // A DML answer carries the table's schema; the grid shows the affected-row count only without fields.
+  const fields = result.affectedRows === null ? result.fields.map((f) => f.name) : [];
   return {
     rows: result.rows,
     fields,
@@ -179,7 +182,10 @@ function bytesWarning(result: BigQueryQueryResult): QueryWarning[] | undefined {
 export class BigQueryProvider extends SQLBaseProvider {
   private transport: BigQueryTransport | null = null;
   private location: string | undefined;
-  private readonly monitoringCache = new Map<string, { at: number; rows: Promise<Record<string, unknown>[]> }>();
+  private readonly monitoringCache = new Map<
+    string,
+    { at: number; ttl: number; rows: Promise<Record<string, unknown>[] | null> }
+  >();
   private readonly tableLists = new Map<string, { at: number; tables: Promise<BigQueryTableRef[]> }>();
   private catalogCache: { at: number; ttl: number; catalog: Promise<Catalog | null> } | null = null;
 
@@ -568,15 +574,16 @@ export class BigQueryProvider extends SQLBaseProvider {
   // ==========================================================================
 
   /**
-   * One region INFORMATION_SCHEMA read for the monitoring panels, cached for a minute: the panel polls every 30 s and
-   * each metadata query bills BigQuery's 10 MB minimum. A refused read (no bigquery.jobs.listAll, no location) is empty.
+   * One region INFORMATION_SCHEMA read for the monitoring panels, cached (STORAGE_TTL_MS for TABLE_STORAGE, else
+   * MONITORING_TTL_MS) since the panel polls every 30 s and each read bills at least 10 MB. A refused read (no
+   * bigquery.jobs.listAll, no location) is null.
    */
-  private monitoringRead(view: string, select: (from: string) => string): Promise<Record<string, unknown>[]> {
-    if (!this.location) return Promise.resolve([]);
+  private monitoringRead(view: string, select: (from: string) => string): Promise<Record<string, unknown>[] | null> {
+    if (!this.location) return Promise.resolve(null);
     const from = `${this.escapeIdentifier(this.project())}.${this.escapeIdentifier(`region-${this.location.toLowerCase()}`)}.INFORMATION_SCHEMA.${view}`;
     const sql = select(from);
     const hit = this.monitoringCache.get(sql);
-    if (hit && Date.now() - hit.at < MONITORING_TTL_MS) return hit.rows;
+    if (hit && Date.now() - hit.at < hit.ttl) return hit.rows;
     const rows = this.requireTransport()
       .query(sql, {
         jobTimeoutMs: CATALOG_TIMEOUT_MS,
@@ -586,47 +593,59 @@ export class BigQueryProvider extends SQLBaseProvider {
       })
       .then((result) => result.rows)
       .catch(() => {
-        // A failed read is answered empty but not cached, so the next poll retries.
+        // Not cached, so the next poll retries.
         if (this.monitoringCache.get(sql)?.rows === rows) this.monitoringCache.delete(sql);
-        return [] as Record<string, unknown>[];
+        return null;
       });
     const now = Date.now();
-    for (const [key, entry] of this.monitoringCache)
-      if (now - entry.at >= MONITORING_TTL_MS) this.monitoringCache.delete(key);
+    for (const [key, entry] of this.monitoringCache) if (now - entry.at >= entry.ttl) this.monitoringCache.delete(key);
     // Map order is insertion order, so the first key is the oldest.
     while (this.monitoringCache.size >= MONITORING_MAX_ENTRIES) {
       this.monitoringCache.delete(this.monitoringCache.keys().next().value!);
     }
-    this.monitoringCache.set(sql, { at: now, rows });
+    this.monitoringCache.set(sql, {
+      at: now,
+      ttl: view === "TABLE_STORAGE" ? STORAGE_TTL_MS : MONITORING_TTL_MS,
+      rows,
+    });
     return rows;
   }
 
-  public async getOverview(): Promise<DatabaseOverview> {
-    const [storage] = await this.monitoringRead(
+  /** Tables and logical bytes per dataset: one read serves the overview and the storage panel. */
+  private storageBySchema(): Promise<Record<string, unknown>[] | null> {
+    return this.monitoringRead(
       "TABLE_STORAGE",
       (from) =>
-        `SELECT COUNT(*) AS tables, SUM(total_logical_bytes) AS bytes FROM ${from} WHERE project_id = ${bqString(this.project())} AND NOT deleted`,
+        "SELECT table_schema, COUNT(*) AS tables, SUM(total_logical_bytes) AS bytes " +
+        `FROM ${from} WHERE project_id = ${bqString(this.project())} AND NOT deleted ` +
+        "GROUP BY table_schema ORDER BY bytes DESC",
     );
-    const bytes = Number(storage?.bytes ?? 0);
+  }
+
+  public async getOverview(): Promise<DatabaseOverview> {
+    const rows = await this.storageBySchema();
+    const read = rows !== null;
+    const bytes = (rows ?? []).reduce((sum, row) => sum + Number(row.bytes ?? 0), 0);
     return {
       version: `BigQuery${this.location ? ` (${this.location})` : ""}`,
       uptime: "N/A",
       maxConnections: 0,
-      databaseSize: storage ? formatBytes(bytes) : "N/A",
-      ...(storage ? { databaseSizeBytes: bytes } : {}),
-      tableCount: Number(storage?.tables ?? 0),
+      databaseSize: read ? formatBytes(bytes) : "N/A",
+      ...(read ? { databaseSizeBytes: bytes } : {}),
+      tableCount: (rows ?? []).reduce((sum, row) => sum + Number(row.tables ?? 0), 0),
       indexCount: 0,
     };
   }
 
   /** Over the last hour of query jobs: share answered from cache, and jobs per second. */
   public async getPerformanceMetrics(): Promise<PerformanceMetrics> {
-    const [jobs] = await this.monitoringRead(
-      "JOBS_BY_PROJECT",
-      (from) =>
-        `SELECT COUNT(*) AS total, COUNTIF(cache_hit) AS cached FROM ${from} ` +
-        "WHERE creation_time > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR) AND job_type = 'QUERY'",
-    );
+    const [jobs] =
+      (await this.monitoringRead(
+        "JOBS_BY_PROJECT",
+        (from) =>
+          `SELECT COUNT(*) AS total, COUNTIF(cache_hit) AS cached FROM ${from} ` +
+          "WHERE creation_time > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR) AND job_type = 'QUERY'",
+      )) ?? [];
     const total = Number(jobs?.total ?? 0);
     if (!jobs || total === 0) return {};
     return {
@@ -649,7 +668,7 @@ export class BigQueryProvider extends SQLBaseProvider {
         "AND job_type = 'QUERY' AND state = 'DONE' AND statement_type != 'SCRIPT' " +
         `GROUP BY query ORDER BY total_ms DESC LIMIT ${limit}`,
     );
-    return rows.map((row) => {
+    return (rows ?? []).map((row) => {
       const calls = Number(row.calls);
       const totalTime = Number(row.total_ms ?? 0);
       return {
@@ -675,7 +694,7 @@ export class BigQueryProvider extends SQLBaseProvider {
         `FROM ${from} WHERE creation_time > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 DAY) AND state != 'DONE' ` +
         `ORDER BY creation_time LIMIT ${limit}`,
     );
-    return rows.map((row) => {
+    return (rows ?? []).map((row) => {
       const durationMs = Number(row.ms ?? 0);
       return {
         pid: String(row.job_id),
@@ -700,7 +719,7 @@ export class BigQueryProvider extends SQLBaseProvider {
         (options.schema ? ` AND table_schema = ${bqString(options.schema)}` : "") +
         " ORDER BY total_logical_bytes DESC LIMIT 500",
     );
-    return rows.map((row) => {
+    return (rows ?? []).map((row) => {
       const bytes = Number(row.total_logical_bytes ?? 0);
       return {
         schemaName: String(row.table_schema),
@@ -714,14 +733,8 @@ export class BigQueryProvider extends SQLBaseProvider {
 
   /** Logical bytes per dataset. */
   public async getStorageStats(): Promise<StorageStats[]> {
-    const rows = await this.monitoringRead(
-      "TABLE_STORAGE",
-      (from) =>
-        "SELECT table_schema, SUM(total_logical_bytes) AS bytes " +
-        `FROM ${from} WHERE project_id = ${bqString(this.project())} AND NOT deleted ` +
-        "GROUP BY table_schema ORDER BY bytes DESC",
-    );
-    return rows.map((row) => {
+    const rows = await this.storageBySchema();
+    return (rows ?? []).map((row) => {
       const bytes = Number(row.bytes ?? 0);
       return {
         name: String(row.table_schema),

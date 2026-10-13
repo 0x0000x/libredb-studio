@@ -1,0 +1,21 @@
+{
+  "scenario": "token-rejected",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "https://oauth2.googleapis.com/token",
+        "body": {
+          "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_grant",
+          "error_description": "Invalid grant: account not found"
+        }
+      }
+    }
+  ]
+}

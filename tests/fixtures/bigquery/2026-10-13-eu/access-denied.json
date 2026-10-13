@@ -1,0 +1,40 @@
+{
+  "scenario": "access-denied",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "project": "bigquery-public-data",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT 1",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1000,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 403,
+        "body": {
+          "error": {
+            "code": 403,
+            "message": "Access Denied: Project bigquery-public-data: User does not have bigquery.jobs.create permission in project bigquery-public-data.",
+            "errors": [
+              {
+                "message": "Access Denied: Project bigquery-public-data: User does not have bigquery.jobs.create permission in project bigquery-public-data.",
+                "domain": "global",
+                "reason": "accessDenied"
+              }
+            ],
+            "status": "PERMISSION_DENIED"
+          }
+        }
+      }
+    }
+  ]
+}

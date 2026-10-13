@@ -1,0 +1,66 @@
+{
+  "scenario": "select-1",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/queries",
+        "body": {
+          "query": "SELECT 1",
+          "location": "EU",
+          "useLegacySql": false,
+          "maxResults": 1,
+          "timeoutMs": 60000,
+          "jobTimeoutMs": "120000",
+          "formatOptions": {
+            "useInt64Timestamp": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#queryResponse",
+          "schema": {
+            "fields": [
+              {
+                "name": "f0_",
+                "type": "INTEGER",
+                "mode": "NULLABLE"
+              }
+            ]
+          },
+          "jobReference": {
+            "projectId": "demo-project",
+            "jobId": "<job-9>",
+            "location": "EU"
+          },
+          "totalRows": "1",
+          "rows": [
+            {
+              "f": [
+                {
+                  "v": "1"
+                }
+              ]
+            }
+          ],
+          "totalBytesProcessed": "0",
+          "jobComplete": true,
+          "cacheHit": true,
+          "queryId": "<job-9>",
+          "jobCreationReason": {
+            "code": "REQUESTED"
+          },
+          "totalBytesBilled": "0",
+          "location": "EU",
+          "creationTime": "1791876485082",
+          "startTime": "1791876485151",
+          "endTime": "1791876485205",
+          "pageRowCount": "1",
+          "statementType": "SELECT"
+        }
+      }
+    }
+  ]
+}

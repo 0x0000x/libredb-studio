@@ -1,0 +1,98 @@
+{
+  "scenario": "tables-list",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/datasets/shop/tables?maxResults=1000"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#tableList",
+          "tables": [
+            {
+              "kind": "bigquery#table",
+              "id": "demo-project:shop.customers",
+              "tableReference": {
+                "projectId": "demo-project",
+                "datasetId": "shop",
+                "tableId": "customers"
+              },
+              "type": "TABLE",
+              "creationTime": "1791876480035",
+              "expirationTime": "1791962880035"
+            },
+            {
+              "kind": "bigquery#table",
+              "id": "demo-project:shop.daily_totals",
+              "tableReference": {
+                "projectId": "demo-project",
+                "datasetId": "shop",
+                "tableId": "daily_totals"
+              },
+              "type": "MATERIALIZED_VIEW",
+              "creationTime": "1791876484504",
+              "expirationTime": "1791962884504"
+            },
+            {
+              "kind": "bigquery#table",
+              "id": "demo-project:shop.order_summary",
+              "tableReference": {
+                "projectId": "demo-project",
+                "datasetId": "shop",
+                "tableId": "order_summary"
+              },
+              "type": "VIEW",
+              "view": {
+                "useLegacySql": false
+              },
+              "creationTime": "1791876484088",
+              "expirationTime": "1791962884088"
+            },
+            {
+              "kind": "bigquery#table",
+              "id": "demo-project:shop.orders",
+              "tableReference": {
+                "projectId": "demo-project",
+                "datasetId": "shop",
+                "tableId": "orders"
+              },
+              "type": "TABLE",
+              "creationTime": "1791876479702",
+              "expirationTime": "1791962879702"
+            }
+          ],
+          "totalItems": 4
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/datasets/archive/tables?maxResults=1000"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "kind": "bigquery#tableList",
+          "tables": [
+            {
+              "kind": "bigquery#table",
+              "id": "demo-project:archive.orders_2023",
+              "tableReference": {
+                "projectId": "demo-project",
+                "datasetId": "archive",
+                "tableId": "orders_2023"
+              },
+              "type": "TABLE",
+              "creationTime": "1791876480400",
+              "expirationTime": "1791962880400"
+            }
+          ],
+          "totalItems": 1
+        }
+      }
+    }
+  ]
+}
