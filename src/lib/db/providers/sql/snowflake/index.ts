@@ -289,6 +289,8 @@ export class SnowflakeProvider extends SQLBaseProvider {
   private connecting: SnowflakeSession | null = null;
   /** Sessions whose close is still ending their runs; their runs count as in flight until it returns. */
   private readonly closing = new Set<SnowflakeSession>();
+  /** Sessions whose close has begun, so a failed connect() and a disconnect() never close one twice. */
+  private readonly closed = new WeakSet<SnowflakeSession>();
   private cautions: QueryWarning[] = [];
 
   /** Validates nothing and opens nothing: the connection's rules run in `connect()`, before any socket. */
@@ -360,7 +362,8 @@ export class SnowflakeProvider extends SQLBaseProvider {
    * The configuration, the key, then the connect statement and the role check, each under the surface timeout. Both
    * need no running warehouse (M100), so a browse-only connection passes them; another role than the configured one
    * fails the connect, and active secondary roles add their caution to the connect warnings. A failure closes what it
-   * opened and is worded by `errors.ts`; a second `connect()` replaces the first session and closes it.
+   * opened and is worded by `errors.ts`; a second `connect()` replaces the first session and closes it, and a connect
+   * still running when a second one starts closes its own session.
    */
   public async connect(): Promise<void> {
     let opened: SnowflakeSession | null = null;
@@ -418,12 +421,15 @@ export class SnowflakeProvider extends SQLBaseProvider {
       if (this.connecting !== session) throw new SnowflakeError("cancelled", SNOWFLAKE_ERROR_SENTENCES.cancelled);
       cautions = [...connectCautions(answer, warehouse, role), ...roleCautions];
     } catch (error) {
-      if (opened !== null && this.connecting === opened) {
-        this.connecting = null;
+      // A second connect() displaces this one from `connecting`: its session is closed here whoever holds it, and
+      // its failure leaves the state of the connect that replaced it alone.
+      const displaced = opened !== null && this.connecting !== opened && (this.connecting ?? this.session) !== null;
+      if (opened !== null) {
+        if (this.connecting === opened) this.connecting = null;
         await this.close(opened);
       }
       const failure = toDatabaseError(error) as Error;
-      this.setError(failure);
+      if (!displaced) this.setError(failure);
       throw failure;
     }
     this.connecting = null;
@@ -436,6 +442,8 @@ export class SnowflakeProvider extends SQLBaseProvider {
 
   /** Closes one session, counting its runs until every one has ended or the close's bound fired. */
   private async close(session: SnowflakeSession): Promise<void> {
+    if (this.closed.has(session)) return;
+    this.closed.add(session);
     this.closing.add(session);
     try {
       await session.statements.close();

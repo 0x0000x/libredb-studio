@@ -417,6 +417,68 @@ describe("failureError: the key-pair refusal", () => {
   });
 });
 
+describe("failureError: the network-policy refusals", () => {
+  const PAT_CONTEXT: Partial<SnowflakeFailureContext> = {
+    authMethod: "pat",
+    fingerprint: null,
+    fingerprintHex8: null,
+    publicKeyBody: null,
+  };
+  // The trial's answers, 2026-10-13: HTTP 401 on the submit for both sign-in methods.
+  const ADDRESS = "203.0.113.7";
+  const notAllowed = (request: SnowflakeFailure["request"]) =>
+    failure({
+      status: 401,
+      code: "390422",
+      message: `Incoming request with IP/Token ${ADDRESS} is not allowed to access Snowflake. Contact your account administrator.`,
+      request,
+    });
+  const required = (request: SnowflakeFailure["request"]) =>
+    failure({ status: 401, code: "390432", message: "Fail : Network policy is required.", request });
+
+  test("the sentences", () => {
+    expect(SNOWFLAKE_ERROR_SENTENCES.networkPolicyRefused).toBe(
+      "A network policy on the Snowflake account or on this user does not allow the address Studio connects from. An administrator adds that address to the policy's allowed list.",
+    );
+    expect(SNOWFLAKE_ERROR_SENTENCES.networkPolicyRequired).toBe(
+      "Snowflake signs in with an access token only for a user under a network policy, and this user has none. An administrator either attaches a network policy that allows the address Studio connects from, or sets an authentication policy with PAT_POLICY = (NETWORK_POLICY_EVALUATION = ENFORCED_NOT_REQUIRED).",
+    );
+  });
+
+  for (const [method, overrides] of [
+    ["key pair", {}],
+    ["token", PAT_CONTEXT],
+  ] as const) {
+    test(`390422 for a ${method}, at connect and mid-run, names the network policy and never the address`, () => {
+      for (const [request, submitAccepted] of [
+        ["submit", false],
+        ["status", true],
+        ["partition", true],
+      ] as const) {
+        const error = failureError(notAllowed(request), context({ ...overrides, submitAccepted }));
+        expect(error.category).toBe("auth");
+        expect(error.message).toBe(SNOWFLAKE_ERROR_SENTENCES.networkPolicyRefused);
+        expect(error.message).not.toContain(ADDRESS);
+        expect(error.message).not.toContain("IP/Token");
+        expect(error.fixStatement).toBeUndefined();
+        expect(toDatabaseError(error)).toBeInstanceOf(AuthenticationError);
+      }
+    });
+
+    test(`390432 for a ${method}, at connect and mid-run, names the missing network policy`, () => {
+      for (const [request, submitAccepted] of [
+        ["submit", false],
+        ["status", true],
+      ] as const) {
+        const error = failureError(required(request), context({ ...overrides, submitAccepted }));
+        expect(error.category).toBe("auth");
+        expect(error.message).toBe(SNOWFLAKE_ERROR_SENTENCES.networkPolicyRequired);
+        expect(error.fixStatement).toBeUndefined();
+      }
+    });
+  }
+});
+
 describe("failureError: secrets and the server-text cut", () => {
   const sentinels = [PAT, ...JWT.split(".")];
   const hostile = [
@@ -549,6 +611,11 @@ describe("copyable identifiers", () => {
     expect(error.message).toContain("for_role => 'o''brien'.");
     const call = error.message.slice(error.message.indexOf("CALL "), error.message.indexOf("'. ") + 2);
     expect(statements(call)).toHaveLength(1);
+  });
+
+  test("the object-missing for_role literal doubles a backslash, so a role ending in one stays a closed literal", () => {
+    const error = failureError(failure({ status: 422, code: "002003", message: "gone" }), context({ role: "ops\\" }));
+    expect(error.message).toContain("for_role => 'ops\\\\'.");
   });
 
   test("the key name form", () => {

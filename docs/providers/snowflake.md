@@ -86,7 +86,7 @@ Account takes:
 - a locator `locator[.region[.cloud]]` (AWS Oregon needs no region);
 - either of those with `.privatelink`, and the `.snowflakecomputing.cn` suffix for China;
 - an account URL `https://<identifier>.snowflakecomputing.com` (or `.cn`), with an optional trailing `/`;
-- a Snowsight URL `https://app.snowflake.com/<org>/<account>/...`, read as `<org>-<account>`; Studio never sends a request to `app.snowflake.com`.
+- a Snowsight URL `https://app.snowflake.com/<org>/<account>/...`, read as `<org>-<account>`, with no query, fragment, user part or port; Studio never sends a request to `app.snowflake.com`.
 
 Studio builds the origin itself as `https://<identifier>.snowflakecomputing.com:443` and accepts a host only under `.snowflakecomputing.com` or `.snowflakecomputing.cn`, with at most five labels before the suffix, no IP literal, no other port, and no path, query or user part.
 The suffix comes off once, and an identifier whose labels still name a Snowflake domain is refused, such as a doubled suffix or `app.snowflake.com`; labels are compared whole, so `snowflake.community` reads as a locator and its region.
@@ -214,30 +214,30 @@ The role is the boundary, not Studio: grant it no MODIFY, OPERATE, MANAGE WAREHO
 Every name below is a placeholder:
 
 ```sql
--- As an administrator. Placeholders: studio_ro, studio_wh, analytics, studio_svc.
+-- As an administrator. Placeholders: STUDIO_RO, STUDIO_WH, ANALYTICS, STUDIO_SVC.
 -- CREDIT_QUOTA, the trigger percentages and STATEMENT_TIMEOUT_IN_SECONDS are starting values.
-CREATE WAREHOUSE studio_wh WAREHOUSE_SIZE = XSMALL GENERATION = '1' ENABLE_QUERY_ACCELERATION = FALSE
+CREATE WAREHOUSE STUDIO_WH WAREHOUSE_SIZE = XSMALL GENERATION = '1' ENABLE_QUERY_ACCELERATION = FALSE
   AUTO_SUSPEND = 60 AUTO_RESUME = TRUE INITIALLY_SUSPENDED = TRUE STATEMENT_TIMEOUT_IN_SECONDS = 600;
-CREATE RESOURCE MONITOR studio_rm WITH CREDIT_QUOTA = 10
+CREATE RESOURCE MONITOR STUDIO_RM WITH CREDIT_QUOTA = 10
   TRIGGERS ON 80 PERCENT DO NOTIFY ON 100 PERCENT DO SUSPEND_IMMEDIATE;
-ALTER WAREHOUSE studio_wh SET RESOURCE_MONITOR = studio_rm;
-CREATE ROLE studio_ro;
-GRANT USAGE ON WAREHOUSE studio_wh TO ROLE studio_ro;
-GRANT USAGE ON DATABASE analytics TO ROLE studio_ro;
-GRANT USAGE ON ALL SCHEMAS IN DATABASE analytics TO ROLE studio_ro;
-GRANT USAGE ON FUTURE SCHEMAS IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON ALL TABLES IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON FUTURE TABLES IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON ALL VIEWS IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON FUTURE VIEWS IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON ALL MATERIALIZED VIEWS IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON FUTURE MATERIALIZED VIEWS IN DATABASE analytics TO ROLE studio_ro;
--- Optional, for the monitoring panels: GRANT MONITOR ON WAREHOUSE studio_wh TO ROLE studio_ro;
-CREATE USER studio_svc TYPE = SERVICE DEFAULT_ROLE = studio_ro DEFAULT_WAREHOUSE = studio_wh
+ALTER WAREHOUSE STUDIO_WH SET RESOURCE_MONITOR = STUDIO_RM;
+CREATE ROLE STUDIO_RO;
+GRANT USAGE ON WAREHOUSE STUDIO_WH TO ROLE STUDIO_RO;
+GRANT USAGE ON DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT USAGE ON ALL SCHEMAS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT USAGE ON FUTURE SCHEMAS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON ALL TABLES IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON FUTURE TABLES IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON ALL VIEWS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON FUTURE VIEWS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON ALL MATERIALIZED VIEWS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON FUTURE MATERIALIZED VIEWS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+-- Optional, for the monitoring panels: GRANT MONITOR ON WAREHOUSE STUDIO_WH TO ROLE STUDIO_RO;
+CREATE USER STUDIO_SVC TYPE = SERVICE DEFAULT_ROLE = STUDIO_RO DEFAULT_WAREHOUSE = STUDIO_WH
   DEFAULT_SECONDARY_ROLES = ();
-GRANT ROLE studio_ro TO USER studio_svc;
+GRANT ROLE STUDIO_RO TO USER STUDIO_SVC;
 -- The key Studio's key-pair refusal names; <fp8> is the first 8 hex characters of the key's SHA-256 (section 2.3):
-ALTER USER studio_svc ADD KEY PAIR libredb_studio_<fp8> PUBLIC_KEY = '<public key body>';
+ALTER USER STUDIO_SVC ADD KEY PAIR libredb_studio_<fp8> PUBLIC_KEY = '<public key body>';
 ```
 
 - Assigning a key needs MODIFY PROGRAMMATIC AUTHENTICATION METHODS on the user, or OWNERSHIP, usually an administrator; a user's own self-service form was refused with 003001 by a message naming that privilege on the user.
@@ -249,7 +249,9 @@ ALTER USER studio_svc ADD KEY PAIR libredb_studio_<fp8> PUBLIC_KEY = '<public ke
 
 ## 4. Sessions, transactions and blocks
 
-Every request is its own Snowflake session context: Studio sends Database, Schema, Warehouse and Role on every request exactly as configured, and leaves a field out only when the connection leaves it empty, so Snowflake falls back to the user's default.
+Every request is its own Snowflake session context: Studio sends Database, Schema, Warehouse and Role on every request, and leaves a field out only when the connection leaves it empty, so Snowflake falls back to the user's default.
+Each of the four is read as a name in Snowflake SQL: an unquoted name is upper-cased, and double quotes keep its case, so `studio_ro` is sent as `STUDIO_RO` and `"Mixed Case"` as `Mixed Case`.
+The SQL API reads the four fields as exact names: a role it cannot resolve is refused, while a database, schema or warehouse name Snowflake cannot resolve leaves that context unset without an error: `CURRENT_DATABASE()`, `CURRENT_SCHEMA()` or `CURRENT_WAREHOUSE()` then answers NULL.
 The SQL API does not run `USE` (it answers code 391911, `Command not supported by SQL API: USE`), so a statement whose operative keyword is `USE` is refused before anything is sent:
 
 `Snowflake's SQL API does not run USE. Set Database, Schema, Warehouse or Role on the connection instead, or use fully qualified names such as database.schema.table. Nothing was sent.`
@@ -350,6 +352,7 @@ A statement nobody can reach any more stops billing at that moment.
 ## 6. Results
 
 Snowflake answers in partitions, every request setting `client_result_chunk_size` to 16: the first arrives inline, up to 24 MiB of text, and each further one is fetched in order, gzip-decoded as a stream.
+A failed partition answer is gzip-decoded the same way, under the same bound, before its error is read; one that inflates past the bound is classified by its HTTP status alone.
 One budget spans a statement's whole result: 16 MiB of decoded rows and 100,000 rows.
 A cut keeps the rows before it, marks the result limited, and says so:
 
@@ -394,6 +397,10 @@ A cell whose text does not match its type is refused with the column name, never
 - `Snowflake sent a result whose column list Studio could not read.`
 
 The SQL INSERT export writes semi-structured, structured and vector cells as `INSERT ... SELECT` rows through `PARSE_JSON`, and dates and timestamps through `TO_DATE`, `TO_TIME` and `TO_TIMESTAMP_*` with an explicit format.
+A vector column carries no dimension in the result, so each vector cell is cast to `VECTOR(<element>, <n>)`, `<n>` being the number of elements in the cell and the element `FLOAT` when any element has a decimal point, an exponent or a non-finite word, else `INT`.
+A FLOAT NaN or infinity is written as `'NaN'::FLOAT`, `'inf'::FLOAT` or `'-inf'::FLOAT`.
+A structured OBJECT, ARRAY or MAP column is reported as `object` or `array`, as a semi-structured one is, so its cells are written as semi-structured values, which a structured column refuses with `incompatible types` (001010).
+Replayed on the trial on 2026-10-13, the export of the capture's every-type table came back cell for cell into a copy whose structured columns were semi-structured, vector and FLOAT infinities included.
 
 ## 7. The tree
 
@@ -423,6 +430,7 @@ Snowflake answers at most 10,000 rows for one `SHOW`:
 
 The tree has no place for a listing's sentence, so it shows the first 50,000 (or 10,000) objects of a kind without one; the object inventory, which the agent and the inventory route read, carries the two listing sentences above.
 
+The object inventory reads a schema's columns with one `SHOW COLUMNS IN SCHEMA`; when that answers a full 10,000 rows it reads them one object at a time instead, for at most the first 1,000 objects: `Snowflake answered a full 10,000-row column listing for this schema, so Studio read the columns of the first 1,000 objects one at a time`.
 Describe reads `SHOW COLUMNS IN TABLE` (or `IN VIEW`) and `SHOW PRIMARY KEYS`; a primary key column is shown as a key with no further mark, although Snowflake does not enforce primary keys on standard tables; indexes exist only on hybrid tables.
 Studio draws no foreign keys, so the ER diagram shows tables without relations.
 A view's source comes from `SHOW VIEWS`; every other kind's from `SELECT GET_DDL(...)`, which needs no running warehouse.
@@ -500,7 +508,7 @@ Still unconfirmed: every Snowflake form not named above, among them `CREATE STOR
 ## 10. Security
 
 - Secrets of a connection a user creates are kept in browser storage, and `GET /api/storage` returns them to their owner ([STORAGE.md](../STORAGE.md)); keep an operator-seeded connection `managed: true` so its key stays on the server.
-- Studio reads no key file; the key's text is parsed once at connect, and the provider keeps only the key object and its fingerprint.
+- Studio reads no key file; the key's text is parsed once at connect, and no field the provider owns keeps the key text or its passphrase: it keeps the key object and its fingerprint, while the connection object passed in still holds both.
 - Statement text, secrets in it included, is kept in the query history and sent to the AI safety check, as on every SQL engine.
 - A PAT created in the editor with `ALTER USER ... ADD PAT` appears once in the grid, as Snowflake returns it; Studio keeps no copy beyond that result.
 - A pasted string is read in the browser and never kept ([section 2.6](#26-paste-url)).
@@ -517,6 +525,8 @@ Still unconfirmed: every Snowflake form not named above, among them `CREATE STOR
 | Key pair refused while a statement ran | `AuthenticationError` | `Snowflake stopped accepting Studio's key-pair token while this statement ran (<code>). The statement may still be running; Studio could not read or cancel it.` |
 | A key-pair connection with no key | `DatabaseError` | `Studio has no public key to name for this key-pair connection. This is a Studio defect; please report it.` |
 | Token refused | `AuthenticationError` | `Snowflake did not accept the access token: check that it is complete and has not expired or been revoked. A token also signs in only for a user under a network policy that allows the public address Studio connects from, which on a laptop changes with the network, or under an authentication policy that sets PAT_POLICY NETWORK_POLICY_EVALUATION = ENFORCED_NOT_REQUIRED. Key-pair sign-in avoids the network-policy requirement.` |
+| Network policy refuses the address (390422 at HTTP 401, for a key pair or a token; Snowflake's message names the address and is not shown) | `AuthenticationError` | `A network policy on the Snowflake account or on this user does not allow the address Studio connects from. An administrator adds that address to the policy's allowed list.` |
+| Token for a user under no network policy (390432 at HTTP 401; on the trial the authentication policy named let the token sign in) | `AuthenticationError` | `Snowflake signs in with an access token only for a user under a network policy, and this user has none. An administrator either attaches a network policy that allows the address Studio connects from, or sets an authentication policy with PAT_POLICY = (NETWORK_POLICY_EVALUATION = ENFORCED_NOT_REQUIRED).` |
 | Role refused (390186 at HTTP 400, as Snowflake answers; 390189 and 3013, as documented) | `AuthenticationError` | `Snowflake refused role <role> for user <user>: the role does not exist, it is not granted to this user, or the key pair or access token is restricted to another role. Check the Role field; an administrator grants it with GRANT ROLE <role> TO USER <user>.` |
 | Role mismatch | `AuthenticationError` | `Snowflake ran this connection as role <r>, not <role>. Check the Role field; a role-restricted key or token signs in only as its own role.` |
 | No warehouse (000606, as documented; 391920, as Snowflake answers a role that can use no warehouse) | `QueryError` | `No warehouse is selected for this connection. Enter one in the connection settings, or ask an administrator to set DEFAULT_WAREHOUSE on the user. Browsing works without one; queries do not.` |
@@ -543,7 +553,7 @@ Still unconfirmed: every Snowflake form not named above, among them `CREATE STOR
 | A link outside the account's statements | `DatabaseError` | `Snowflake answered with a link outside this account's statements, so Studio did not follow it.` |
 | Lone transaction, `USE`, result partitions, key and field checks | as above | the sentences of sections 2, 4 and 6 |
 
-Every request sends the User-Agent `LibreDB-Studio/<version>`.
+Every request sends the User-Agent `LibreDB-Studio/<version>`, or `LibreDB-Studio` in the embedded package, whose build injects no version.
 A submit answered 429, 500, 502, 503 or 504 is resent with the same request id and `retry=true`, so Snowflake never runs it twice, after a backoff from 500 ms doubling to 8 s, at most 5 sends; 401, 403, 404, 422 and 522 are never retried.
 Studio holds 4 statements per connection, 8 per Studio process, and a queue of 64, from the submit to the last partition, which bounds the memory results take; a full queue refuses with the shared limiter's sentence.
 

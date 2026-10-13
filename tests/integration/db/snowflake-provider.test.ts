@@ -447,7 +447,7 @@ describe("each refusal the fixtures hold, with its class and its sentence", () =
     [
       "refusal-002003",
       "SELECT * FROM STUDIO_DEMO.PROBE.MISSING",
-      (message) => SNOWFLAKE_ERROR_SENTENCES.objectMissing("STUDIO_RO", "STUDIO_RO", message),
+      (message) => SNOWFLAKE_ERROR_SENTENCES.objectMissing("STUDIO_RO", "'STUDIO_RO'", message),
     ],
     [
       "refusal-003001",
@@ -1009,7 +1009,7 @@ describe("a role-restricted PAT with another configured role", () => {
 // ============================================================================
 
 describe("two providers, two roles", () => {
-  test("each puts its own role, byte for byte, in every recorded body", async () => {
+  test("each puts its own role, as Snowflake resolves it, in every recorded body", async () => {
     // Each role check answers the provider's own role, folded as Snowflake names it. BUILT on role-check-match.
     const roles: readonly (readonly [string, string])[] = [
       ["STUDIO_RW", "STUDIO_RW"],
@@ -1029,8 +1029,8 @@ describe("two providers, two roles", () => {
       const bodies = entry.transports.requests.filter((request) => request.body !== undefined);
       expect(bodies).toHaveLength(3);
       for (const request of bodies) {
-        expect(bodyOf(request).role).toBe(roles[index][0]);
-        expect(request.body).toContain(`"role":${JSON.stringify(roles[index][0])}`);
+        expect(bodyOf(request).role).toBe(roles[index][1]);
+        expect(request.body).toContain(`"role":${JSON.stringify(roles[index][1])}`);
       }
     });
   });

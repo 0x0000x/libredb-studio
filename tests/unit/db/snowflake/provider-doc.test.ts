@@ -186,10 +186,12 @@ const QUOTED: Readonly<Record<string, { readonly keys: readonly string[]; readon
       SNOWFLAKE_ERROR_SENTENCES.keyPairMidRun("<code>"),
       SNOWFLAKE_ERROR_SENTENCES.keyMissing,
       SNOWFLAKE_ERROR_SENTENCES.patRefused,
+      SNOWFLAKE_ERROR_SENTENCES.networkPolicyRefused,
+      SNOWFLAKE_ERROR_SENTENCES.networkPolicyRequired,
       SNOWFLAKE_ERROR_SENTENCES.roleRefused("<role>", "<user>", "<role>", "<user>"),
       SNOWFLAKE_ERROR_SENTENCES.roleMismatch("<r>", "<role>"),
       SNOWFLAKE_ERROR_SENTENCES.noWarehouse,
-      SNOWFLAKE_ERROR_SENTENCES.objectMissing("<role>", "<role>", ""),
+      SNOWFLAKE_ERROR_SENTENCES.objectMissing("<role>", "'<role>'", ""),
       SNOWFLAKE_ERROR_SENTENCES.privileges("<role>", ""),
       SNOWFLAKE_ERROR_SENTENCES.forbidden,
       SNOWFLAKE_ERROR_SENTENCES.statementFailed("<message>", "<code>", "<sqlstate>"),
@@ -280,6 +282,7 @@ describe("docs/providers/snowflake.md", () => {
       SNOWFLAKE_INTROSPECT_SENTENCES.treeCap,
       SNOWFLAKE_INTROSPECT_SENTENCES.silentCap,
       SNOWFLAKE_INTROSPECT_SENTENCES.countFloor,
+      SNOWFLAKE_INTROSPECT_SENTENCES.pairCap,
       SNOWFLAKE_INTROSPECT_SENTENCES.secureView,
       SNOWFLAKE_MONITORING_SENTENCES.suspended("<wh>"),
       SNOWFLAKE_MONITORING_SENTENCES.noWarehouse,
@@ -496,7 +499,9 @@ describe("every other number and sentence the doc states is the code's", () => {
     ]);
     expect(FLAT_DOC).toContain(`setting \`client_result_chunk_size\` to ${SNOWFLAKE_CHUNK_SIZE_MB}`);
     expect(SNOWFLAKE_USER_AGENT).toMatch(/^LibreDB-Studio(\/.+)?$/);
-    expect(FLAT_DOC).toContain("Every request sends the User-Agent `LibreDB-Studio/<version>`.");
+    expect(FLAT_DOC).toContain(
+      "Every request sends the User-Agent `LibreDB-Studio/<version>`, or `LibreDB-Studio` in the embedded package, whose build injects no version.",
+    );
   });
 
   test("the key bounds, the server text cut, the host labels, the tree pages and the panel cache", () => {

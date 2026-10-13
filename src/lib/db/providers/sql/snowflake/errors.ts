@@ -26,6 +26,7 @@ import {
 } from "@/lib/db/errors";
 import { TransportError } from "@/lib/db/http/node-transport";
 import { serverText } from "@/lib/db/utils/server-text";
+import { quoteLiteral } from "@/lib/sql/values";
 import type { DatabaseType } from "@/lib/types";
 
 /** The one place the type id is written; every module of the provider names it through this constant. */
@@ -133,6 +134,10 @@ export const SNOWFLAKE_ERROR_SENTENCES = Object.freeze({
     "Studio has no public key to name for this key-pair connection. This is a Studio defect; please report it.",
   patRefused:
     "Snowflake did not accept the access token: check that it is complete and has not expired or been revoked. A token also signs in only for a user under a network policy that allows the public address Studio connects from, which on a laptop changes with the network, or under an authentication policy that sets PAT_POLICY NETWORK_POLICY_EVALUATION = ENFORCED_NOT_REQUIRED. Key-pair sign-in avoids the network-policy requirement.",
+  networkPolicyRefused:
+    "A network policy on the Snowflake account or on this user does not allow the address Studio connects from. An administrator adds that address to the policy's allowed list.",
+  networkPolicyRequired:
+    "Snowflake signs in with an access token only for a user under a network policy, and this user has none. An administrator either attaches a network policy that allows the address Studio connects from, or sets an authentication policy with PAT_POLICY = (NETWORK_POLICY_EVALUATION = ENFORCED_NOT_REQUIRED).",
   roleRefused: (role: string, user: string, roleId: string, userId: string) =>
     `Snowflake refused role ${role} for user ${user}: the role does not exist, it is not granted to this user, or the key pair or access token is restricted to another role. Check the Role field; an administrator grants it with GRANT ROLE ${roleId} TO USER ${userId}.`,
   roleMismatch: (actual: string, role: string) =>
@@ -141,7 +146,7 @@ export const SNOWFLAKE_ERROR_SENTENCES = Object.freeze({
     "No warehouse is selected for this connection. Enter one in the connection settings, or ask an administrator to set DEFAULT_WAREHOUSE on the user. Browsing works without one; queries do not.",
   objectMissing: (role: string, roleLiteral: string, text: string) =>
     withText(
-      `Snowflake says this object does not exist or role ${role} may not see it. Check the name, the database and schema, and the role; CALL EXPLAIN_PRIVILEGES(statement => '<statement>', missing_only => true) lists what is missing, and an administrator adds for_role => '${roleLiteral}'.`,
+      `Snowflake says this object does not exist or role ${role} may not see it. Check the name, the database and schema, and the role; CALL EXPLAIN_PRIVILEGES(statement => '<statement>', missing_only => true) lists what is missing, and an administrator adds for_role => ${roleLiteral}.`,
       text,
     ),
   privileges: (role: string, text: string) => withText(`Role ${role} lacks a privilege this statement needs.`, text),
@@ -248,8 +253,17 @@ function loginFailureId(text: string): string | null {
   return last !== undefined && UUID_SHAPE.test(last) ? last : null;
 }
 
-/** A 401, or a refused token: the mid-run case first, then the sign-in method decides. */
+/**
+ * The network-policy refusals, measured on the trial for a key pair and a token at HTTP 401: 390422 when a policy
+ * refuses the address, whose message names that address and is never shown, and 390432 when a token's user has none.
+ */
+const NETWORK_POLICY_REFUSED_CODE = "390422";
+const NETWORK_POLICY_REQUIRED_CODE = "390432";
+
+/** A 401, or a refused token: the network-policy codes first, then the mid-run case, then the sign-in method. */
 function signInError(failure: SnowflakeFailure, context: SnowflakeFailureContext, text: string): SnowflakeError {
+  if (failure.code === NETWORK_POLICY_REFUSED_CODE) return new SnowflakeError("auth", sentences.networkPolicyRefused);
+  if (failure.code === NETWORK_POLICY_REQUIRED_CODE) return new SnowflakeError("auth", sentences.networkPolicyRequired);
   if (context.authMethod === "keypair" && context.submitAccepted && failure.request !== "submit") {
     return new SnowflakeError(
       "auth",
@@ -316,7 +330,10 @@ export function failureError(failure: SnowflakeFailure, context: SnowflakeFailur
   if (code === "390142") return new SnowflakeError("defect", sentences.invalidPayload);
   if (code !== null && NO_WAREHOUSE_CODES.has(code)) return new SnowflakeError("query", sentences.noWarehouse);
   if (code === "002003") {
-    return new SnowflakeError("query", sentences.objectMissing(context.role, context.role.replaceAll("'", "''"), text));
+    return new SnowflakeError(
+      "query",
+      sentences.objectMissing(context.role, quoteLiteral(context.role, SNOWFLAKE), text),
+    );
   }
   if (code === "003001") return new SnowflakeError("query", sentences.privileges(context.role, text));
   if (code === UNSUPPORTED_COMMAND_CODE) return new SnowflakeError("query", sentences.unsupportedCommand(text));

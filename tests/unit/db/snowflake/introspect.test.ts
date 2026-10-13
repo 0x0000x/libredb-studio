@@ -751,7 +751,7 @@ describe("describeObjects", () => {
     expect(batch.truncated).toBeUndefined();
   });
 
-  test("the per-table fallback stops at the pair limit and says the listing is capped", async () => {
+  test("the per-table fallback stops at the pair limit and names Studio's bound", async () => {
     const full = Array.from({ length: 10_000 }, (_, index) => id(`X${index}`));
     const { run, calls } = fakeRunner([
       [/^SHOW TABLES /, () => showResult(["name"], namedRows("T", 1, INVENTORY_PAIR_LIMIT + 1))],
@@ -761,7 +761,25 @@ describe("describeObjects", () => {
     const batch = await describeObjects(run, SCHEMA, "table", undefined, mapMemo());
     expect(calls.filter((call) => call.sql.startsWith("SHOW COLUMNS IN TABLE"))).toHaveLength(INVENTORY_PAIR_LIMIT);
     expect(batch.details).toHaveLength(INVENTORY_PAIR_LIMIT);
-    expect(batch.truncated).toEqual({ limit: INVENTORY_PAIR_LIMIT, reason: SNOWFLAKE_INTROSPECT_SENTENCES.silentCap });
+    expect(batch.truncated).toEqual({ limit: INVENTORY_PAIR_LIMIT, reason: SNOWFLAKE_INTROSPECT_SENTENCES.pairCap });
+    expect(SNOWFLAKE_INTROSPECT_SENTENCES.pairCap).toBe(
+      "Snowflake answered a full 10,000-row column listing for this schema, so Studio read the columns of the first 1,000 objects one at a time",
+    );
+  });
+
+  test("a caller limit above the pair limit keeps the caller-bound sentence beside the pair limit's", async () => {
+    const full = Array.from({ length: 10_000 }, (_, index) => id(`X${index}`));
+    const limit = INVENTORY_PAIR_LIMIT + 500;
+    const { run } = fakeRunner([
+      [/^SHOW TABLES /, () => showResult(["name"], namedRows("T", 1, limit + 100))],
+      [/^SHOW COLUMNS IN SCHEMA /, schemaColumns(full)],
+      [/^SHOW COLUMNS IN TABLE /, (sql) => schemaColumns([id(/"([^"]+)"$/.exec(sql)?.[1] ?? "")])()],
+    ]);
+    const batch = await describeObjects(run, SCHEMA, "table", limit, mapMemo());
+    expect(batch.details).toHaveLength(INVENTORY_PAIR_LIMIT);
+    expect(batch.truncated?.limit).toBe(INVENTORY_PAIR_LIMIT);
+    expect(batch.truncated?.reason).toContain(callerBoundTruncationReason(limit));
+    expect(batch.truncated?.reason).toContain(SNOWFLAKE_INTROSPECT_SENTENCES.pairCap);
   });
 
   test("a listing stopped at the tree cap is reported", async () => {

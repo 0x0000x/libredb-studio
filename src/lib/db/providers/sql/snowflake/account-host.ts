@@ -93,7 +93,10 @@ function readUrl(text: string): { identifier: string; cn: boolean; url: Snowflak
     return null;
   }
   if (parsed.hostname === SNOWSIGHT_HOST) {
-    // A Snowsight URL's path, query and fragment are its own; Studio never sends a request to app.snowflake.com.
+    // A Snowsight URL's path is its own; Studio never sends a request to app.snowflake.com. The text is stored in the
+    // public host field, so a query, a fragment, userinfo or a port, any of which can carry a secret, is refused.
+    if (parsed.search !== "" || parsed.hash !== "" || parsed.port !== "") return null;
+    if (parsed.username !== "" || parsed.password !== "") return null;
     const [, org, account] = parsed.pathname.split("/");
     if (org === undefined || account === undefined) return null;
     if (!SNOWSIGHT_SEGMENT.test(org) || !SNOWSIGHT_SEGMENT.test(account)) return null;
@@ -160,7 +163,8 @@ export function readSnowflakeAccount(text: string): SnowflakeAccountReading {
   if (labels.length > SNOWFLAKE_MAX_HOST_LABELS || !labels.every((label) => LABEL.test(label))) {
     return refusal(SNOWFLAKE_FIELD_SENTENCES.accountFormat);
   }
-  if (labels.length === 2 && labels[1] === "privatelink") {
+  // A locator never holds a `-`, so only a locator lacks the region; `myorg-myacct.privatelink` is whole.
+  if (labels.length === 2 && labels[1] === "privatelink" && !labels[0].includes("-")) {
     return refusal(SNOWFLAKE_FIELD_SENTENCES.privateLinkRegion);
   }
 

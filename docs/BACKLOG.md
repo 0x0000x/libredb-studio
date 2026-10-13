@@ -28,7 +28,7 @@ None of it is a GitHub issue.
 **Sections**
 
 - [SQL statement reading](#sql-statement-reading) — S2-S9 · 6
-- [Drivers and connections](#drivers-and-connections) — D1-D340, U17 · 240
+- [Drivers and connections](#drivers-and-connections) — D1-D344, U17 · 244
 - [Value interpolation](#value-interpolation) — V1
 - [Row editing](#row-editing) — R1–R3 · 3
 - [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U131 · 121
@@ -3481,6 +3481,45 @@ The provider doc's section 7 states the gap.
 Found 2026-10-12 while building the Snowflake provider.
 
 **Done when:** a listing can carry a truncation field (a cap reached, with its sentence), Snowflake's `listObjects` fills it from its stop reason, the tree renders the sentence under the cut folder, and the provider doc's tree section says the tree names the cut, with tests on the provider answer and the rendered folder.
+
+### D341. A region and locator Snowsight URL is read as an organisation account
+
+`readUrl` in `src/lib/db/providers/sql/snowflake/account-host.ts` reads any `https://app.snowflake.com/<a>/<b>/...` as the identifier `<a>-<b>`, so a path such as `us-west-2/xy12345` becomes the host `us-west-2-xy12345.snowflakecomputing.com`, which does not exist.
+Whether Snowsight still issues that region and locator path shape is not established, and the failure is loud: the connect fails with the unreachable-host sentence.
+
+Found 2026-10-12 in the external review of the Snowflake provider (#1714).
+
+**Done when:** the path shape is confirmed on a live account, and a region and locator Snowsight URL is either read as `<locator>.<region>` or refused with the Account format sentence, with a case in `tests/unit/db/snowflake/account.test.ts` and the doc's section 2.2 updated.
+
+### D342. A failed Snowflake monitoring panel's QueryError carries no SQL
+
+The monitoring panels are built over `statements.runSurface` in `connect()` (`src/lib/db/providers/sql/snowflake/index.ts`), not over the runner `surface()` records the statement with, so a failed panel reaches `toDatabaseError(error, undefined)` and its `QueryError.sql` is empty.
+Every other surface read carries the statement it sent.
+Threading the recording runner through `createSnowflakeMonitoring` (`monitoring.ts`) means a runner per call through its cache and all seven methods, more than a follow-up fix.
+
+Found 2026-10-12 in the external review of the Snowflake provider (#1714).
+
+**Done when:** a failed monitoring panel's `QueryError.sql` is the statement it sent, cached reads included, with a test in `tests/unit/db/snowflake/provider.test.ts` or `monitoring.test.ts`.
+
+### D343. A Snowflake cancel during a retried submit reports failure after a fixed 10 s
+
+`cancel()` in `src/lib/db/providers/sql/snowflake/statements.ts` races the run's end against `SNOWFLAKE_CANCEL_TIMEOUT_MS * 2`, 10 s.
+The submit runs under `run.deadline`, not `run.signal`, so it is not cut by a cancel, and a submit answered 429 or 5xx walks the transport's retry ladder (`transport.ts`, up to 5 sends with backoffs up to 8 s) before the run's own 5 s cancel can go out.
+A cancel during that ladder answers false although the run then ends cancelled.
+
+Found 2026-10-12 in the external review of the Snowflake provider (#1714).
+
+**Done when:** a cancel during a retried submit answers true once the run ends cancelled, the race bounded by the submit work still to come plus the cancel's 5 s, with a test in `tests/unit/db/snowflake/statements-cancel.test.ts` over a 429 then 503 submit.
+
+### D344. Test Connection passes when a database, schema or warehouse name does not resolve
+
+The SQL API reads the request's database, schema and warehouse as exact names, and one it cannot resolve leaves that context unset without an error (measured on the trial account 2026-10-13: `CURRENT_DATABASE()`, `CURRENT_SCHEMA()` or `CURRENT_WAREHOUSE()` answered NULL).
+The role check, `SNOWFLAKE_ROLE_CHECK_SQL` in `src/lib/db/providers/sql/snowflake/statements.ts`, reads only `CURRENT_ROLE()` and `CURRENT_SECONDARY_ROLES()`, so a misspelt database or schema passes Test Connection with no word and fails at the first query that needs it; a warehouse that does not resolve passes too, with only the connect caution its `SHOW WAREHOUSES` row match gives (`noWarehouseRow`).
+Reading the other three in the same statement changes the captured exchanges under `tests/fixtures/snowflake/`, so it needs a re-capture on the trial account.
+
+Found 2026-10-13 while fixing the Snowflake request's name folding.
+
+**Done when:** the role check also reads `CURRENT_DATABASE()`, `CURRENT_SCHEMA()` and `CURRENT_WAREHOUSE()`, a configured field that answers NULL adds a connect caution naming the field, the fixtures are re-captured on the trial account, and the provider doc's sections 2.5 and 4 state the caution.
 
 ## Value interpolation
 
