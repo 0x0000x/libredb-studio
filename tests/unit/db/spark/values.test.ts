@@ -34,10 +34,6 @@ function refusal(run: () => unknown): SparkError {
   throw new Error("expected a SparkError, and nothing was thrown");
 }
 
-/** The refusal of a column whose Arrow data is not laid out as its kind, named by the column. */
-const layoutRefused = (column: string): string =>
-  SPARK_ERROR_SENTENCES.unreadable(`a column "${column}" whose Arrow type does not match its Spark type`);
-
 /**
  * A VARIANT column of `count` values, each the JSON string "a" (a short string of one byte over an empty dictionary),
  * as Spark lays it out: Struct{value Binary, metadata Binary tagged variant=true}.
@@ -363,6 +359,75 @@ describe("cellValue: the nested rule", () => {
     expect(rows[0].gg).toBe("SRID=0;WKB(09)");
     expect(rows[0].nv).toStrictEqual(['"a"']);
   });
+
+  test("a geometry value writes the srid it carries, which a GEOMETRY(ANY) column's type does not name", () => {
+    const point = Uint8Array.from([1, 1, 0, 0, 0, ...new Uint8Array(Float64Array.of(1, 2).buffer)]);
+    const read = readIpcColumns(
+      columnsStream([
+        {
+          name: "g",
+          kind: "struct",
+          length: 1,
+          children: [
+            { name: "srid", kind: "int32", values: [4326] },
+            { name: "wkb", kind: "binary", values: [point], metadata: { geometry: "true", srid: "-1" } },
+          ],
+        },
+      ]),
+    );
+    const [column] = columnsFromArrow(read);
+    expect(column.kind).toStrictEqual({ type: "geometry", srid: -1 });
+    expect(cellValue(column, read.columns[0], 0)).toBe("SRID=4326;POINT (1 2)");
+  });
+
+  test("a map keyed by a struct is its [key, value] pairs, each key its object", () => {
+    // map(named_struct('a', 1), 'x'): a struct key has no scalar text to key an object by.
+    const rows = mapped([
+      {
+        name: "m",
+        kind: "map",
+        offsets: [0, 1],
+        keys: { name: "key", kind: "struct", length: 1, children: [{ name: "a", kind: "int32", values: [1] }] },
+        items: { name: "value", kind: "utf8", values: ["x"] },
+      },
+    ]);
+    expect(rows[0].m).toStrictEqual([[{ a: 1 }, "x"]]);
+  });
+
+  test("a map whose key texts are not all distinct is its [key, value] pairs, so no entry is lost", () => {
+    // Spark reads a map as a source stored it, and a source that does not enforce distinct keys (Parquet) can hold one
+    // key twice; two keys can also share a text, as 0.0 and -0.0 share "0". Each map is decided on its own keys.
+    const rows = mapped([
+      {
+        name: "s",
+        kind: "map",
+        offsets: [0, 2, 4],
+        keys: { name: "key", kind: "utf8", values: ["a", "a", "a", "b"] },
+        items: { name: "value", kind: "int32", values: [1, 2, 1, 2] },
+      },
+      {
+        name: "f",
+        kind: "map",
+        offsets: [0, 2, 4],
+        keys: { name: "key", kind: "float64", values: [0, -0, 0, 1] },
+        items: { name: "value", kind: "int32", values: [1, 2, 1, 2] },
+      },
+    ]);
+    expect(rows).toStrictEqual([
+      {
+        s: [
+          ["a", 1],
+          ["a", 2],
+        ],
+        f: [
+          [0, 1],
+          [-0, 2],
+        ],
+      },
+      { s: { a: 1, b: 2 }, f: { "0": 1, "1": 2 } },
+    ]);
+    expect(Object.is((rows[0].f as unknown[][])[1][0], -0)).toBe(true);
+  });
 });
 
 describe("cellValue: refusals and the VARIANT budget", () => {
@@ -520,22 +585,26 @@ describe("cellValue: refusals and the VARIANT budget", () => {
 
 describe("cellValue: a column whose Arrow data is not laid out as its kind", () => {
   // The relation path reads each column's kind from the DataType Spark sends first and its cells from the Arrow batch;
-  // spec 5.1 holds the two to the same column count and names, so a server whose two schemas disagree inside a column
-  // is refused before a byte is read under the wrong type.
+  // assertSchemasAgree holds the two to the same column count, names and kinds, and this check also holds the children
+  // of a VARIANT or geospatial struct and a caller that compares no schemas, so a column laid out otherwise is refused
+  // before a byte is read under the wrong type, in the cell refusal's form, naming the kind it was to be read as.
   const int32 = onlyColumn({ name: "n", kind: "int32", values: [1, 2] });
 
   test("a kind read from another Arrow type is refused naming the column, whatever its width", () => {
-    for (const kind of [
-      { type: "bigint" },
-      { type: "string" },
-      { type: "binary" },
-      { type: "void" },
-      { type: "array", element: { type: "int" } },
-      { type: "struct", fields: [] },
-    ] as const satisfies readonly SparkColumn["kind"][]) {
+    for (const [kind, label] of [
+      [{ type: "bigint" }, "bigint"],
+      [{ type: "string" }, "string"],
+      [{ type: "binary" }, "binary"],
+      [{ type: "void" }, "void"],
+      [{ type: "array", element: { type: "int" } }, "array"],
+      [{ type: "struct", fields: [] }, "struct"],
+      // An interval is named as the interval refusals name it.
+      [{ type: "day-time-interval", fields: { start: "DAY", end: "SECOND" } }, "day-time interval"],
+      [{ type: "calendar-interval" }, "calendar interval"],
+    ] as const satisfies readonly (readonly [SparkColumn["kind"], string])[]) {
       const error = refusal(() => cellValue({ name: "n", spelling: "x", kind }, int32, 0));
       expect(error.category).toBe("unreadable");
-      expect(error.message).toBe(layoutRefused("n"));
+      expect(error.message).toBe(SPARK_ERROR_SENTENCES.cellUnreadable(label, "n"));
     }
     // The same column read as its own kind.
     expect(cellValue({ name: "n", spelling: "int", kind: { type: "int" } }, int32, 1)).toBe(2);
@@ -553,7 +622,7 @@ describe("cellValue: a column whose Arrow data is not laid out as its kind", () 
       spelling: "array<string>",
       kind: { type: "array", element: { type: "string" } } as const,
     };
-    expect(refusal(() => cellValue(column, list, 0)).message).toBe(layoutRefused("a"));
+    expect(refusal(() => cellValue(column, list, 0)).message).toBe(SPARK_ERROR_SENTENCES.cellUnreadable("string", "a"));
     const same = { name: "a", spelling: "array<int>", kind: { type: "array", element: { type: "int" } } as const };
     expect(cellValue(same, list, 0)).toStrictEqual([1]);
   });
@@ -561,13 +630,17 @@ describe("cellValue: a column whose Arrow data is not laid out as its kind", () 
   test("a null cell of a disagreeing column is refused too", () => {
     const nulls = onlyColumn({ name: "s", kind: "utf8", values: [null] });
     const column = { name: "s", spelling: "bigint", kind: { type: "bigint" } as const };
-    expect(refusal(() => cellValue(column, nulls, 0)).message).toBe(layoutRefused("s"));
+    expect(refusal(() => cellValue(column, nulls, 0)).message).toBe(
+      SPARK_ERROR_SENTENCES.cellUnreadable("bigint", "s"),
+    );
   });
 
   test("a decimal whose scale differs from the batch's is refused, since the scale places the point", () => {
     const decimal = onlyColumn({ name: "d", kind: "decimal", precision: 10, scale: 2, values: [BigInt(1234)] });
     const other = { name: "d", spelling: "decimal(10,3)", kind: { type: "decimal", precision: 10, scale: 3 } as const };
-    expect(refusal(() => cellValue(other, decimal, 0)).message).toBe(layoutRefused("d"));
+    expect(refusal(() => cellValue(other, decimal, 0)).message).toBe(
+      SPARK_ERROR_SENTENCES.cellUnreadable("decimal", "d"),
+    );
     // The precision does not place the point, so a batch of another precision reads by its scale.
     const wider = { name: "d", spelling: "decimal(12,2)", kind: { type: "decimal", precision: 12, scale: 2 } as const };
     expect(cellValue(wider, decimal, 0)).toBe("12.34");
@@ -613,7 +686,9 @@ describe("cellValue: a column whose Arrow data is not laid out as its kind", () 
       } as const,
     };
     for (const column of [fewer, more, swapped]) {
-      expect(refusal(() => cellValue(column, struct, 0)).message).toBe(layoutRefused("st"));
+      expect(refusal(() => cellValue(column, struct, 0)).message).toBe(
+        SPARK_ERROR_SENTENCES.cellUnreadable("struct", "st"),
+      );
     }
     const same = {
       name: "st",
@@ -716,7 +791,7 @@ describe("cellValue: a column whose Arrow data is not laid out as its kind", () 
       ["id_0", "id_0"],
     ]) {
       expect(refusal(() => cellValue(declared("id", "id"), batch(...names).columns[0], 0)).message).toBe(
-        layoutRefused("st"),
+        SPARK_ERROR_SENTENCES.cellUnreadable("struct", "st"),
       );
     }
   });
@@ -743,7 +818,9 @@ describe("cellValue: a column whose Arrow data is not laid out as its kind", () 
     );
     const [variant] = columnsFromArrow(variantOfText);
     expect(variant.kind).toStrictEqual({ type: "variant" });
-    expect(refusal(() => cellValue(variant, variantOfText.columns[0], 0)).message).toBe(layoutRefused("v"));
+    expect(refusal(() => cellValue(variant, variantOfText.columns[0], 0)).message).toBe(
+      SPARK_ERROR_SENTENCES.cellUnreadable("variant", "v"),
+    );
     const wideSrid = readIpcColumns(
       columnsStream([
         {
@@ -759,7 +836,9 @@ describe("cellValue: a column whose Arrow data is not laid out as its kind", () 
     );
     const [geography] = columnsFromArrow(wideSrid);
     expect(geography.kind).toStrictEqual({ type: "geography", srid: 4326 });
-    expect(refusal(() => cellValue(geography, wideSrid.columns[0], 0)).message).toBe(layoutRefused("g"));
+    expect(refusal(() => cellValue(geography, wideSrid.columns[0], 0)).message).toBe(
+      SPARK_ERROR_SENTENCES.cellUnreadable("geography", "g"),
+    );
     // A DataType that names a VARIANT or a geometry over a struct of other children is refused alike.
     const pair = onlyColumn({
       name: "p",
@@ -772,7 +851,7 @@ describe("cellValue: a column whose Arrow data is not laid out as its kind", () 
     });
     for (const kind of [{ type: "variant" }, { type: "geometry", srid: 0 }] as const) {
       expect(refusal(() => cellValue({ name: "p", spelling: kind.type, kind }, pair, 0)).message).toBe(
-        layoutRefused("p"),
+        SPARK_ERROR_SENTENCES.cellUnreadable(kind.type, "p"),
       );
     }
     const single = onlyColumn({
@@ -783,7 +862,7 @@ describe("cellValue: a column whose Arrow data is not laid out as its kind", () 
     });
     expect(
       refusal(() => cellValue({ name: "p", spelling: "variant", kind: { type: "variant" } }, single, 0)).message,
-    ).toBe(layoutRefused("p"));
+    ).toBe(SPARK_ERROR_SENTENCES.cellUnreadable("variant", "p"));
   });
 });
 

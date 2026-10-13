@@ -2,15 +2,17 @@
  * The Studio value mapper of spec 5.2: one cell of a raw Arrow column to an exact, JSON-safe value. No bigint leaves
  * (5.3): an int64 is a number when safe and its digits otherwise, a decimal its text. Every object keyed by server
  * text is built from entries, so a key named __proto__ is an own property. A cell is read only under the Arrow type
- * its kind reads: the relation path takes a column's kind from the DataType Spark sends first, which spec 5.1 holds to
- * the batch by column count and names only, so a column whose batch is laid out otherwise is refused before a byte of
- * it is read under the wrong type. Pure: no I/O, no logger.
+ * its kind reads. The relation path takes a column's kind from the DataType Spark sends first, and assertSchemasAgree
+ * (spec 5.1) holds the batch to it in column count, names and kinds, a struct's repeated field names as Spark's Arrow
+ * writer numbers them. The layout check here also holds what that comparison leaves out, the children of a VARIANT or
+ * geospatial struct, and covers a caller that maps cells without comparing schemas, so a column whose batch is laid
+ * out otherwise is refused before a byte of it is read under the wrong type. Pure: no I/O, no logger.
  */
 import { uniqueFieldNames } from "@/lib/db/utils/result-fields";
 import type { ArrowColumnData, ArrowTypeName } from "./arrow";
 import { SPARK_RESULT_BYTE_BUDGET } from "./constants";
 import { SPARK_ERROR_SENTENCES, SparkError } from "./errors";
-import type { SparkColumn, SparkValueKind } from "./schema";
+import { arrowFieldNames, type SparkColumn, type SparkValueKind } from "./schema";
 import { calendarIntervalText, dateText, dayTimeText, timeText, timestampText, yearMonthText } from "./temporal";
 import { float32Number, variantJson } from "./variant";
 import { geoText } from "./wkb";
@@ -22,7 +24,10 @@ const EMPTY = new Uint8Array(0);
 // One decoder for every cell: fatal refuses bytes that are not UTF-8, and ignoreBOM keeps a leading U+FEFF in the
 // string, where a default decoder would drop it from the value (variant.ts reads its strings alike).
 const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
-/** The key kinds whose values are not scalar text: a map of such keys is a list of [key, value] pairs (spec 5.2). */
+/**
+ * The key kinds whose values are not scalar text: a map of such keys is a list of [key, value] pairs (spec 5.2), as is
+ * a map whose key texts are not all distinct.
+ */
 const NESTED_KEYS: ReadonlySet<SparkValueKind["type"]> = new Set([
   "array",
   "map",
@@ -92,8 +97,8 @@ class CellRefusal {
   constructor(readonly type: string) {}
 }
 
-/** Thrown for a cell whose Arrow data is not laid out as its kind; cellValue words it, naming the column. */
-const LAYOUT_REFUSAL = Symbol("layout refusal");
+/** A kind's type as a cell refusal names it: an interval's last hyphen a space, as in "day-time interval". */
+const labelOf = (kind: SparkValueKind): string => kind.type.replace(/-interval$/, " interval");
 
 const isNull = (data: ArrowColumnData, row: number): boolean =>
   data.validity !== undefined && (data.validity[row >> 3] & (1 << (row & 7))) === 0;
@@ -121,30 +126,12 @@ const namedAs = (children: readonly ArrowColumnData[], names: readonly string[])
   names.every((name, index) => children[index].name === name);
 
 /**
- * The names Spark's Arrow writer gives a struct's fields: both result paths write the Arrow schema with
- * errorOnDuplicatedFieldNames = false, so ArrowUtils.deduplicateFieldNames numbers a name the struct holds more than
- * once name_0, name_1 and on, in order, and keeps a name it holds once. The DataType keeps every name as the plan
- * gives it, so struct(a.id, b.id) is id, id there and id_0, id_1 in the batch (4.1.3 and 4.2.0 alike).
- */
-function arrowFieldNames(names: readonly string[]): string[] {
-  const counts = new Map<string, number>();
-  for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
-  const numbered = new Map<string, number>();
-  return names.map((name) => {
-    if (counts.get(name) === 1) return name;
-    const index = numbered.get(name) ?? 0;
-    numbered.set(name, index + 1);
-    return `${name}_${index}`;
-  });
-}
-
-/**
  * Whether `data` is laid out as `kind` reads it: its Arrow type; a decimal's scale, which places the point (the
  * precision does not); a struct's fields, by count, and by name as the kind names them or as Spark's Arrow writer
- * numbers a repeated one (the command path's kind takes the names the batch carries, the relation path's the
- * DataType's); Spark's own two children of a VARIANT or a geospatial value. A timestamp's zone is not held: it labels
- * the same microseconds, and the kind decides whether the text carries +00:00. Every child is held the same way when
- * it is read, at every depth.
+ * numbers a repeated one (arrowFieldNames; the command path's kind takes the names the batch carries, the relation
+ * path's the DataType's); Spark's own two children of a VARIANT or a geospatial value. A timestamp's zone is not held:
+ * it labels the same microseconds, and the kind decides whether the text carries +00:00. Every child is held the same
+ * way when it is read, at every depth.
  */
 function laidOutAs(kind: SparkValueKind, data: ArrowColumnData): boolean {
   if (data.type !== ARROW_TYPES[kind.type]) return false;
@@ -168,8 +155,8 @@ function laidOutAs(kind: SparkValueKind, data: ArrowColumnData): boolean {
   }
 }
 
-// The input is bounded by checkIpcStream (T6.1) and by schema.ts: precision at most 38, scale between -38 and the
-// precision, so the text of one value stays within about 80 characters.
+// The input is bounded by checkIpcStream in ipc-guard.ts and by schema.ts: precision at most 38, scale between -38
+// and the precision, so the text of one value stays within about 80 characters.
 function decimalText(view: DataView, at: number, scale: number): string {
   const unscaled = (view.getBigInt64(at + 8, true) << SIXTY_FOUR) | view.getBigUint64(at, true);
   if (unscaled === ZERO && scale <= 0) return "0";
@@ -192,7 +179,7 @@ function valueOf(
   nested: boolean,
   budget: SparkTextBudget,
 ): unknown {
-  if (!laidOutAs(kind, data)) throw LAYOUT_REFUSAL;
+  if (!laidOutAs(kind, data)) throw new CellRefusal(labelOf(kind));
   if (kind.type === "void" || isNull(data, row)) return null;
   switch (kind.type) {
     case "boolean":
@@ -238,8 +225,8 @@ function valueOf(
     case "timestamp":
     case "timestamp_ntz":
       return timestampText(fixed(data).getBigInt64(8 * row, true), kind.type === "timestamp");
-    // timeText refuses a count outside one day, and the interval texts a field range outside their type or in reverse
-    // order (PLAN-00 row `D/temporal.ts`); each refusal becomes the cell refusal that names the column.
+    // timeText refuses a count outside one day, and yearMonthText and dayTimeText a field range outside their type or
+    // in reverse order (their docblocks in temporal.ts); each refusal becomes the cell refusal that names the column.
     case "time":
       try {
         return timeText(fixed(data).getBigInt64(8 * row, true));
@@ -280,9 +267,14 @@ function valueOf(
         valueOf(kind.key, keys, start + index, true, budget),
         valueOf(kind.value, items, start + index, true, budget),
       ]);
-      return NESTED_KEYS.has(kind.key.type)
-        ? pairs
-        : Object.fromEntries(pairs.map(([key, value]) => [String(key), value]));
+      if (NESTED_KEYS.has(kind.key.type)) return pairs;
+      // Spark reads a map as its source stored it, and a source that does not enforce distinct keys (Parquet) can hold
+      // one key twice; two keys can also share a text, as 0.0 and -0.0 share "0". An object would keep only the last
+      // entry of each text, so such a map stays its pairs.
+      const texts = pairs.map(([key]) => String(key));
+      return new Set(texts).size === texts.length
+        ? Object.fromEntries(texts.map((text, index) => [text, pairs[index][1]]))
+        : pairs;
     }
     case "struct": {
       const names = uniqueFieldNames(kind.fields.map((field) => field.name));
@@ -331,12 +323,6 @@ export function cellValue(
   } catch (error) {
     if (error instanceof CellRefusal) {
       throw new SparkError("unreadable", SPARK_ERROR_SENTENCES.cellUnreadable(error.type, column.name));
-    }
-    if (error === LAYOUT_REFUSAL) {
-      throw new SparkError(
-        "unreadable",
-        SPARK_ERROR_SENTENCES.unreadable(`a column "${column.name}" whose Arrow type does not match its Spark type`),
-      );
     }
     throw error;
   }

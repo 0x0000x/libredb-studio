@@ -109,7 +109,7 @@ function emit(out: string[], leaf: Leaf): SparkValueKind {
  * An interval's fields from the unit indexes the proto names, as Spark reads them: both named, that range; the start
  * alone, that one unit; otherwise the type's whole range. An index outside the unit list, or a start after the end, is
  * refused here once at schema time, so an empty or all-null column of that type is refused too; temporal.ts refuses
- * the same per cell as the second line of defence (review of T6.3).
+ * the same per cell as the second line of defence.
  */
 function intervalFields(units: readonly IntervalUnit[], start: unknown, end: unknown): IntervalFields {
   const from = typeof start === "number" ? start : 0;
@@ -184,10 +184,10 @@ function mapKind(out: string[], key: () => SparkValueKind, value: () => SparkVal
 }
 
 /**
- * A struct, each field name spelled by spellSparkName, bare where Spark's quoteIfNeeded leaves it bare and backticked
- * otherwise (L08-C21), since Spark's type grammar reads a field name as an identifier (complexColType). Spark's
- * simpleString writes every name bare, which Spark cannot parse back for a name such as `a b` and reads as another
- * shape for one such as `x:int,y`. The kind keeps each name as it is.
+ * A struct, each field name spelled by spellSparkName: bare where Spark's QuotingUtils.quoteIfNeeded leaves it bare (a
+ * name matching [a-zA-Z_][a-zA-Z0-9_]*) and backticked otherwise, since Spark's type grammar reads a field name as an
+ * identifier (complexColType). Spark's simpleString writes every name bare, which Spark cannot parse back for a name
+ * such as `a b` and reads as another shape for one such as `x:int,y`. The kind keeps each name as it is.
  */
 function structKind<F extends { readonly name: string }>(
   out: string[],
@@ -278,9 +278,10 @@ function typed(dataType: unknown, depth: number, budget: { fields: number }, out
     case "geography":
       return emit(out, geospatialOf(name, typeof body.srid === "number" ? body.srid : 0));
     case "udt":
-      // A user-defined type travels as its storage type (spec 5.2; L10-C24), so it is read and spelled as that type,
-      // at the same depth and counted once, as the Arrow schema carries it. A storage type that is itself user-defined
-      // is bounded by protobufjs, which refuses a message nested past 100 levels (spec 5.5).
+      // A user-defined type travels as its storage type (spec 5.2; Spark's ArrowUtils writes a UDT as its sqlType), so
+      // it is read and spelled as that type, at the same depth and counted once, as the Arrow schema carries it. A
+      // storage type that is itself user-defined is bounded by protobufjs, which refuses a message nested past 100
+      // levels (spec 5.5).
       budget.fields -= 1;
       return typed(body.sql_type, depth, budget, out);
     default:
@@ -391,8 +392,32 @@ export function columnsFromArrow(columns: ArrowColumns): SparkColumn[] {
 }
 
 /**
+ * The names Spark's Arrow writer gives a struct's fields: both result paths write the Arrow schema with
+ * errorOnDuplicatedFieldNames = false, so ArrowUtils.deduplicateFieldNames numbers a name the struct holds more than
+ * once name_0, name_1 and on, in order, and keeps a name it holds once. The DataType keeps every name as the plan
+ * gives it, so struct(a.id, b.id) is id, id there and id_0, id_1 in the batch (4.1.3 and 4.2.0 alike). A top-level
+ * column's name is never renamed.
+ */
+export function arrowFieldNames(names: readonly string[]): string[] {
+  const counts = new Map<string, number>();
+  for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
+  const numbered = new Map<string, number>();
+  return names.map((name) => {
+    if (counts.get(name) === 1) return name;
+    const index = numbered.get(name) ?? 0;
+    numbered.set(name, index + 1);
+    return `${name}_${index}`;
+  });
+}
+
+/** Whether `fields` are named `names`, in order. */
+const namedAs = (fields: readonly { readonly name: string }[], names: readonly string[]): boolean =>
+  names.every((name, index) => fields[index].name === name);
+
+/**
  * Whether a batch holds a column's values as its `DataType` declares them, values.ts reading each cell by the declared
- * kind: the same type at every depth, a decimal's precision and scale, and a struct's field count and names. Interval
+ * kind: the same type at every depth, a decimal's precision and scale, and a struct's field count and names, the
+ * batch's names being the DataType's or those Spark's Arrow writer numbers from them (arrowFieldNames). Interval
  * fields, time precision and srid are left out: Spark's two readings of its own answers differ on them (Arrow carries
  * no interval fields, and one Time64 unit for every time precision), or values.ts does not read them from the kind.
  */
@@ -404,14 +429,14 @@ function sameKind(declared: SparkValueKind, read: SparkValueKind): boolean {
       return read.type === "array" && sameKind(declared.element, read.element);
     case "map":
       return read.type === "map" && sameKind(declared.key, read.key) && sameKind(declared.value, read.value);
-    case "struct":
+    case "struct": {
+      if (read.type !== "struct" || declared.fields.length !== read.fields.length) return false;
+      const names = declared.fields.map((field) => field.name);
       return (
-        read.type === "struct" &&
-        declared.fields.length === read.fields.length &&
-        declared.fields.every(
-          (field, index) => field.name === read.fields[index].name && sameKind(field.kind, read.fields[index].kind),
-        )
+        (namedAs(read.fields, names) || namedAs(read.fields, arrowFieldNames(names))) &&
+        declared.fields.every((field, index) => sameKind(field.kind, read.fields[index].kind))
       );
+    }
     default:
       return declared.type === read.type;
   }
@@ -419,7 +444,8 @@ function sameKind(declared: SparkValueKind, read: SparkValueKind): boolean {
 
 /**
  * On the relation path the `DataType` schema and the Arrow batch must name the same columns (spec 5.1), each of the
- * same kind (sameKind), so no cell is read by a kind its batch does not hold.
+ * same kind (sameKind), so no cell is read by a kind its batch does not hold. A column's name is compared as it is,
+ * since Spark numbers a repeated name only inside a struct.
  */
 export function assertSchemasAgree(fromDataType: readonly SparkColumn[], fromArrow: readonly SparkColumn[]): void {
   if (

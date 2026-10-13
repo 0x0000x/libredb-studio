@@ -743,6 +743,74 @@ describe("the two schemas of the relation path", () => {
     }
   });
 
+  // SELECT struct(a.id, b.id) AS st: the DataType keeps the names the plan gives (id, id), while Spark writes the Arrow
+  // schema with errorOnDuplicatedFieldNames = false, so ArrowUtils.deduplicateFieldNames numbers a name a struct
+  // repeats (id_0, id_1, in order) and keeps a name it holds once, inside an array or a map too.
+  test("a struct that repeats a field name agrees with the names Spark's Arrow writer numbers, at every depth", () => {
+    const fieldsOf = (names: readonly string[]) => struct(names.map((name) => [name, t("integer")] as const));
+    const structOf = (name: string, names: readonly string[]): SparkIpcColumn => ({
+      name,
+      kind: "struct",
+      length: 1,
+      children: names.map((child) => ({ name: child, kind: "int32", values: [1] })),
+    });
+    // The struct as the column, as an array's element and as a map's value: its DataType and its batch.
+    const shapes: readonly (readonly [
+      (names: readonly string[]) => object,
+      (names: readonly string[]) => SparkIpcColumn,
+    ])[] = [
+      [fieldsOf, (names) => structOf("c", names)],
+      [
+        (names) => t("array", { element_type: fieldsOf(names) }),
+        (names) => ({ name: "c", kind: "list", offsets: [0, 1], child: structOf("element", names) }),
+      ],
+      [
+        (names) => t("map", { key_type: t("string"), value_type: fieldsOf(names) }),
+        (names) => ({
+          name: "c",
+          kind: "map",
+          offsets: [0, 1],
+          keys: { name: "key", kind: "utf8", values: ["k"] },
+          items: structOf("value", names),
+        }),
+      ],
+    ];
+    for (const [dataType, batch] of shapes) {
+      const compare = (declared: readonly string[], written: readonly string[]) => () =>
+        assertSchemasAgree([one(dataType(declared))], fromStream([batch(written)]));
+      expect(compare(["id", "id"], ["id_0", "id_1"])).not.toThrow();
+      // struct<id,x,id,id_0> is written id_0, x, id_1, id_0: x and id_0 each occur once, so each keeps its name.
+      expect(compare(["id", "x", "id", "id_0"], ["id_0", "x", "id_1", "id_0"])).not.toThrow();
+      // The names as the DataType gives them agree too.
+      expect(compare(["id", "id"], ["id", "id"])).not.toThrow();
+      // A repeat numbered any other way is not Spark's writing.
+      for (const written of [
+        ["id_1", "id_0"],
+        ["id", "id_1"],
+        ["id_0", "id_0"],
+        ["id_1", "id_2"],
+      ]) {
+        expect(refusalOf(compare(["id", "id"], written))).toStrictEqual(
+          unreadable("a result whose schema and batches name different columns"),
+        );
+      }
+    }
+  });
+
+  test("a top-level column name is compared as it is, since Spark numbers a repeated name only inside a struct", () => {
+    const int32 = (name: string): SparkIpcColumn => ({ name, kind: "int32", values: [1] });
+    const repeated = columnsFromDataType(
+      struct([
+        ["id", t("integer")],
+        ["id", t("integer")],
+      ]),
+    );
+    expect(() => assertSchemasAgree(repeated, fromStream([int32("id"), int32("id")]))).not.toThrow();
+    expect(refusalOf(() => assertSchemasAgree(repeated, fromStream([int32("id_0"), int32("id_1")])))).toStrictEqual(
+      unreadable("a result whose schema and batches name different columns"),
+    );
+  });
+
   test("interval fields, time precision and srid are not compared, at any depth, since Spark's two readings differ on them", () => {
     const hour = t("day_time_interval", { start_field: 1, end_field: 1 });
     const declared = columnsFromDataType(
