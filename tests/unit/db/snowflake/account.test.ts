@@ -17,6 +17,12 @@ describe("readSnowflakeAccount accepts", () => {
     ["xy12345", "xy12345.snowflakecomputing.com", "XY12345"],
     ["xy12345.us-east-2.aws", "xy12345.us-east-2.aws.snowflakecomputing.com", "XY12345"],
     ["xy12345.us-east-1.privatelink", "xy12345.us-east-1.privatelink.snowflakecomputing.com", "XY12345"],
+    ["myorg-myacct.privatelink", "myorg-myacct.privatelink.snowflakecomputing.com", "MYORG-MYACCT"],
+    [
+      "https://myorg-myacct.privatelink.snowflakecomputing.com",
+      "myorg-myacct.privatelink.snowflakecomputing.com",
+      "MYORG-MYACCT",
+    ],
     ["xy12345.cn-north-1.snowflakecomputing.cn", "xy12345.cn-north-1.snowflakecomputing.cn", "XY12345"],
     ["MyOrg-MyAcct.SnowflakeComputing.com.", "myorg-myacct.snowflakecomputing.com", "MYORG-MYACCT"],
     ["https://myorg-myacct.snowflakecomputing.com/", "myorg-myacct.snowflakecomputing.com", "MYORG-MYACCT"],
@@ -38,7 +44,7 @@ describe("readSnowflakeAccount accepts", () => {
       accountClaim: "XY12345",
       url: null,
     });
-    expect(readSnowflakeAccount("https://app.snowflake.com/o/a/x?y=1#z")).toMatchObject({ ok: true, url: null });
+    expect(readSnowflakeAccount("https://app.snowflake.com/o/a/x")).toMatchObject({ ok: true, url: null });
     expect(readSnowflakeAccount("https://u:p@xy12345.snowflakecomputing.com:8443/p?q=1#h")).toEqual({
       ok: true,
       host: "xy12345.snowflakecomputing.com",
@@ -59,6 +65,11 @@ describe("readSnowflakeAccount refuses", () => {
     ["https://snowflakecomputing.com.attacker.net/", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
     ["https://app.snowflake.com/myorg", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
     ["https://app.snowflake.com/my.org/acct", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
+    // A Snowsight URL is stored in the public host field, so one carrying a query, a fragment, userinfo or a port is refused.
+    ["https://app.snowflake.com/myorg/myacct/worksheets?x=1", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
+    ["https://app.snowflake.com/myorg/myacct/#y", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
+    ["https://u:p@app.snowflake.com/myorg/myacct", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
+    ["https://app.snowflake.com:8443/myorg/myacct", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
     ["https://", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
     ["http://xy12345.snowflakecomputing.com/", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
     ["a.b.c.d.e.f", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
@@ -163,7 +174,7 @@ describe("snowflakeEndpoint", () => {
   test.each([
     ["https://myorg-a.snowflakecomputing.com:443/", "myorg-a.snowflakecomputing.com"],
     ["https://xy12345.cn-north-1.snowflakecomputing.cn", "xy12345.cn-north-1.snowflakecomputing.cn"],
-    ["https://app.snowflake.com/myorg/myacct/worksheets?x=1#y", "myorg-myacct.snowflakecomputing.com"],
+    ["https://app.snowflake.com/myorg/myacct/worksheets", "myorg-myacct.snowflakecomputing.com"],
   ])("accepts %p", (account, host) => {
     expect(snowflakeEndpoint(account).origin).toEqual({ scheme: "https", host, port: 443 });
   });
@@ -182,6 +193,7 @@ describe("snowflakeEndpoint", () => {
     ["snowflakecomputing.com.attacker.net", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
     ["a.b.c.d.e.f", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
     ["-myorg-a", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
+    ["https://app.snowflake.com/myorg/myacct/worksheets?x=1#y", SNOWFLAKE_FIELD_SENTENCES.accountFormat],
     ["xy12345.privatelink", SNOWFLAKE_FIELD_SENTENCES.privateLinkRegion],
     ["", SNOWFLAKE_FIELD_SENTENCES.accountEmpty],
     [7, SNOWFLAKE_FIELD_SENTENCES.accountEmpty],

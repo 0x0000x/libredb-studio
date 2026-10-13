@@ -86,7 +86,7 @@ Account takes:
 - a locator `locator[.region[.cloud]]` (AWS Oregon needs no region);
 - either of those with `.privatelink`, and the `.snowflakecomputing.cn` suffix for China;
 - an account URL `https://<identifier>.snowflakecomputing.com` (or `.cn`), with an optional trailing `/`;
-- a Snowsight URL `https://app.snowflake.com/<org>/<account>/...`, read as `<org>-<account>`; Studio never sends a request to `app.snowflake.com`.
+- a Snowsight URL `https://app.snowflake.com/<org>/<account>/...`, read as `<org>-<account>`, with no query, fragment, user part or port; Studio never sends a request to `app.snowflake.com`.
 
 Studio builds the origin itself as `https://<identifier>.snowflakecomputing.com:443` and accepts a host only under `.snowflakecomputing.com` or `.snowflakecomputing.cn`, with at most five labels before the suffix, no IP literal, no other port, and no path, query or user part.
 The suffix comes off once, and an identifier whose labels still name a Snowflake domain is refused, such as a doubled suffix or `app.snowflake.com`; labels are compared whole, so `snowflake.community` reads as a locator and its region.
