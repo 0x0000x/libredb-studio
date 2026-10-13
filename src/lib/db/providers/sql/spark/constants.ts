@@ -85,5 +85,8 @@ export const SPARK_VERSION_TEXT_MAX_CHARS = 64;
 export const SPARK_STATUS_DETAILS_MAX_BYTES = 65_536;
 export const SPARK_STATUS_DETAILS_MAX_ENTRIES = 16;
 export const SPARK_STATUS_DETAILS_VALUE_MAX_BYTES = 8_192;
-/** Probe sessions a server below the floor keeps, by connection id and target (spec 4.9). */
+/**
+ * Probe sessions a server below the floor keeps, by connection id and configured endpoint, the far end under an SSH
+ * tunnel.
+ */
 export const SPARK_REFUSED_SESSION_MAP_MAX = 256;

@@ -915,6 +915,25 @@ describe("SparkProvider: the version floor and the probe session", () => {
     expect(new Set(probes).size).toBe(4);
   });
 
+  test("refused connects of two connections whose id and host would run together use different probe session ids", async () => {
+    const script = scripted({
+      version: "3.5.9",
+      unary: (rpc) => (rpc === "ReleaseSession" ? Promise.reject(unimplemented()) : undefined),
+    });
+    const probeOf = async (id: string, host: string): Promise<string> => {
+      const before = script.calls.length;
+      const provider = new SparkProvider(connection(15002, { id, host }), {}, script);
+      await expect(provider.connect()).rejects.toThrow(SPARK_ERROR_SENTENCES.versionTooOld("3.5.9"));
+      return script.calls.slice(before).find((call) => call.rpc === "AnalyzePlan")?.sessionId as string;
+    };
+    const probes = [
+      await probeOf("probe-x", "1a.remote"),
+      // Run together, this id and host would spell the first connection's id and host.
+      await probeOf("probe-x1", "a.remote"),
+    ];
+    expect(new Set(probes).size).toBe(2);
+  });
+
   test("a failed release of the metadata session logs one warning holding only its category, never the server's text or the token", async () => {
     let failRelease = false;
     const script = scripted({
