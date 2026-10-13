@@ -1,0 +1,85 @@
+/**
+ * Every fixed number and fixed identity value of the Apache Spark provider (spec 4.1), each with its evidence.
+ * Pure: no I/O, no logger (tests/unit/db/spark/seam-guard.test.ts).
+ */
+
+/** Spark Connect's port unless the server was started on another (L13-C66; P01-C4). */
+export const SPARK_DEFAULT_PORT = 15002;
+/** The TLS name an IP identity is checked as: `.invalid` belongs to no host (RFC 6761); Node 25+ and Bun refuse an IP as a server name. */
+export const SPARK_IP_SERVER_NAME = "spark.invalid";
+/** Spark's built-in session catalog, the default of spark.sql.defaultCatalog (L09-C2). */
+export const SPARK_SESSION_CATALOG = "spark_catalog";
+/** The floor of D3: result chunking, which Studio needs to read large results, arrived in 4.1.0 (SPARK-53525). */
+export const SPARK_MIN_VERSION = { major: 4, minor: 1, patch: 0 } as const;
+
+/** One gRPC message: the cap every gRPC provider passes (D01-C2). */
+export const SPARK_RECEIVE_CAP_BYTES = 16_777_216;
+/** The preferred Arrow chunk size each ExecutePlan asks for, and the session's maxChunkSize (D01-C31, C49, C50). */
+export const SPARK_ARROW_CHUNK_BYTES = 4_194_304;
+/** Rows per relation batch, chosen by O11's rule from the measured read cost (D03-C6 to C8, C11). */
+export const SPARK_ARROW_MAX_RECORDS_PER_BATCH = 1_000;
+/** Decoded cost kept per statement, Snowflake's budget (spec 5.6). */
+export const SPARK_RESULT_BYTE_BUDGET = 16_777_216;
+/** Bytes received per ExecutePlan stream: the budget plus one relation batch (spec 5.6). */
+export const SPARK_STREAM_MAX_RECEIVED_BYTES = 33_554_432;
+/** The largest IPC message metadata the stream check reads (spec 5.5). */
+export const SPARK_IPC_METADATA_MAX_BYTES = 1_048_576;
+/** Schema depth and field count, for the Arrow schema and the DataType proto (spec 5.5). */
+export const SPARK_SCHEMA_MAX_DEPTH = 64;
+export const SPARK_SCHEMA_MAX_FIELDS = 10_000;
+
+/** One unary Config call per interval while a call is open (D17; D01-C19, C20); 15 s is under the 20 s worst case (D01-C17). */
+export const SPARK_HEARTBEAT_INTERVAL_MS = 15_000;
+export const SPARK_HEARTBEAT_DEADLINE_MS = 5_000;
+/** Config, Interrupt, ReleaseSession, FetchErrorDetails and AnalyzePlan, from the moment each is sent (spec 4.3). */
+export const SPARK_CONTROL_DEADLINE_MS = 10_000;
+
+/** The fixed identity of every request (D5e): never a Studio user's name. */
+export const SPARK_USER_CONTEXT = { user_id: "libredb-studio", user_name: "libredb-studio" } as const;
+export const SPARK_CLIENT_TYPE = "libredb-studio";
+/** A run's tag is this prefix and a random UUID; a tag holds no comma (base.proto ExecutePlanRequest field 7). */
+export const SPARK_RUN_TAG_PREFIX = "libredb-studio-";
+
+/**
+ * Sent by Config `set` on every new session, in this order (spec 4.5 step 1). Every key is settable at run time on
+ * 4.1.3 and 4.2.0, accepted in one call and read back as sent (D03-C2 to C4).
+ */
+export const SPARK_SESSION_CONF: readonly (readonly [string, string])[] = [
+  // D7: ${...} is never expanded, so the text Spark parses is the text the confirmation gate read (D01-C44).
+  ["spark.sql.variable.substitute", "false"],
+  // D6: a server-wide codec never compresses Studio's results (D02-C30 to C35).
+  ["spark.sql.execution.arrow.compression.codec", "none"],
+  // String and binary columns arrive as Utf8 and Binary (spec 5.5; D03-C18).
+  ["spark.sql.execution.arrow.useLargeVarTypes", "false"],
+  // Spark chunks only while this is above 0 and honours the preferred size only up to it (spec 4.5).
+  ["spark.connect.session.resultChunking.maxChunkSize", "4194304"],
+  ["spark.sql.execution.arrow.maxRecordsPerBatch", "1000"],
+  // Spark's default; a server default cannot silence a run's stream (D03-C34, C37).
+  ["spark.connect.progress.reportInterval", "2s"],
+  // Spark's default; without it an error carries no errorId (spec 4.10 step 2).
+  ["spark.sql.connect.enrichError.enabled", "true"],
+];
+
+/** Sent in the same Config call on the metadata session only (spec 4.5 step 1). */
+export const SPARK_METADATA_SESSION_CONF: readonly (readonly [string, string])[] = [
+  // SHOW NAMESPACES and SHOW TABLES answer the column names introspection reads (L09-C13, C17, C18).
+  ["spark.sql.legacy.keepCommandOutputSchema", "false"],
+  // DESCRIBE spells a struct type whole (L09 verify U8).
+  ["spark.sql.debug.maxToStringFields", "10000"],
+];
+
+/** The nested namespace walk's bounds (spec 4.11; 6.5). */
+export const SPARK_NAMESPACE_WALK_MAX = 1_000;
+export const SPARK_NAMESPACE_MAX_PARTS = 8;
+export const SPARK_DESCRIBE_OBJECTS_MAX = 1_000;
+/** Introspection statements in flight at once (spec 4.11, the walk's breadth). */
+export const SPARK_INTROSPECT_IN_FLIGHT_MAX = 8;
+/** FetchErrorDetails: one root, at most 5 causes of at most 1,024 characters (spec 4.10 step 2). */
+export const SPARK_ERROR_CAUSES_MAX = 5;
+export const SPARK_ERROR_CAUSE_MAX_CHARS = 1_024;
+/** grpc-status-details-bin: at most 64 KiB, 16 details, 8 KiB per map value (spec 4.10 step 1). */
+export const SPARK_STATUS_DETAILS_MAX_BYTES = 65_536;
+export const SPARK_STATUS_DETAILS_MAX_ENTRIES = 16;
+export const SPARK_STATUS_DETAILS_VALUE_MAX_BYTES = 8_192;
+/** Probe sessions a server below the floor keeps, by connection id and target (spec 4.9). */
+export const SPARK_REFUSED_SESSION_MAP_MAX = 256;

@@ -10,6 +10,9 @@
  * directory but the factory and the connection-string parser imports a Spark module. Every rule is proven both ways:
  * the real sources pass it and a planted file fails it by name.
  *
+ * The pure modules (PURE_MODULES) import no I/O, no logger and no transport, and write nothing to the console
+ * (spec 4.1); that rule is proven both ways too.
+ *
  * The guard is syntactic: a module name built at run time is stated, not chased. Each list grows in the task that adds
  * its files.
  */
@@ -39,6 +42,11 @@ const GENERATOR_IMPORTERS: readonly string[] = [DESCRIPTOR_TEST, HARNESS];
 const OUTSIDE_IMPORTERS_ALLOWED: readonly string[] = ["src/lib/db/factory.ts", "src/lib/connection-string-parser.ts"];
 /** The one module under src/lib/db/providers/ outside the directory a Spark file may import (spec 8.10). */
 const SQL_BASE = "src/lib/db/providers/sql/sql-base";
+/** Lane B's pure modules: no I/O, no logger, no transport and no console (spec 4.1). T5.7 adds status-details.ts, errors.ts, version.ts and requests.ts. */
+const PURE_MODULES: readonly string[] = [`${SPARK}/constants.ts`, `${SPARK}/namespace.ts`];
+const IO_MODULE =
+  /^(?:node:)?(?:fs|fs\/promises|net|tls|http|http2|https|dns|dgram|child_process|worker_threads)$|^@grpc\/|^@\/lib\/logger(?:\/|$)/;
+const NO_IO_TARGET = /^src\/lib\/(?:db\/grpc|logger)(?:\/|$)/;
 
 interface RepositoryFile {
   readonly path: string;
@@ -191,6 +199,31 @@ function outsideImportFindings(files: readonly RepositoryFile[]): string[] {
     );
 }
 
+function pureFindings(files: readonly RepositoryFile[]): string[] {
+  const out: string[] = [];
+  for (const path of PURE_MODULES) {
+    const file = files.find((candidate) => candidate.path === path);
+    if (file === undefined) {
+      out.push(`${path} is a pure module and missing`);
+      continue;
+    }
+    for (const specifier of moduleNames(file.sf)) {
+      const target = reached(specifier, path);
+      if (IO_MODULE.test(specifier) || (target !== undefined && NO_IO_TARGET.test(target)))
+        out.push(`${path} imports ${specifier}`);
+    }
+    let consoled = false;
+    const visit = (node: ts.Node) => {
+      if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "console")
+        consoled = true;
+      ts.forEachChild(node, visit);
+    };
+    visit(file.sf);
+    if (consoled) out.push(`${path} writes to the console`);
+  }
+  return out;
+}
+
 const replaced = (files: readonly RepositoryFile[], path: string, text: string) => [
   ...files.filter((file) => file.path !== path),
   { path, sf: parse(path, text) },
@@ -266,5 +299,29 @@ describe("isolation (spec 8.10)", () => {
     ]);
     const factory = 'const load = () => import("./providers/sql/spark");\n';
     expect(outsideImportFindings(replaced(SOURCES, "src/lib/db/factory.ts", factory))).toEqual([]);
+  });
+});
+
+describe("pure modules import no I/O, no logger and no transport (spec 4.1)", () => {
+  test("the real sources pass", () => {
+    expect(pureFindings(HELD)).toEqual([]);
+  });
+
+  test.each([
+    ['import { readFileSync } from "node:fs";\n', "node:fs"],
+    ['import { logger } from "@/lib/logger";\n', "@/lib/logger"],
+    ['import type { GrpcTlsOptions } from "../../../grpc/tls";\n', "../../../grpc/tls"],
+    ['import { openGrpcChannel } from "@/lib/db/grpc/channel";\n', "@/lib/db/grpc/channel"],
+    ['import { credentials } from "@grpc/grpc-js";\n', "@grpc/grpc-js"],
+  ] as const)("a planted %p fails by name", (text, specifier) => {
+    expect(pureFindings(replaced(HELD, `${SPARK}/namespace.ts`, text))).toEqual([
+      `${SPARK}/namespace.ts imports ${specifier}`,
+    ]);
+  });
+
+  test("a planted console call fails by name", () => {
+    expect(pureFindings(replaced(HELD, `${SPARK}/constants.ts`, "console.log(1);\n"))).toEqual([
+      `${SPARK}/constants.ts writes to the console`,
+    ]);
   });
 });
