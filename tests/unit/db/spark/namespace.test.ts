@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   SPARK_ARROW_CHUNK_BYTES,
   SPARK_ARROW_MAX_RECORDS_PER_BATCH,
+  SPARK_BATCH_OVERHEAD_BYTES,
   SPARK_CLIENT_TYPE,
   SPARK_CONTROL_DEADLINE_MS,
   SPARK_DEFAULT_PORT,
@@ -63,6 +64,7 @@ describe("the fixed values (PLAN-00 Global Constraints)", () => {
     expect(SPARK_ARROW_CHUNK_BYTES).toBe(4_194_304);
     expect(SPARK_ARROW_MAX_RECORDS_PER_BATCH).toBe(1_000);
     expect(SPARK_RESULT_BYTE_BUDGET).toBe(16_777_216);
+    expect(SPARK_BATCH_OVERHEAD_BYTES).toBe(1_024);
     expect(SPARK_STREAM_MAX_RECEIVED_BYTES).toBe(33_554_432);
     expect(SPARK_IPC_METADATA_MAX_BYTES).toBe(1_048_576);
     expect(SPARK_SCHEMA_MAX_DEPTH).toBe(64);

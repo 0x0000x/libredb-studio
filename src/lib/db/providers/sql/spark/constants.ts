@@ -20,6 +20,8 @@ export const SPARK_ARROW_CHUNK_BYTES = 4_194_304;
 export const SPARK_ARROW_MAX_RECORDS_PER_BATCH = 1_000;
 /** Decoded cost kept per statement, Snowflake's budget (spec 5.6). */
 export const SPARK_RESULT_BYTE_BUDGET = 16_777_216;
+/** The heap a kept batch holds beyond its values, measured at about 810 bytes for a one-row batch, rounded up. */
+export const SPARK_BATCH_OVERHEAD_BYTES = 1_024;
 /** Bytes received per ExecutePlan stream: the budget plus one relation batch (spec 5.6). */
 export const SPARK_STREAM_MAX_RECEIVED_BYTES = 33_554_432;
 /** The largest IPC message metadata the stream check reads (spec 5.5). */

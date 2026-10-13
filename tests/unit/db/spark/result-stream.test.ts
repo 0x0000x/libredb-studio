@@ -3,7 +3,7 @@
  * Spark descriptor decodes them to (SPARK_LOADER_OPTIONS: an unset message field outside the response_type oneof is
  * null, an int64 is a decimal string): response kinds, chunk reassembly and its refusals, the row and byte budgets with
  * a result that ends exactly on one, stream.truncated read after every undefined, the batch check of step 7 and
- * batch-too-large, and the cost rule at 8 bytes a value.
+ * batch-too-large, and the cost rule at 8 bytes a value plus the fixed overhead each kept batch pays.
  *
  * The reader holds a batch's declared row count twice: against the stream before apache-arrow reads it, and against
  * what the Arrow reader decoded. The two agree for every stream the pre-check passes, so the Arrow reader is replaced,
@@ -13,6 +13,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import {
   SPARK_ARROW_CHUNK_BYTES,
+  SPARK_BATCH_OVERHEAD_BYTES,
   SPARK_RESULT_BYTE_BUDGET,
   SPARK_STREAM_MAX_RECEIVED_BYTES,
 } from "@/lib/db/providers/sql/spark/constants";
@@ -88,11 +89,17 @@ interface Stub extends SparkPlanStream {
 
 /**
  * A stream answering `responses` in order, then the server's end. `truncateAt` ends it after that many responses as
- * the 32 MiB bound would; `bytes` gives each response's received size (1 by default).
+ * the 32 MiB bound would; `bytes` gives each response's received size (1 by default). `bound` ends it as the channel
+ * does: bytes are counted as each response is taken, and the response that reaches the bound is still handed over,
+ * the stream already truncated, with nothing after it.
  */
 function stub(
   responses: readonly object[],
-  options: { readonly truncateAt?: number; readonly bytes?: (index: number) => number } = {},
+  options: {
+    readonly truncateAt?: number;
+    readonly bytes?: (index: number) => number;
+    readonly bound?: number;
+  } = {},
 ): Stub {
   let index = 0;
   let received = 0;
@@ -109,6 +116,7 @@ function stub(
       if (next === undefined) return undefined;
       received += options.bytes?.(index) ?? 1;
       index += 1;
+      if (options.bound !== undefined && received >= options.bound) truncated = true;
       return next;
     },
     get receivedBytes() {
@@ -338,34 +346,84 @@ describe("readRelationAnswer: budgets (spec 5.6)", () => {
   });
 
   test("the byte budget cuts before the row that would pass it and cancels the stream", async () => {
-    // stringBatch writes exactly `width` ASCII characters a value, so a row costs 8 + 100 (spec 5.6).
+    // stringBatch writes exactly `width` ASCII characters a value, so a row costs 8 + 100 (spec 5.6), and the batch
+    // pays its overhead once.
     const stream = stub([SCHEMA, batch(stringBatch(10, 100), 10), METRICS]);
-    const answer = await readRelationAnswer(stream, { rows: WIDE.rows, bytes: 3 * 108 + 50 });
+    const answer = await readRelationAnswer(stream, {
+      rows: WIDE.rows,
+      bytes: SPARK_BATCH_OVERHEAD_BYTES + 3 * 108 + 50,
+    });
     expect(answer.cut).toBe("bytes");
     expect(keptRows(answer)).toBe(3);
     expect(stream.cancelled()).toBe(true);
   });
 
   test("keepRows: 8 bytes a value for empty strings and for nulls, and exactly the budget keeps every row", () => {
+    const OVERHEAD = SPARK_BATCH_OVERHEAD_BYTES;
     const empty = readIpcColumns(stringBatch(10, 0));
-    expect(keepRows(empty, { rows: 100, bytes: 80 }, { rows: 0, bytes: 0 })).toStrictEqual({ rows: 10, cut: null });
-    expect(keepRows(empty, { rows: 100, bytes: 79 }, { rows: 0, bytes: 0 })).toStrictEqual({ rows: 9, cut: "bytes" });
+    expect(keepRows(empty, { rows: 100, bytes: OVERHEAD + 80 }, { rows: 0, bytes: 0 })).toStrictEqual({
+      rows: 10,
+      cut: null,
+    });
+    expect(keepRows(empty, { rows: 100, bytes: OVERHEAD + 79 }, { rows: 0, bytes: 0 })).toStrictEqual({
+      rows: 9,
+      cut: "bytes",
+    });
     const nulls = readIpcColumns(
       columnsStream([
         { name: "n", kind: "null", length: 10 },
         { name: "s", kind: "utf8", values: Array.from({ length: 10 }, () => null) },
       ]),
     );
-    expect(keepRows(nulls, { rows: 100, bytes: 160 }, { rows: 0, bytes: 0 })).toStrictEqual({ rows: 10, cut: null });
-    expect(keepRows(nulls, { rows: 100, bytes: 159 }, { rows: 0, bytes: 0 })).toStrictEqual({ rows: 9, cut: "bytes" });
+    expect(keepRows(nulls, { rows: 100, bytes: OVERHEAD + 160 }, { rows: 0, bytes: 0 })).toStrictEqual({
+      rows: 10,
+      cut: null,
+    });
+    expect(keepRows(nulls, { rows: 100, bytes: OVERHEAD + 159 }, { rows: 0, bytes: 0 })).toStrictEqual({
+      rows: 9,
+      cut: "bytes",
+    });
     // keepRows advances what the statement has kept, so the next batch starts where this one stopped.
     const used = { rows: 95, bytes: 0 };
-    expect(keepRows(empty, { rows: 100, bytes: 1_000 }, used)).toStrictEqual({ rows: 5, cut: "rows" });
-    expect(used).toStrictEqual({ rows: 100, bytes: 40 });
+    expect(keepRows(empty, { rows: 100, bytes: OVERHEAD + 1_000 }, used)).toStrictEqual({ rows: 5, cut: "rows" });
+    expect(used).toStrictEqual({ rows: 100, bytes: OVERHEAD + 40 });
     // A row both budgets refuse is cut by the row budget; a batch with no row declares no cut, even on a spent budget.
-    expect(keepRows(empty, { rows: 5, bytes: 40 }, { rows: 0, bytes: 0 })).toStrictEqual({ rows: 5, cut: "rows" });
+    expect(keepRows(empty, { rows: 5, bytes: OVERHEAD + 40 }, { rows: 0, bytes: 0 })).toStrictEqual({
+      rows: 5,
+      cut: "rows",
+    });
     const none = readIpcColumns(int64Batch(0, 0));
     expect(keepRows(none, { rows: 0, bytes: 0 }, { rows: 0, bytes: 0 })).toStrictEqual({ rows: 0, cut: null });
+  });
+
+  test("keepRows charges a batch its overhead once, with its first row kept, and a batch that keeps no row nothing", () => {
+    // 1,000 Int64 values cost 8,000; the batch adds exactly SPARK_BATCH_OVERHEAD_BYTES to that, once a batch.
+    const thousand = readIpcColumns(int64Batch(0, 1_000));
+    const used = { rows: 0, bytes: 0 };
+    const whole = { rows: WIDE.rows, bytes: 2 * (SPARK_BATCH_OVERHEAD_BYTES + 8_000) };
+    expect(keepRows(thousand, whole, used)).toStrictEqual({ rows: 1_000, cut: null });
+    expect(used).toStrictEqual({ rows: 1_000, bytes: SPARK_BATCH_OVERHEAD_BYTES + 8_000 });
+    expect(keepRows(thousand, whole, used)).toStrictEqual({ rows: 1_000, cut: null });
+    expect(used).toStrictEqual({ rows: 2_000, bytes: 2 * (SPARK_BATCH_OVERHEAD_BYTES + 8_000) });
+    const short = { rows: WIDE.rows, bytes: SPARK_BATCH_OVERHEAD_BYTES + 7_999 };
+    expect(keepRows(thousand, short, { rows: 0, bytes: 0 })).toStrictEqual({ rows: 999, cut: "bytes" });
+    // A first row that cannot pay the overhead with its own cost is refused, and the batch is charged nothing.
+    const unpaid = { rows: 0, bytes: 0 };
+    const tight = { rows: WIDE.rows, bytes: SPARK_BATCH_OVERHEAD_BYTES + 7 };
+    expect(keepRows(thousand, tight, unpaid)).toStrictEqual({ rows: 0, cut: "bytes" });
+    expect(unpaid).toStrictEqual({ rows: 0, bytes: 0 });
+  });
+
+  test("many one-row batches are cut by the byte budget at the batch count the overhead predicts", async () => {
+    // The shape of a statement over very many tiny partitions: each kept batch costs its 8-byte value and its
+    // overhead, so a budget of 64 KiB keeps 65,536 / (1,024 + 8) rounded down, 63 batches, not all 100.
+    const stream = stub([SCHEMA, ...Array.from({ length: 100 }, (_, row) => batch(int64Batch(row, 1), 1)), METRICS]);
+    const answer = await readRelationAnswer(stream, { rows: WIDE.rows, bytes: 65_536 });
+    expect(answer.cut).toBe("bytes");
+    expect(answer.batches).toHaveLength(63);
+    expect(answer.batches.every((kept) => kept.rows === 1)).toBe(true);
+    expect(stream.taken()).toBe(65);
+    expect(stream.cancelled()).toBe(true);
   });
 
   test("a list cell over a Null child of 2^31 - 1 values is cut by the byte budget before its array is built", async () => {
@@ -492,6 +550,34 @@ describe("readRelationAnswer: the 32 MiB bound (spec 4.6 steps 7 and 8)", () => 
     const error = await refusal(readRelationAnswer(at, WIDE));
     expect([error.category, error.message]).toStrictEqual(["batch-too-large", SPARK_ERROR_SENTENCES.batchTooLarge(32)]);
     expect(at.taken()).toBe(2);
+  });
+
+  test("a one-chunk batch whose bytes reach the bound is whole when read: it is kept, with the cut stream", async () => {
+    // As Spark sends them, every batch one chunk (num_chunks_in_batch "1"), and 1 MiB a response: the schema and 30
+    // batches leave 31 MiB counted, and the 31st batch is the response that reaches the bound.
+    const ones = Array.from({ length: 40 }, (_, at) => chunks(int64Batch(at * 5, 5), 5, 1)[0] as object);
+    const stream = stub([SCHEMA, ...ones, METRICS], { bound: SPARK_STREAM_MAX_RECEIVED_BYTES, bytes: () => MiB });
+    const answer = await readRelationAnswer(stream, WIDE);
+    expect(answer.cut).toBe("stream");
+    expect(answer.batches.map((kept) => kept.rows)).toStrictEqual(Array.from({ length: 31 }, () => 5));
+    expect(stream.receivedBytes).toBe(SPARK_STREAM_MAX_RECEIVED_BYTES);
+    expect(stream.taken()).toBe(32);
+    expect(stream.cancelled()).toBe(true);
+  });
+
+  test("a batch with chunks still to come is still checked at its first chunk under the same counting", async () => {
+    // With its first chunk counted, the other two of three chunks could reach the bound: the cut is declared before it.
+    const ipc = stringBatch(50, 100);
+    const first = SPARK_STREAM_MAX_RECEIVED_BYTES - 2 * SPARK_ARROW_CHUNK_BYTES - 2;
+    const stream = stub([SCHEMA, batch(int64Batch(0, 5), 5), ...chunks(ipc, 50, 3), METRICS], {
+      bound: SPARK_STREAM_MAX_RECEIVED_BYTES,
+      bytes: (index) => (index === 2 ? first : 1),
+    });
+    const answer = await readRelationAnswer(stream, WIDE);
+    expect(answer.cut).toBe("stream");
+    expect(answer.batches.map((kept) => kept.rows)).toStrictEqual([5]);
+    expect(stream.taken()).toBe(3);
+    expect(stream.cancelled()).toBe(true);
   });
 });
 
