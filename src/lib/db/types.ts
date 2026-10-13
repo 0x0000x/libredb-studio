@@ -614,7 +614,8 @@ export type ExplainFormat =
   | "databend-text"
   | "bigquery-dryrun"
   | "snowflake-json"
-  | "firestore-explain";
+  | "firestore-explain"
+  | "spark-text";
 
 /**
  * How deep an engine's container chain is, in the TYPE rather than only in a derivation.
