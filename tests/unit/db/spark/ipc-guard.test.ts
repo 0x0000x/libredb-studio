@@ -402,3 +402,33 @@ describe("checkIpcStream: the stream apache-arrow 21.2.0 walks is the stream che
     }
   });
 });
+
+describe("checkIpcStream: the check reads each body byte at most once", () => {
+  test("a buffer that starts before the previous one ends: shared offsets, data inside offsets, buffers out of order", () => {
+    // Two Utf8 columns of the same values: validity, offsets and data of a (buffers 0 to 2), then of b (3 to 5).
+    const stream = columnsStream([
+      { name: "a", kind: "utf8", values: ["ab", "cd"] },
+      { name: "b", kind: "utf8", values: ["ab", "cd"] },
+    ]);
+    expect(checkIpcStream(stream)).toStrictEqual({ fields: 2, depth: 1, batches: 1 });
+    const { view, batch } = tablesOf(stream);
+    const buffers = tableAt(view, slotAt(view, batch, 2)) + 4;
+    const offsetOf = (index: number) => view.getBigInt64(buffers + 16 * index, true);
+    const endOf = (index: number) => offsetOf(index) + view.getBigInt64(buffers + 16 * index + 8, true);
+    // b's offsets moved onto a's: inside the body and aligned, the same bytes the offsets check of a reads.
+    refusedWith(
+      () => checkIpcStream(patchRecordBatch(stream, { kind: "buffer", index: 4, offset: offsetOf(1) })),
+      unreadable("bufferOrder"),
+    );
+    // b's data moved 8 bytes into b's offsets buffer, recorded as 16 bytes: after its start, before its end.
+    refusedWith(
+      () => checkIpcStream(patchRecordBatch(stream, { kind: "buffer", index: 5, offset: offsetOf(4) + BigInt(8) })),
+      unreadable("bufferOrder"),
+    );
+    // a's empty validity buffer moved to where the last buffer ends: no bytes overlap, but the order is broken.
+    refusedWith(
+      () => checkIpcStream(patchRecordBatch(stream, { kind: "buffer", index: 0, offset: endOf(5) })),
+      unreadable("bufferOrder"),
+    );
+  });
+});

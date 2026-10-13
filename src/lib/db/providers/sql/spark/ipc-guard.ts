@@ -33,6 +33,7 @@ export const SPARK_IPC_FAILURES = Object.freeze({
   nodes: "a batch whose columns or buffers differ from its schema",
   buffers: "a buffer outside its batch's body",
   alignment: "a buffer not aligned to 8 bytes",
+  bufferOrder: "a buffer that starts before the previous buffer ends",
   length: "a column whose length or null count does not fit its batch",
   validity: "a validity bitmap shorter than its column",
   values: "a values buffer shorter than its column",
@@ -291,12 +292,18 @@ function checkBatch(
     nulls.push(nullCount);
   }
   const spans: { readonly at: number; readonly length: number }[] = [];
+  // Arrow's writers lay the buffers out end to end, in order, so each starts at or after the end of the one before.
+  // Holding every batch to that makes the offsets checks below read each body byte at most once, so their work stays
+  // linear in the stream's size.
+  let end = 0;
   for (let index = 0; index < buffers.length; index += 1) {
     const offset = header.i64(buffers.start + 16 * index);
     const length = header.i64(buffers.start + 16 * index + 8);
     if (offset < 0 || length < 0 || offset + length > bodyLength) refuse("buffers");
     // apache-arrow views a buffer as a typed array, which needs the 8-byte alignment Arrow's format gives each buffer.
     if (offset % 8 !== 0) refuse("alignment");
+    if (offset < end) refuse("bufferOrder");
+    end = offset + length;
     spans.push({ at: body + offset, length });
   }
   let next = 0;
