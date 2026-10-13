@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import { SPARK_ERROR_SENTENCES, SparkError } from "@/lib/db/providers/sql/spark/errors";
+import { SparkProvider } from "@/lib/db/providers/sql/spark/index";
 import {
   readHealth,
   readOverview,
@@ -6,6 +8,9 @@ import {
   type SparkMonitoringDeps,
 } from "@/lib/db/providers/sql/spark/monitoring";
 import { formatDuration } from "@/lib/db/utils/pool-manager";
+import type { DatabaseConnection } from "@/lib/types";
+import { startSparkFake } from "../../../helpers/spark-connect-server";
+import { columnsStream } from "../../../helpers/spark-ipc";
 
 const NOW = new Date("2026-10-13T12:00:00Z");
 
@@ -13,7 +18,12 @@ afterEach(() => {
   setSystemTime();
 });
 
-function deps(app: Readonly<Record<string, string>>, calls: string[] = []): SparkMonitoringDeps {
+/** The provider's side of the panels: SHOW CURRENT NAMESPACE answers `rows`, and every listing answers 7 tables. */
+function deps(
+  app: Readonly<Record<string, string>>,
+  calls: string[] = [],
+  rows: readonly Readonly<Record<string, unknown>>[] = [{ catalog: "spark_catalog", namespace: "studio" }],
+): SparkMonitoringDeps {
   return {
     version: async () => {
       calls.push("version");
@@ -23,9 +33,13 @@ function deps(app: Readonly<Record<string, string>>, calls: string[] = []): Spar
       calls.push(`confAll ${prefix}`);
       return app;
     },
-    currentTables: async () => {
-      calls.push("currentTables");
-      return { count: 7, catalog: "spark_catalog", namespace: "studio" };
+    currentNamespace: async () => {
+      calls.push("currentNamespace");
+      return rows.at(0);
+    },
+    tableCount: async (catalog, namespace) => {
+      calls.push(`tableCount ${catalog} ${namespace}`);
+      return 7;
     },
   };
 }
@@ -46,8 +60,47 @@ describe("overview", () => {
       tableCountSampledFrom: "the tables of spark_catalog.studio, the connection's current namespace",
       indexCount: 0,
     });
-    expect(calls).toStrictEqual(["version", "confAll spark.app.", "currentTables"]);
+    expect(calls).toStrictEqual([
+      "version",
+      "confAll spark.app.",
+      "currentNamespace",
+      "tableCount spark_catalog studio",
+    ]);
   });
+
+  test("a catalog with no current namespace has no table count: no listing is read, and every other field is as with one", async () => {
+    setSystemTime(NOW);
+    const app = { startTime: String(NOW.getTime() - 90_000) };
+    const counted = await readOverview(deps(app));
+    const calls: string[] = [];
+    // Spark spells the current namespace of a catalog that has none as "".
+    const uncounted = await readOverview(deps(app, calls, [{ catalog: "lake", namespace: "" }]));
+    const { tableCountSampledFrom, ...others } = counted;
+    expect(tableCountSampledFrom).toBe("the tables of spark_catalog.studio, the connection's current namespace");
+    expect(uncounted).toStrictEqual({ ...others, tableCount: 0 });
+    expect(calls).toStrictEqual(["version", "confAll spark.app.", "currentNamespace"]);
+  });
+
+  test.each<[string, readonly Readonly<Record<string, unknown>>[], string]>([
+    ["no row", [], "SHOW CURRENT NAMESPACE"],
+    ["a catalog that is not text", [{ catalog: null, namespace: "studio" }], "the catalog column of Spark's answer"],
+    ["a namespace that is not text", [{ catalog: "lake", namespace: null }], "the namespace column of Spark's answer"],
+  ])(
+    "SHOW CURRENT NAMESPACE with %s fails the overview as unreadable, and no listing is read",
+    async (_, rows, what) => {
+      const calls: string[] = [];
+      const failure = await readOverview(deps({}, calls, rows)).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(SparkError);
+      expect({ category: (failure as SparkError).category, message: (failure as SparkError).message }).toStrictEqual({
+        category: "unreadable",
+        message: SPARK_ERROR_SENTENCES.unreadable(what),
+      });
+      expect(calls).toStrictEqual(["version", "confAll spark.app.", "currentNamespace"]);
+    },
+  );
 
   test.each<Record<string, string>>([{}, { startTime: "" }, { startTime: "soon" }, { startTime: "-5" }])(
     "without a readable start time the uptime is N/A and no start time is claimed (%j)",
@@ -84,6 +137,55 @@ describe("overview", () => {
       uptime: formatDuration(0),
       startTime: NOW,
     });
+  });
+});
+
+describe("the overview through the provider", () => {
+  test("a connection whose catalog has no current namespace answers the overview with no table count, and sends no listing", async () => {
+    const fake = await startSparkFake({
+      statements: {
+        // A catalog with no current namespace: Spark spells that namespace as "".
+        "SHOW CURRENT NAMESPACE": {
+          kind: "command",
+          ipc: columnsStream([
+            { name: "catalog", kind: "utf8", values: ["lake"] },
+            { name: "namespace", kind: "utf8", values: [""] },
+          ]),
+        },
+      },
+    });
+    const port = Number(fake.target.split(":").at(-1));
+    const provider = new SparkProvider({
+      id: "no-namespace",
+      name: "no-namespace",
+      type: "spark",
+      host: "127.0.0.1",
+      port,
+    } as DatabaseConnection);
+    try {
+      await provider.connect();
+      expect(await provider.getOverview()).toStrictEqual({
+        version: "4.2.0",
+        uptime: "N/A",
+        maxConnections: 0,
+        databaseSize: "N/A",
+        tableCount: 0,
+        indexCount: 0,
+      });
+      // The connect's and the overview's SHOW CURRENT NAMESPACE, and no listing.
+      expect(
+        fake.log.entries
+          .filter((entry) => entry.rpc === "ExecutePlan")
+          .map(
+            (entry) =>
+              (entry.request as { plan: { command: { sql_command: { input: { sql: { query: string } } } } } }).plan
+                .command.sql_command.input.sql.query,
+          ),
+      ).toStrictEqual(["SHOW CURRENT NAMESPACE", "SHOW CURRENT NAMESPACE"]);
+    } finally {
+      await provider.disconnect();
+      fake.close();
+    }
   });
 });
 

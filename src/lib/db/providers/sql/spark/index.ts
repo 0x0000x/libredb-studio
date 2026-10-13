@@ -744,13 +744,9 @@ export class SparkProvider extends SQLBaseProvider {
           connection.options.secretForms,
         ),
       confAll: (prefix) => this.confAll(connection, prefix),
-      currentTables: async () => {
-        const row = (await this.metadataSql(connection, "SHOW CURRENT NAMESPACE")).rows.at(0) ?? {};
-        const catalog = String(row.catalog ?? "");
-        const namespace = String(row.namespace ?? "");
-        const tables = await introspect.listObjects(this.introspectDeps(connection), [catalog, namespace], "table");
-        return { count: tables.length, catalog, namespace };
-      },
+      currentNamespace: async () => (await this.metadataSql(connection, "SHOW CURRENT NAMESPACE")).rows.at(0),
+      tableCount: async (catalog, namespace) =>
+        (await introspect.listObjects(this.introspectDeps(connection), [catalog, namespace], "table")).length,
     };
   }
 
