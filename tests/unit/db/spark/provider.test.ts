@@ -679,6 +679,155 @@ describe("SparkProvider: the object surface on the metadata session", () => {
   });
 });
 
+describe("SparkProvider: one deadline for a bulk column read", () => {
+  const TIMEOUT = 1_000;
+  const START = 1_000_000;
+  /** DESCRIBE TABLE's answer for a table of one column. */
+  const DESCRIBED = columnsStream([
+    { name: "col_name", kind: "utf8", values: ["id"] },
+    { name: "data_type", kind: "utf8", values: ["int"] },
+    { name: "comment", kind: "utf8", values: [null] },
+  ]);
+  const detailOf = (name: string) => ({
+    path: ["spark_catalog", "default", name],
+    columns: [{ name: "id", type: "int", nullable: true, isPrimary: false }],
+    indexes: [],
+    foreignKeys: [],
+  });
+
+  /**
+   * A connected provider on a test clock, over a channel whose namespace `default` lists `tables`. The listing answers at
+   * once and each DESCRIBE TABLE `cost` ms after it was sent; one whose answer would come past its call's deadline fails
+   * at that deadline, as grpc-js fails a call past its deadline. The clock starts at START once connected.
+   */
+  async function timed(tables: readonly string[], cost: number) {
+    let now = Date.now();
+    const script = scripted({
+      commands: {
+        "SHOW CURRENT NAMESPACE": CURRENT,
+        [`SHOW VIEWS IN ${DEFAULT}`]: listing("viewName", []),
+        [`SHOW TABLES IN ${DEFAULT}`]: listing("tableName", tables),
+      },
+      stream: (sql, request, call) => {
+        if (!sql.startsWith("DESCRIBE TABLE ")) return undefined;
+        let reads = 0;
+        return {
+          read: async () => {
+            reads += 1;
+            if (reads > 1) return undefined;
+            if (now + cost > call.deadline.getTime()) {
+              now = call.deadline.getTime();
+              throw deadlineStatus();
+            }
+            now += cost;
+            return commandAnswer(request, DESCRIBED);
+          },
+          receivedBytes: 0,
+          truncated: false,
+          cancel: () => undefined,
+        };
+      },
+    });
+    const provider = new SparkProvider(connection(1), { queryTimeout: TIMEOUT }, script);
+    await provider.connect();
+    now = START;
+    const clock = spyOn(Date, "now").mockImplementation(() => now);
+    const sentAt = script.calls.length;
+    return {
+      provider,
+      /** The statements the read sent, each with the time it was sent and its deadline. */
+      statements: () =>
+        script.calls
+          .slice(sentAt)
+          .filter((call) => call.rpc === "ExecutePlan")
+          .map((call) => ({ sql: statementOf(call.request), at: call.at, deadline: call.deadline })),
+      interrupts: () => script.calls.slice(sentAt).filter((call) => call.rpc === "Interrupt").length,
+      end: async () => {
+        clock.mockRestore();
+        await provider.disconnect();
+      },
+    };
+  }
+
+  test("a read whose statements are each fast enough alone but pass the timeout together fails when its time is up between two of them, and sends nothing after", async () => {
+    const read = await timed(["a", "b", "c", "d"], TIMEOUT / 2);
+    try {
+      const failure = await failureOf(read.provider.describeObjects(["spark_catalog", "default"], "table"));
+      expect(failure).toBeInstanceOf(QueryError);
+      expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.deadlineBeforeSend(TIMEOUT));
+      expect(read.statements()).toStrictEqual([
+        { sql: `SHOW VIEWS IN ${DEFAULT}`, at: START, deadline: START + TIMEOUT },
+        { sql: `SHOW TABLES IN ${DEFAULT}`, at: START, deadline: START + TIMEOUT },
+        { sql: `DESCRIBE TABLE ${DEFAULT}.\`a\``, at: START, deadline: START + TIMEOUT },
+        { sql: `DESCRIBE TABLE ${DEFAULT}.\`b\``, at: START + TIMEOUT / 2, deadline: START + TIMEOUT },
+      ]);
+      expect(read.provider.hasRunsInFlight()).toBe(false);
+    } finally {
+      await read.end();
+    }
+  });
+
+  test("a read whose time is up during a statement fails with the deadline's sentence, stops that statement, and sends nothing after", async () => {
+    const cost = (TIMEOUT * 9) / 20;
+    const read = await timed(["a", "b", "c", "d"], cost);
+    try {
+      const failure = await failureOf(read.provider.describeObjects(["spark_catalog", "default"], "table"));
+      expect(failure).toBeInstanceOf(QueryError);
+      expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.deadline(TIMEOUT));
+      expect(read.statements()).toStrictEqual([
+        { sql: `SHOW VIEWS IN ${DEFAULT}`, at: START, deadline: START + TIMEOUT },
+        { sql: `SHOW TABLES IN ${DEFAULT}`, at: START, deadline: START + TIMEOUT },
+        { sql: `DESCRIBE TABLE ${DEFAULT}.\`a\``, at: START, deadline: START + TIMEOUT },
+        { sql: `DESCRIBE TABLE ${DEFAULT}.\`b\``, at: START + cost, deadline: START + TIMEOUT },
+        { sql: `DESCRIBE TABLE ${DEFAULT}.\`c\``, at: START + 2 * cost, deadline: START + TIMEOUT },
+      ]);
+      // The statement that met the deadline is asked to stop; nothing else is.
+      expect(read.interrupts()).toBe(1);
+      expect(read.provider.hasRunsInFlight()).toBe(false);
+    } finally {
+      await read.end();
+    }
+  });
+
+  test("a read well inside its time answers every object, each statement under the read's one deadline", async () => {
+    const cost = TIMEOUT / 10;
+    const read = await timed(["a", "b", "c"], cost);
+    try {
+      expect(await read.provider.describeObjects(["spark_catalog", "default"], "table")).toStrictEqual({
+        details: [detailOf("a"), detailOf("b"), detailOf("c")],
+      });
+      expect(read.statements()).toStrictEqual([
+        { sql: `SHOW VIEWS IN ${DEFAULT}`, at: START, deadline: START + TIMEOUT },
+        { sql: `SHOW TABLES IN ${DEFAULT}`, at: START, deadline: START + TIMEOUT },
+        { sql: `DESCRIBE TABLE ${DEFAULT}.\`a\``, at: START, deadline: START + TIMEOUT },
+        { sql: `DESCRIBE TABLE ${DEFAULT}.\`b\``, at: START + cost, deadline: START + TIMEOUT },
+        { sql: `DESCRIBE TABLE ${DEFAULT}.\`c\``, at: START + 2 * cost, deadline: START + TIMEOUT },
+      ]);
+      expect(read.interrupts()).toBe(0);
+    } finally {
+      await read.end();
+    }
+  });
+
+  test("every other read gives each of its statements the whole timeout", async () => {
+    const read = await timed(["a"], TIMEOUT / 2);
+    try {
+      expect(await read.provider.describeObject(["spark_catalog", "default", "a"], "table")).toStrictEqual(
+        detailOf("a"),
+      );
+      expect(await read.provider.describeObject(["spark_catalog", "default", "a"], "table")).toStrictEqual(
+        detailOf("a"),
+      );
+      expect(read.statements()).toStrictEqual([
+        { sql: `DESCRIBE TABLE ${DEFAULT}.\`a\``, at: START, deadline: START + TIMEOUT },
+        { sql: `DESCRIBE TABLE ${DEFAULT}.\`a\``, at: START + TIMEOUT / 2, deadline: START + (3 * TIMEOUT) / 2 },
+      ]);
+    } finally {
+      await read.end();
+    }
+  });
+});
+
 describe("SparkProvider: refusals before any call", () => {
   test("bound parameters, a script block, a Unicode space and an address Studio reads differently are refused, and nothing is sent", async () => {
     const script = scripted({ commands: { "SHOW CURRENT NAMESPACE": CURRENT, "SELECT 1": ONE } });

@@ -593,14 +593,17 @@ export class SparkProvider extends SQLBaseProvider {
 
   // -- the metadata session ------------------------------------------------------------------------------------------
 
-  /** One statement the provider wrote, on the metadata session, read again once on a new one when the server closed it. */
-  private metadataSql(connection: SparkConnection, sql: string): Promise<SparkStatementResult> {
+  /**
+   * One statement the provider wrote, on the metadata session, read again once on a new one when the server closed it.
+   * Its deadline is the connection's query timeout from now, unless the read it belongs to passes the read's own.
+   */
+  private metadataSql(
+    connection: SparkConnection,
+    sql: string,
+    deadline: Date = new Date(Date.now() + connection.options.callTimeoutMs),
+  ): Promise<SparkStatementResult> {
     return connection.sessions.readMetadata((session) =>
-      connection.runs.run({
-        sql,
-        session: async () => session,
-        deadline: new Date(Date.now() + connection.options.callTimeoutMs),
-      }),
+      connection.runs.run({ sql, session: async () => session, deadline }),
     );
   }
 
@@ -621,9 +624,10 @@ export class SparkProvider extends SQLBaseProvider {
     });
   }
 
-  private introspectDeps(connection: SparkConnection): introspect.SparkIntrospectDeps {
+  /** The tree's statements on `connection`; given `deadline`, every statement of the read runs under that one. */
+  private introspectDeps(connection: SparkConnection, deadline?: Date): introspect.SparkIntrospectDeps {
     return {
-      runSql: (sql) => this.metadataSql(connection, sql),
+      runSql: (sql) => this.metadataSql(connection, sql, deadline),
       confKeys: async (prefix) => Object.keys(await this.confAll(connection, prefix)),
     };
   }
@@ -703,11 +707,17 @@ export class SparkProvider extends SQLBaseProvider {
     return this.surface((connection) => introspect.describeObject(this.introspectDeps(connection), checked, kind));
   }
 
+  /**
+   * One deadline for the whole read: its listing and every DESCRIBE TABLE share the connection's query timeout from the
+   * read's start, so each statement runs in the time that is left. Once that time is up the read fails as a statement
+   * past the timeout fails, with no details, and sends nothing more.
+   */
   public async describeObjects(container: readonly string[], kind: string, limit?: number): Promise<ObjectDetailBatch> {
     const checked = this.container(container);
-    return this.surface((connection) =>
-      introspect.describeObjects(this.introspectDeps(connection), checked, kind, limit),
-    );
+    return this.surface((connection) => {
+      const deadline = new Date(Date.now() + connection.options.callTimeoutMs);
+      return introspect.describeObjects(this.introspectDeps(connection, deadline), checked, kind, limit);
+    });
   }
 
   public async readObjectSource(path: readonly string[], kind: string, limit?: number): Promise<ObjectSourceDocument> {
