@@ -644,6 +644,8 @@ describe("createDatabaseProvider", () => {
     const provider = await createDatabaseProvider(makeConnection("spark", { host: "127.0.0.1", port: 15002 }));
     expect(provider).toBeInstanceOf(SparkProvider);
     expect(provider.isConnected()).toBe(false);
+    // The third constructor argument, the transport seam, defaults to an empty object when the factory omits it.
+    expect((provider as unknown as { deps: Record<string, unknown> }).deps).toStrictEqual({});
   });
 
   test('creates provider for type "cassandra"', async () => {
