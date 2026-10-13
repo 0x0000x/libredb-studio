@@ -38,11 +38,15 @@ export async function readOverview(deps: SparkMonitoringDeps): Promise<DatabaseO
   const app = await deps.confAll("spark.app.");
   const tables = await deps.currentTables();
   const raw = app.startTime;
-  // `spark.app.startTime` is epoch milliseconds; any other text claims no start time.
-  const startMs = raw !== undefined && /^\d+$/.test(raw) ? Number(raw) : undefined;
+  const now = Date.now();
+  // `spark.app.startTime` is epoch milliseconds. Any other text, and a start later than Studio's clock, claims no start
+  // time, so the overview never shows a negative uptime. A start past the Date range is later than any clock, so it
+  // never becomes an Invalid Date either.
+  const read = raw !== undefined && /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  const startMs = read <= now ? read : undefined;
   return {
     version,
-    uptime: startMs === undefined ? NOT_AVAILABLE : formatDuration(Date.now() - startMs),
+    uptime: startMs === undefined ? NOT_AVAILABLE : formatDuration(now - startMs),
     ...(startMs === undefined ? {} : { startTime: new Date(startMs) }),
     maxConnections: 0,
     databaseSize: NOT_AVAILABLE,

@@ -60,6 +60,31 @@ describe("overview", () => {
       expect("databaseSizeBytes" in overview).toBe(false);
     },
   );
+
+  test.each<[string, string]>([
+    ["a start later than Studio's clock", String(NOW.getTime() + 60_000)],
+    ["a start past the Date range", "99999999999999999999"],
+  ])("%s claims no start time and no uptime", async (_, startTime) => {
+    setSystemTime(NOW);
+    expect(await readOverview(deps({ startTime }))).toStrictEqual({
+      version: "4.2.0",
+      uptime: "N/A",
+      maxConnections: 0,
+      databaseSize: "N/A",
+      tableCount: 7,
+      tableCountSampledFrom: "the tables of spark_catalog.studio, the connection's current namespace",
+      indexCount: 0,
+    });
+  });
+
+  test("a start at Studio's own clock is an uptime of zero", async () => {
+    setSystemTime(NOW);
+    const overview = await readOverview(deps({ startTime: String(NOW.getTime()) }));
+    expect({ uptime: overview.uptime, startTime: overview.startTime }).toStrictEqual({
+      uptime: formatDuration(0),
+      startTime: NOW,
+    });
+  });
 });
 
 describe("health", () => {
