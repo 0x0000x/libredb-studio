@@ -78,7 +78,7 @@ An mssql seed that carried only a `connectionString`, for example, loaded and op
 The types whose provider reads it are postgres, mysql, sqlite, libsql, oracle, db2, clickhouse, mongodb and couchbase.
 sqlite reads it as the database file path, with a `file:` prefix removed, although its provider's capability flag says it does not ([docs/providers/sqlite.md](./providers/sqlite.md)).
 mssql does not read it, although its provider's capability flag says it does: the flag covers the connection form, which splits a pasted URI into fields, and the provider builds from those fields only ([docs/providers/mssql.md](./providers/mssql.md#44-connection-string-nuance)).
-The 27 that refuse it are bigquery, snowflake, duckdb, mssql, druid, trino, cassandra, elasticsearch, opensearch, redis, prometheus, kafka, etcd, neo4j, milvus, qdrant, influxdb, influxdb3, oxia, databend, s3, kubernetes, mqtt, firestore, rabbitmq, opcua and libredb.
+The 28 that refuse it are bigquery, snowflake, spark, duckdb, mssql, druid, trino, cassandra, elasticsearch, opensearch, redis, prometheus, kafka, etcd, neo4j, milvus, qdrant, influxdb, influxdb3, oxia, databend, s3, kubernetes, mqtt, firestore, rabbitmq, opcua and libredb.
 To fix a refused file, move the value into `host`, `port`, `user`, `password` and `database`, and remove `connectionString`.
 
 ### A Firestore connection
@@ -123,6 +123,24 @@ connections:
 ```
 
 A Snowflake connection takes no `connectionString` and is refused if it carries one.
+
+### An Apache Spark connection
+
+An Apache Spark seed names the Spark Connect server in `host` and `port`, and carries the bearer token in `password`, written as an `${ENV}` reference ([providers/spark.md](providers/spark.md)).
+
+```yaml
+connections:
+  - id: "spark-lakehouse"
+    name: "Spark lakehouse"
+    type: "spark"
+    host: "spark.internal"
+    port: 15002
+    password: "${SPARK_TOKEN}"
+    database: "spark_catalog"
+    schema: "studio"
+```
+
+No `user` field and no `readOnly`: Spark Connect takes a bearer token, and Spark has no read-only session, so a seed that sets `readOnly: true` is refused at load.
 
 ### Diagnostics
 
@@ -335,7 +353,7 @@ connections:
 | `connections` | Yes | — | Array of connection definitions (min 1) |
 | `connections[].id` | Yes | — | Unique slug: `[a-z0-9-]+`, max 64 chars |
 | `connections[].name` | Yes | — | Display name, max 128 chars |
-| `connections[].type` | Yes | - | Database type: `postgres`, `mysql`, `sqlite`, `libsql`, `duckdb`, `mongodb`, `redis`, `oracle`, `db2`, `mssql`, `libredb`, `couchbase`, `clickhouse`, `druid`, `elasticsearch`, `opensearch`, `trino`, `snowflake`, `cassandra`, `prometheus`, `kafka`, `etcd`, `neo4j`, `milvus`, `qdrant`, `influxdb`, `influxdb3`, `oxia`, `databend`, `s3`, `kubernetes` |
+| `connections[].type` | Yes | - | Database type: `postgres`, `mysql`, `sqlite`, `libsql`, `duckdb`, `mongodb`, `redis`, `oracle`, `db2`, `mssql`, `libredb`, `couchbase`, `clickhouse`, `druid`, `elasticsearch`, `opensearch`, `trino`, `snowflake`, `spark`, `cassandra`, `prometheus`, `kafka`, `etcd`, `neo4j`, `milvus`, `qdrant`, `influxdb`, `influxdb3`, `oxia`, `databend`, `s3`, `kubernetes` |
 | `connections[].host` | No | — | Hostname or IP |
 | `connections[].port` | No | — | Port number (1-65535) |
 | `connections[].database` | No | — | Database name (Couchbase: the bucket. Druid has one catalog and ignores it. Trino: the **catalog**. S3: the optional pinned bucket. PostgreSQL: empty reaches the whole server, every database the role can CONNECT to) |
