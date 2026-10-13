@@ -488,7 +488,9 @@ describe("every other number and sentence the doc states is the code's", () => {
     ]);
     expect(FLAT_DOC).toContain(`setting \`client_result_chunk_size\` to ${SNOWFLAKE_CHUNK_SIZE_MB}`);
     expect(SNOWFLAKE_USER_AGENT).toMatch(/^LibreDB-Studio(\/.+)?$/);
-    expect(FLAT_DOC).toContain("Every request sends the User-Agent `LibreDB-Studio/<version>`.");
+    expect(FLAT_DOC).toContain(
+      "Every request sends the User-Agent `LibreDB-Studio/<version>`, or `LibreDB-Studio` in the embedded package, whose build injects no version.",
+    );
   });
 
   test("the key bounds, the server text cut, the host labels, the tree pages and the panel cache", () => {

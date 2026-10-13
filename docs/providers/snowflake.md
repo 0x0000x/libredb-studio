@@ -495,7 +495,7 @@ Still unconfirmed: every Snowflake form not named above, among them `CREATE STOR
 ## 10. Security
 
 - Secrets of a connection a user creates are kept in browser storage, and `GET /api/storage` returns them to their owner ([STORAGE.md](../STORAGE.md)); keep an operator-seeded connection `managed: true` so its key stays on the server.
-- Studio reads no key file; the key's text is parsed once at connect, and the provider keeps only the key object and its fingerprint.
+- Studio reads no key file; the key's text is parsed once at connect, and no field the provider owns keeps the key text or its passphrase: it keeps the key object and its fingerprint, while the connection object passed in still holds both.
 - Statement text, secrets in it included, is kept in the query history and sent to the AI safety check, as on every SQL engine.
 - A PAT created in the editor with `ALTER USER ... ADD PAT` appears once in the grid, as Snowflake returns it; Studio keeps no copy beyond that result.
 - A pasted string is read in the browser and never kept ([section 2.6](#26-paste-url)).
@@ -538,7 +538,7 @@ Still unconfirmed: every Snowflake form not named above, among them `CREATE STOR
 | A link outside the account's statements | `DatabaseError` | `Snowflake answered with a link outside this account's statements, so Studio did not follow it.` |
 | Lone transaction, `USE`, result partitions, key and field checks | as above | the sentences of sections 2, 4 and 6 |
 
-Every request sends the User-Agent `LibreDB-Studio/<version>`.
+Every request sends the User-Agent `LibreDB-Studio/<version>`, or `LibreDB-Studio` in the embedded package, whose build injects no version.
 A submit answered 429, 500, 502, 503 or 504 is resent with the same request id and `retry=true`, so Snowflake never runs it twice, after a backoff from 500 ms doubling to 8 s, at most 5 sends; 401, 403, 404, 422 and 522 are never retried.
 Studio holds 4 statements per connection, 8 per Studio process, and a queue of 64, from the submit to the last partition, which bounds the memory results take; a full queue refuses with the shared limiter's sentence.
 
