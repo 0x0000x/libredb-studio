@@ -121,6 +121,30 @@ function tableOrViewNotFound(error: unknown): boolean {
   );
 }
 
+/**
+ * The classes Spark refuses SHOW CREATE TABLE with for an object it holds: a temporary view, a metric view, a
+ * transactional Hive table, and a Hive table whose features or serde configuration the statement cannot print. Spark
+ * 4.1.3 and 4.2.0 answer a temporary view with EXPECT_PERMANENT_VIEW_NOT_TEMP before the command's own refusal is
+ * reached. The command's AS SERDE refusal is left out, since Studio never sends that form.
+ */
+const SOURCE_REFUSALS: readonly string[] = [
+  "EXPECT_PERMANENT_VIEW_NOT_TEMP",
+  "UNSUPPORTED_SHOW_CREATE_TABLE.ON_TEMPORARY_VIEW",
+  "UNSUPPORTED_SHOW_CREATE_TABLE.ON_METRIC_VIEW",
+  "UNSUPPORTED_SHOW_CREATE_TABLE.ON_TRANSACTIONAL_HIVE_TABLE",
+  "UNSUPPORTED_SHOW_CREATE_TABLE.WITH_UNSUPPORTED_FEATURE",
+  "UNSUPPORTED_SHOW_CREATE_TABLE.WITH_UNSUPPORTED_SERDE_CONFIGURATION",
+];
+
+/** Whether Spark refused a definition read with one of SOURCE_REFUSALS: the class its text opens with. */
+function sourceRefused(error: unknown): error is SparkError {
+  return (
+    error instanceof SparkError &&
+    error.category === "spark" &&
+    SOURCE_REFUSALS.some((refusal) => error.message.startsWith(`[${refusal}]`))
+  );
+}
+
 async function currentNamespace(deps: SparkIntrospectDeps): Promise<{ catalog: string; spelling: string }> {
   const [row] = await readWhole(deps, "SHOW CURRENT NAMESPACE");
   if (row === undefined) throw unreadable("SHOW CURRENT NAMESPACE");
@@ -360,6 +384,11 @@ function describeBoundReason(limit: number | undefined): string {
     : callerBoundTruncationReason(limit);
 }
 
+/**
+ * A table's or a view's definition from SHOW CREATE TABLE, as one part. A refusal SOURCE_REFUSALS lists is the part's
+ * unavailable sentence, Spark's own text; any other failure fails the read, a missing object with Spark's text, which
+ * names it.
+ */
 export async function readObjectSource(
   deps: SparkIntrospectDeps,
   path: readonly string[],
@@ -374,8 +403,7 @@ export async function readObjectSource(
     if (row === undefined) throw unreadable("SHOW CREATE TABLE");
     text = cell(row, "createtab_stmt");
   } catch (error) {
-    // Spark refuses a temp view, a transactional Hive table and a metric view; its own text says which.
-    if (error instanceof SparkError && error.category === "spark") {
+    if (sourceRefused(error)) {
       return { path: [...path], kind, parts: [{ id: "ddl", label: "Definition", unavailable: error.message }] };
     }
     throw error;
