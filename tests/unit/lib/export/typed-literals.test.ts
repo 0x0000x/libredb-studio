@@ -403,6 +403,17 @@ describe("typedLiteral: snowflake (provisional until a replay on an account)", (
   });
 });
 
+/** The sentence an `UnwritableValue` carries, so one assertion pins both the class and the words. */
+function unwritable(write: () => unknown): string | undefined {
+  try {
+    write();
+  } catch (error) {
+    if (error instanceof UnwritableValue) return error.message;
+    throw error;
+  }
+  return undefined;
+}
+
 describe("typedLiteral: spark", () => {
   test("writes dates, timestamps and times as Spark's typed literals", () => {
     expect(typedLiteral("2026-10-12", "date", "spark", scalar)).toBe("DATE '2026-10-12'");
@@ -428,8 +439,17 @@ describe("typedLiteral: spark", () => {
     expect(typedLiteral("10000000000", "decimal(1,-10)", "spark", scalar)).toBe("10000000000");
     expect(typedLiteral("9007199254740993", "bigint", "spark", scalar)).toBe("9007199254740993");
     expect(typedLiteral(42, "bigint", "spark", scalar)).toBeUndefined();
-    expect(typedLiteral("1e3", "decimal(10,2)", "spark", scalar)).toBe("<1e3>");
     expect(typedLiteral(1.5, "double", "spark", scalar)).toBeUndefined();
+  });
+
+  test("refuses text that is not digit text under a bigint or decimal declaration", () => {
+    // A quoted string is not taken: Spark's default store assignment (ANSI) refuses a string into a numeric column.
+    expect(unwritable(() => typedLiteral("1e3", "decimal(10,2)", "spark", scalar))).toBe(
+      "a decimal(10,2) value that is not digit text",
+    );
+    expect(unwritable(() => typedLiteral("12 345", "bigint", "spark", scalar))).toBe(
+      "a bigint value that is not digit text",
+    );
   });
 
   test("writes an ANSI interval as its rendered literal after its shape is checked", () => {
@@ -446,15 +466,78 @@ describe("typedLiteral: spark", () => {
 
   test("writes VARIANT through PARSE_JSON and nested values through FROM_JSON, every literal escaped", () => {
     expect(typedLiteral('{"a":"it\'s"}', "variant", "spark", scalar)).toBe(`PARSE_JSON('{"a":"it\\'s"}')`);
-    expect(typedLiteral([1, null, 3], "array<int>", "spark", scalar)).toBe("FROM_JSON('[1,null,3]', 'array<int>')");
+    expect(typedLiteral([1, null, 3], "array<int>", "spark", scalar)).toBe(
+      "FROM_JSON('[1,null,3]', 'array<int>', MAP('mode', 'FAILFAST'))",
+    );
     expect(typedLiteral({ k: "v\\" }, "map<string,string>", "spark", scalar)).toBe(
-      `FROM_JSON('{"k":"v\\\\\\\\"}', 'map<string,string>')`,
+      `FROM_JSON('{"k":"v\\\\\\\\"}', 'map<string,string>', MAP('mode', 'FAILFAST'))`,
     );
     expect(typedLiteral({ "it's": 1 }, "struct<`it's`:int>", "spark", scalar)).toBe(
-      "FROM_JSON('{\"it\\'s\":1}', 'struct<`it\\'s`:int>')",
+      "FROM_JSON('{\"it\\'s\":1}', 'struct<`it\\'s`:int>', MAP('mode', 'FAILFAST'))",
     );
   });
 
+  test("passes FAILFAST, so a nested value FROM_JSON cannot read fails the INSERT instead of storing NULL", () => {
+    // from_json defaults to PERMISSIVE, which stores NULL for the whole value when one element does not parse: a
+    // nested bigint past 2^53, which the decoder writes as digit text, is one (measured on Spark 4.2.0).
+    expect(typedLiteral([1, "9007199254740993"], "array<bigint>", "spark", scalar)).toBe(
+      `FROM_JSON('[1,"9007199254740993"]', 'array<bigint>', MAP('mode', 'FAILFAST'))`,
+    );
+  });
+
+  test("refuses binary, VARIANT and geospatial values at any depth, read as type names and not field names", () => {
+    expect(unwritable(() => typedLiteral(["\\x0102"], "array<binary>", "spark", scalar))).toBe(
+      "a array<binary> value with binary inside, which FROM_JSON reads only as base64",
+    );
+    expect(unwritable(() => typedLiteral({ k: "\\x01" }, "map<string,binary>", "spark", scalar))).toBe(
+      "a map<string,binary> value with binary inside, which FROM_JSON reads only as base64",
+    );
+    expect(unwritable(() => typedLiteral({ b: "\\x01", n: 1 }, "struct<b:binary,n:int>", "spark", scalar))).toBe(
+      "a struct<b:binary,n:int> value with binary inside, which FROM_JSON reads only as base64",
+    );
+    expect(unwritable(() => typedLiteral(['{"a":1}'], "array<variant>", "spark", scalar))).toBe(
+      "a array<variant> value with a VARIANT inside, which FROM_JSON would store as a string",
+    );
+    expect(unwritable(() => typedLiteral([[{ v: "1" }]], "ARRAY<ARRAY<STRUCT<v: VARIANT>>>", "spark", scalar))).toBe(
+      "a array<array<struct<v: variant>>> value with a VARIANT inside, which FROM_JSON would store as a string",
+    );
+    expect(
+      unwritable(() => typedLiteral({ g: "SRID=4326;POINT (1 2)" }, "struct<g:geometry(4326)>", "spark", scalar)),
+    ).toBe("a struct<g:geometry(4326)> value with a geospatial value inside, which FROM_JSON does not read");
+    expect(unwritable(() => typedLiteral(["SRID=4326;POINT (1 2)"], "array<geography(4326)>", "spark", scalar))).toBe(
+      "a array<geography(4326)> value with a geospatial value inside, which FROM_JSON does not read",
+    );
+    expect(typedLiteral({ variant: 1, binary: "x" }, "struct<variant:int,binary:string>", "spark", scalar)).toBe(
+      `FROM_JSON('{"variant":1,"binary":"x"}', 'struct<variant:int,binary:string>', MAP('mode', 'FAILFAST'))`,
+    );
+    expect(typedLiteral({ "a:binary": 1 }, "struct<`a:binary`:int>", "spark", scalar)).toBe(
+      "FROM_JSON('{\"a:binary\":1}', 'struct<`a:binary`:int>', MAP('mode', 'FAILFAST'))",
+    );
+  });
+
+  test("refuses a map whose key is not a string at any depth, which FROM_JSON does not take", () => {
+    expect(unwritable(() => typedLiteral({ "1": "a" }, "map<int,string>", "spark", scalar))).toBe(
+      "a map<int,string> value with a map whose keys are not strings, which FROM_JSON does not read",
+    );
+    expect(unwritable(() => typedLiteral({ m: [[[1], 2]] }, "struct<m:map<array<int>,int>>", "spark", scalar))).toBe(
+      "a struct<m:map<array<int>,int>> value with a map whose keys are not strings, which FROM_JSON does not read",
+    );
+    expect(typedLiteral({ k: 1 }, "map<string collate UTF8_LCASE,int>", "spark", scalar)).toBe(
+      `FROM_JSON('{"k":1}', 'map<string collate UTF8_LCASE,int>', MAP('mode', 'FAILFAST'))`,
+    );
+    expect(typedLiteral({ map: { k: 1 } }, "struct<map:map<string,int>>", "spark", scalar)).toBe(
+      `FROM_JSON('{"map":{"k":1}}', 'struct<map:map<string,int>>', MAP('mode', 'FAILFAST'))`,
+    );
+  });
+
+  test("refuses a CHAR or VARCHAR at any depth, which a FROM_JSON schema does not take", () => {
+    expect(unwritable(() => typedLiteral({ a: "x" }, "struct<a:char(5)>", "spark", scalar))).toBe(
+      "a struct<a:char(5)> value with a CHAR or VARCHAR inside, which a FROM_JSON schema does not take",
+    );
+    expect(unwritable(() => typedLiteral(["x"], "array<varchar(5)>", "spark", scalar))).toBe(
+      "a array<varchar(5)> value with a CHAR or VARCHAR inside, which a FROM_JSON schema does not take",
+    );
+  });
   test("refuses a map whose keys are nested, a geospatial cell and a VARIANT that is not text", () => {
     expect(() => typedLiteral([[[1], "v"]], "map<array<int>,string>", "spark", scalar)).toThrow(UnwritableValue);
     expect(() => typedLiteral("SRID=4326;POINT (1 2)", "geometry(4326)", "spark", scalar)).toThrow(UnwritableValue);
