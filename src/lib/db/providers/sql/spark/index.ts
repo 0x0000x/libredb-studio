@@ -322,8 +322,10 @@ export class SparkProvider extends SQLBaseProvider {
   private connecting: SparkConnection | null = null;
   /** Connections whose close is still stopping their runs and releasing their sessions. */
   private readonly closing = new Set<SparkConnection>();
-  /** Connections whose close has begun, so a failed connect and a disconnect never close one twice. */
-  private readonly closed = new WeakSet<SparkConnection>();
+  /** Each connection's one close, from the moment it began: none is closed twice, and every caller waits for it. */
+  private readonly closes = new WeakMap<SparkConnection, Promise<void>>();
+  /** Connections whose connect a second connect() displaced while they opened. */
+  private readonly displacedConnections = new WeakSet<SparkConnection>();
   /** Session releases in progress, each under the control deadline. */
   private releasing = 0;
 
@@ -462,18 +464,29 @@ export class SparkProvider extends SQLBaseProvider {
    * The option checks, the channel, the version read on a probe session, the metadata session's setup, then the current
    * catalog and namespace read. A failure closes what it opened and is mapped once. A second `connect()` replaces the
    * first connection and closes it; when the second fails, it closes the first connection too, so no connection stays
-   * open behind a provider that reports itself disconnected. A connect still running when a second one starts, or when
-   * a disconnect begins, ends cancelled.
+   * open behind a provider that reports itself disconnected. A connect still running when a second one starts is
+   * displaced: its connection is closed at once, so it sends nothing more, and it ends cancelled. One still running
+   * when a disconnect begins ends cancelled too. A connect answers once every connection it replaced or displaced is
+   * closed.
    */
   public async connect(): Promise<void> {
     let options: SparkConnectionOptions | undefined;
     let opened: SparkConnection | null = null;
+    // The connection of a connect still opening that this one displaced.
+    let overtaken: SparkConnection | null = null;
     try {
       options = buildSparkConnectionOptions(this.config as DatabaseConnection & WithTunnelFarEnd, {
         queryTimeout: this.queryTimeout,
       });
       opened = this.open(options);
+      overtaken = this.connecting;
       this.connecting = opened;
+      if (overtaken !== null) {
+        this.displacedConnections.add(overtaken);
+        // Its close begins now, so the displaced connect sends nothing more; this connect waits for that close before
+        // it answers.
+        void this.close(overtaken);
+      }
       await this.checkVersion(opened);
       await this.metadataSql(opened, "SHOW CURRENT NAMESPACE");
       // A disconnect() or a second connect() took this connection while it opened: this connect ended cancelled.
@@ -483,9 +496,11 @@ export class SparkProvider extends SQLBaseProvider {
       // whatever its own call met then, a failure of the channel a disconnect closed included, so it never reports a
       // server that answered as unreachable.
       const taken = opened !== null && this.connecting !== opened;
-      // A second connect() displaced this one: its connection is closed here whoever holds it, and its failure leaves
-      // the state of the connect that replaced it alone.
-      const displaced = taken && (this.connecting ?? this.connection) !== null;
+      // Displaced by a second connect(), this connect leaves the state of the connect that displaced it alone, whether
+      // that one is still opening, connected or failed. Taken by a disconnect, it does too once a later connect began.
+      const displaced =
+        (opened !== null && this.displacedConnections.has(opened)) ||
+        (taken && (this.connecting ?? this.connection) !== null);
       // A refusal of the option checks is already the repository's DatabaseConfigError.
       const failure = toDatabaseError(
         taken
@@ -502,10 +517,13 @@ export class SparkProvider extends SQLBaseProvider {
         this.setError(failure);
       }
       if (opened !== null && this.connecting === opened) this.connecting = null;
-      // Both closes start at once, so neither connection waits outside `connection`, `connecting` and `closing` for the
-      // other's close, and a Stop reaches its runs throughout. close() never rejects: the failure stays this connect's.
+      // Every close starts at once, so no connection waits outside `connection`, `connecting` and `closing` for
+      // another's close, and a Stop reaches its runs throughout. close() never rejects: the failure stays this
+      // connect's.
       await Promise.all(
-        [opened, previous].filter((item): item is SparkConnection => item !== null).map((item) => this.close(item)),
+        [opened, previous, overtaken]
+          .filter((item): item is SparkConnection => item !== null)
+          .map((item) => this.close(item)),
       );
       throw failure;
     }
@@ -513,7 +531,9 @@ export class SparkProvider extends SQLBaseProvider {
     const previous = this.connection;
     this.connection = opened;
     this.setConnected(true);
-    if (previous !== null) await this.close(previous);
+    await Promise.all(
+      [previous, overtaken].filter((item): item is SparkConnection => item !== null).map((item) => this.close(item)),
+    );
   }
 
   /**
@@ -556,14 +576,25 @@ export class SparkProvider extends SQLBaseProvider {
   }
 
   /**
-   * Refuses the metadata statements still waiting for a slot and closes the session registry, both at once, then stops
-   * every run, releases every session under the control deadline, and closes the channel; once per connection. The
-   * refusals come first, so no slot a stopped run gives back starts a statement, and no session setup or metadata read
-   * sends anything while the runs are being stopped.
+   * Closes `connection` once: the close that began first is recorded before any of it runs, and every caller, a
+   * disconnect, a failed connect or one that displaced another, waits for that one. It never rejects.
    */
-  private async close(connection: SparkConnection): Promise<void> {
-    if (this.closed.has(connection)) return;
-    this.closed.add(connection);
+  private close(connection: SparkConnection): Promise<void> {
+    const began = this.closes.get(connection);
+    if (began !== undefined) return began;
+    const closed = Promise.withResolvers<void>();
+    this.closes.set(connection, closed.promise);
+    closed.resolve(this.tearDown(connection));
+    return closed.promise;
+  }
+
+  /**
+   * Refuses the metadata statements still waiting for a slot and closes the session registry, both at once, then stops
+   * every run, releases every session under the control deadline, and closes the channel. The refusals come first, so
+   * no slot a stopped run gives back starts a statement, and no session setup or metadata read sends anything while
+   * the runs are being stopped.
+   */
+  private async tearDown(connection: SparkConnection): Promise<void> {
     this.closing.add(connection);
     this.releasing += 1;
     connection.metadataSlots.close();
@@ -578,9 +609,14 @@ export class SparkProvider extends SQLBaseProvider {
     }
   }
 
-  /** Ends the connected connection and one still opening; idempotent. */
+  /**
+   * Ends the connected connection and one still opening, and answers once every close in progress has ended, one a
+   * displaced or a failed connect began included, so no channel of this provider is left open; idempotent.
+   */
   public async disconnect(): Promise<void> {
-    const open = [this.connection, this.connecting].filter((item): item is SparkConnection => item !== null);
+    const open = [this.connection, this.connecting, ...this.closing].filter(
+      (item): item is SparkConnection => item !== null,
+    );
     this.connection = null;
     this.connecting = null;
     this.setConnected(false);
@@ -771,7 +807,7 @@ export class SparkProvider extends SQLBaseProvider {
       return await read(connection);
     } catch (error) {
       throw toDatabaseError(
-        this.closed.has(connection) ? new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled) : error,
+        this.closes.has(connection) ? new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled) : error,
       );
     }
   }

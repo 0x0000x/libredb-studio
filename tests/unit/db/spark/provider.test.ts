@@ -1747,7 +1747,7 @@ describe("SparkProvider: the version floor and the probe session", () => {
     await provider.disconnect();
   });
 
-  test("a disconnect while a failed second connect still closes its own connection finds the first connection closed and its sessions released", async () => {
+  test("a disconnect while a failed second connect still closes its own connection finds the first connection closed and its sessions released, and answers once that close ended", async () => {
     const release = gate();
     let shows = 0;
     const script = scripted({
@@ -1777,10 +1777,17 @@ describe("SparkProvider: the version floor and the probe session", () => {
     await eventually(() =>
       script.calls.some((call) => call.rpc === "ReleaseSession" && call.sessionId === secondMetadata()),
     );
-    await provider.disconnect();
+    let disconnected = false;
+    const closing = provider.disconnect().then(() => {
+      disconnected = true;
+    });
+    await later(20);
+    expect(disconnected).toBe(false);
     expect(channels.closed()).toStrictEqual([true, false]);
     expect(released().filter((id) => first.includes(id))).toStrictEqual(first);
     release.open();
+    await closing;
+    expect(channels.closed()).toStrictEqual([true, true]);
     const failure = await failed;
     expect(failure).toBeInstanceOf(ConnectionError);
     expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.notConnected("127.0.0.1", 1));
@@ -1883,6 +1890,159 @@ describe("SparkProvider: the version floor and the probe session", () => {
     expect(lastErrorOf(provider)).toBeUndefined();
     await provider.disconnect();
   });
+
+  test("a second connect then a disconnect while the first connect still opens close both connections before the disconnect answers, and only the probes' releases follow", async () => {
+    const firstVersion = gate();
+    let versions = 0;
+    const script = scripted({
+      commands: {
+        "SHOW CURRENT NAMESPACE": CURRENT,
+        "SET CATALOG 'spark_catalog'": SET_ANSWER,
+        "USE NAMESPACE `default`": SET_ANSWER,
+      },
+      unary: (rpc, request) => {
+        if (rpc !== "AnalyzePlan") return undefined;
+        versions += 1;
+        // The first connect's version read waits on the test.
+        const answer = { session_id: sessionOf(request), spark_version: { version: "4.2.0" } };
+        return versions === 1 ? firstVersion.promise.then(() => answer) : undefined;
+      },
+    });
+    const channels = channelsOf(script);
+    const provider = new SparkProvider(connection(1, { database: "spark_catalog", schema: "default" }), {}, channels);
+    const first = failureOf(provider.connect());
+    await eventually(() => versions === 1);
+    const second = failureOf(provider.connect());
+    const at = script.calls.length;
+    await provider.disconnect();
+    expect(channels.closed()).toStrictEqual([true, true]);
+    firstVersion.open();
+    const failures = await Promise.all([first, second]);
+    expect(
+      failures.map((failure) => [failure instanceof QueryCancelledError, (failure as Error).message]),
+    ).toStrictEqual([
+      [true, SPARK_ERROR_SENTENCES.cancelled],
+      [true, SPARK_ERROR_SENTENCES.cancelled],
+    ]);
+    // The disconnect took the second connect, whose failure stays the provider's last; the displaced first leaves it.
+    expect(lastErrorOf(provider)).toBe(failures[1] as Error);
+    const [firstProbe, secondProbe] = script.calls
+      .filter((call) => call.rpc === "AnalyzePlan")
+      .map((call) => call.sessionId);
+    expect(script.calls.slice(at).map((call) => [call.rpc, call.sessionId])).toStrictEqual([
+      ["ReleaseSession", secondProbe],
+      ["ReleaseSession", firstProbe],
+    ]);
+    expect(provider.isConnected()).toBe(false);
+    expect(provider.hasRunsInFlight()).toBe(false);
+  });
+
+  test.each<[string, string, boolean]>([
+    ["connects", "4.2.0", true],
+    ["is refused by the version floor", "3.5.1", false],
+  ])(
+    "a connect that displaced another and %s answers only once the displaced connection is closed",
+    async (_label, version, connects) => {
+      const firstNamespace = gate();
+      const interrupt = gate();
+      let shows = 0;
+      let versions = 0;
+      const script = scripted({
+        commands: { "SHOW CURRENT NAMESPACE": CURRENT },
+        stream: (sql, request, call) => {
+          if (sql !== "SHOW CURRENT NAMESPACE") return undefined;
+          shows += 1;
+          return shows === 1 ? heldStream(request, call, CURRENT, firstNamespace.promise) : undefined;
+        },
+        unary: (rpc, request) => {
+          // The Interrupt that stops the first connect's namespace read waits on the test.
+          if (rpc === "Interrupt") return interrupt.promise.then(() => ({ interrupted_ids: [] }));
+          if (rpc !== "AnalyzePlan") return undefined;
+          versions += 1;
+          const answered = versions === 1 ? "4.2.0" : version;
+          return Promise.resolve({ session_id: sessionOf(request), spark_version: { version: answered } });
+        },
+      });
+      const channels = channelsOf(script);
+      const provider = new SparkProvider(connection(1), {}, channels);
+      const displaced = failureOf(provider.connect());
+      await eventually(() => shows === 1);
+      let settled = false;
+      const second = failureOf(provider.connect()).then((failure) => {
+        settled = true;
+        return failure;
+      });
+      await eventually(() => provider.isConnected() || lastErrorOf(provider) !== undefined);
+      await later(20);
+      expect(settled).toBe(false);
+      expect(provider.isConnected()).toBe(connects);
+      // The first connection still closes, its namespace read's Interrupt unanswered; a refused second closed its own.
+      expect(channels.closed()).toStrictEqual([false, !connects]);
+      expect(script.calls.filter((call) => call.rpc === "Interrupt")).toHaveLength(1);
+      interrupt.open();
+      const failure = await second;
+      expect(channels.closed()).toStrictEqual([true, !connects]);
+      if (connects) {
+        expect(failure).toBeUndefined();
+        expect(lastErrorOf(provider)).toBeUndefined();
+      } else {
+        expect(failure).toBeInstanceOf(ConnectionError);
+        expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.versionTooOld("3.5.1"));
+        expect(lastErrorOf(provider)).toBe(failure as Error);
+      }
+      const cut = await displaced;
+      expect(cut).toBeInstanceOf(QueryCancelledError);
+      expect((cut as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+      firstNamespace.open();
+      await provider.disconnect();
+      expect(channels.closed()).toStrictEqual([true, true]);
+      expect(provider.hasRunsInFlight()).toBe(false);
+    },
+  );
+
+  test.each<[string, (request: object) => Promise<object>, string]>([
+    [
+      "the version floor refused it",
+      (request) => Promise.resolve({ session_id: sessionOf(request), spark_version: { version: "3.5.1" } }),
+      SPARK_ERROR_SENTENCES.versionTooOld("3.5.1"),
+    ],
+    [
+      "its server did not answer",
+      () => Promise.reject(unavailable()),
+      SPARK_ERROR_SENTENCES.notConnected("127.0.0.1", 1),
+    ],
+  ])(
+    "a displaced connect that ends after the connect that displaced it failed because %s leaves that failure as the provider's last error",
+    async (_label, secondVersion, message) => {
+      const firstVersion = gate();
+      let versions = 0;
+      const script = scripted({
+        commands: { "SHOW CURRENT NAMESPACE": CURRENT },
+        unary: (rpc, request) => {
+          if (rpc !== "AnalyzePlan") return undefined;
+          versions += 1;
+          if (versions === 2) return secondVersion(request);
+          const answer = { session_id: sessionOf(request), spark_version: { version: "4.2.0" } };
+          return versions === 1 ? firstVersion.promise.then(() => answer) : undefined;
+        },
+      });
+      const provider = new SparkProvider(connection(1), {}, script);
+      const displaced = failureOf(provider.connect());
+      await eventually(() => versions === 1);
+      const failure = await failureOf(provider.connect());
+      expect(failure).toBeInstanceOf(ConnectionError);
+      expect((failure as Error).message).toBe(message);
+      expect(lastErrorOf(provider)).toBe(failure as Error);
+      firstVersion.open();
+      const cut = await displaced;
+      expect(cut).toBeInstanceOf(QueryCancelledError);
+      expect((cut as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+      expect(lastErrorOf(provider)).toBe(failure as Error);
+      expect(provider.isConnected()).toBe(false);
+      expect(provider.hasRunsInFlight()).toBe(false);
+      expect(script.closed()).toBe(2);
+    },
+  );
 });
 
 describe("SparkProvider: Stop at the edges of a run", () => {
