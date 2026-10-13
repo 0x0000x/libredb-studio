@@ -7,7 +7,9 @@
  * nothing; Stop before and after the first ExecutePlan, which aborts the run's stream without waiting for the
  * Interrupt's answer while the Interrupt still leaves first on the shared connection under Node, and answers within
  * one control window of the Stop; Stop on a run already refused at its deadline, which answers from that outcome;
- * cancelAll, which stops every run as Stop does; a Spark error with one FetchErrorDetails before the statement
+ * cancelAll, which stops every run as Stop does and refuses, before it asks for its session, every run that starts
+ * once it began, a provider's metadata read that waited through a disconnect for a new metadata session's setup among
+ * them; a Spark error with one FetchErrorDetails before the statement
  * session's release, and a fetch that fails leaving the ErrorInfo message as it is; every exit before Spark ended
  * the stream, each refusal of a result and a server-side id that changed on an open stream among them, sending one
  * Interrupt by the run's tag, none when Spark ended it (a Spark error, a closed or changed session, a session
@@ -21,13 +23,19 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { QueryError } from "@/lib/db/errors";
+import { QueryCancelledError, QueryError } from "@/lib/db/errors";
 import { buildSparkConnectionOptions } from "@/lib/db/providers/sql/spark/connection-options";
 import { SPARK_CONTROL_DEADLINE_MS, SPARK_SESSION_CONF } from "@/lib/db/providers/sql/spark/constants";
 import { SPARK_ERROR_SENTENCES, SparkError, toDatabaseError } from "@/lib/db/providers/sql/spark/errors";
 import { SparkRuns } from "@/lib/db/providers/sql/spark/execute";
-import { grpcWireTransport, type SparkWireCall, type SparkWireChannel } from "@/lib/db/providers/sql/spark/grpc-client";
+import {
+  grpcWireTransport,
+  type SparkWireCall,
+  type SparkWireChannel,
+  type SparkWireTransport,
+} from "@/lib/db/providers/sql/spark/grpc-client";
 import { SparkHeartbeat } from "@/lib/db/providers/sql/spark/heartbeat";
+import { SparkProvider } from "@/lib/db/providers/sql/spark/index";
 import {
   configGetOptionRequest,
   configSetRequest,
@@ -48,6 +56,14 @@ const V_SCHEMA = { struct: { fields: [{ name: "v", data_type: { string: {} }, nu
 const VARIANT_SCHEMA = { struct: { fields: [{ name: "v", data_type: { variant: {} }, nullable: true }] } };
 const BAD_TEXT = "[TABLE_OR_VIEW_NOT_FOUND] The table or view `t` cannot be found.";
 const statements: Record<string, SparkFakeAnswer> = {
+  // A provider's connect and its tree read the current namespace on the metadata session.
+  "SHOW CURRENT NAMESPACE": {
+    kind: "command",
+    ipc: columnsStream([
+      { name: "catalog", kind: "utf8", values: ["spark_catalog"] },
+      { name: "namespace", kind: "utf8", values: ["default"] },
+    ]),
+  },
   "SELECT id FROM t": { kind: "relation", schema: ID_SCHEMA, ipc: [int64Batch(0, 3)] },
   "SHOW TABLES": { kind: "command", ipc: stringBatch(2, 3) },
   "CREATE TABLE x": { kind: "command", ipc: new Uint8Array(0) },
@@ -323,6 +339,59 @@ function heldInterrupt(): {
     close: () => undefined,
   };
   return { wire, order, letGo: (how) => letGo(how) };
+}
+
+/** The SQL text of a command step's request. */
+const commandText = (request: object) =>
+  (request as { plan?: { command?: { sql_command?: { input?: { sql?: { query?: string } } } } } }).plan?.command
+    ?.sql_command?.input?.sql?.query;
+
+/**
+ * A provider's transport: the real adapter over the fake, with the Config set of every session after the first held
+ * until the test opens it; `held` settles once one waits. `sent` records, in order, each call the provider hands the
+ * channel as it asks for it: an RPC by its name, an ExecutePlan with its statement, and the channel's close.
+ */
+function laterSetupsHeld(): {
+  readonly transport: SparkWireTransport;
+  readonly sent: string[];
+  readonly held: Promise<void>;
+  readonly open: () => void;
+} {
+  const sent: string[] = [];
+  let open: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let reached: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  let setups = 0;
+  const transport: SparkWireTransport = (options) => {
+    const inner = grpcWireTransport(options);
+    return {
+      unary: async (rpc, request, call) => {
+        sent.push(rpc);
+        if (rpc === "Config" && (request as { operation?: { set?: object } }).operation?.set !== undefined) {
+          setups += 1;
+          if (setups > 1) {
+            reached();
+            await gate;
+          }
+        }
+        return inner.unary(rpc, request, call);
+      },
+      executePlan: (request, call, limits) => {
+        sent.push(`ExecutePlan ${commandText(request)}`);
+        return inner.executePlan(request, call, limits);
+      },
+      close: () => {
+        sent.push("close");
+        inner.close();
+      },
+    };
+  };
+  return { transport, sent, held, open: () => open() };
 }
 
 const SPARK_SOURCE = join(import.meta.dir, "../../../../src/lib/db/providers/sql/spark");
@@ -1070,6 +1139,104 @@ describe("the deadline and Stop", () => {
     expect(tagOf(interrupts()[0] as { request: object })).toBe(plans()[0]?.tags[0]);
     expect(fake.log.entries.filter((entry) => entry.rpc === "ReleaseSession")).toHaveLength(1);
     await sessions.releaseAll();
+  });
+});
+
+describe("a run that starts once cancelAll began", () => {
+  test("a run that starts while cancelAll still stops another is refused as cancelled before it asks for its session, and nothing is sent for it", async () => {
+    const held = heldInterrupt();
+    const { sessions, runs } = world(held.wire);
+    const first = settle(runs.run({ sql: "SLOW", session: () => sessions.forScope("k1"), deadline: soon() }));
+    await waitFor(() => plans().length === 2);
+    let stopped = false;
+    const stopping = runs.cancelAll().then(() => {
+      stopped = true;
+    });
+    const asked: string[] = [];
+    const late = await failure(
+      runs.run({
+        sql: "SELECT id FROM t",
+        queryId: "k2",
+        session: () => {
+          asked.push("k2");
+          return sessions.forScope("k2");
+        },
+        deadline: soon(),
+      }),
+    );
+    // cancelAll still waits for the first run's Interrupt: it had begun and had not answered.
+    expect(stopped).toBe(false);
+    expect({ category: late.category, message: late.message }).toStrictEqual({
+      category: "cancelled",
+      message: SPARK_ERROR_SENTENCES.cancelled,
+    });
+    expect(asked).toStrictEqual([]);
+    expect(await runs.cancel("k2")).toBe(false);
+    held.letGo("send");
+    await stopping;
+    expect((await first).error?.category).toBe("cancelled");
+    // The first run's two steps and its one Interrupt, and nothing for the run that started late.
+    expect(plans()).toHaveLength(2);
+    expect(interrupts().map(tagOf)).toStrictEqual([plans()[0]?.tags[0]]);
+    expect(runs.runsInFlight()).toBe(0);
+    await sessions.releaseAll();
+  });
+
+  test("a run that starts after cancelAll answered is refused as cancelled before it asks for its session, and nothing is sent for it", async () => {
+    const { sessions, runs } = world();
+    await runs.cancelAll();
+    const asked: string[] = [];
+    const late = await failure(
+      runs.run({
+        sql: "SELECT id FROM t",
+        queryId: "k3",
+        session: () => {
+          asked.push("k3");
+          return sessions.forScope("k3");
+        },
+        deadline: soon(),
+      }),
+    );
+    expect({ category: late.category, message: late.message }).toStrictEqual({
+      category: "cancelled",
+      message: SPARK_ERROR_SENTENCES.cancelled,
+    });
+    expect(asked).toStrictEqual([]);
+    expect(fake.log.entries.filter((entry) => !isBeat(entry))).toStrictEqual([]);
+    expect(sessions.openCount()).toBe(0);
+    expect(await runs.cancel("k3")).toBe(false);
+    expect(runs.runsInFlight()).toBe(0);
+  });
+
+  test("through the provider: a metadata read that waits for a new metadata session's setup when a disconnect begins is refused as cancelled and sends no statement", async () => {
+    const wire = laterSetupsHeld();
+    const provider = new SparkProvider(
+      { id: "late", name: "late", type: "spark", host: "127.0.0.1", port } as unknown as DatabaseConnection,
+      {},
+      { transport: wire.transport },
+    );
+    await provider.connect();
+    // The server restarts, so the read meets a changed metadata session and waits for a new one's setup.
+    fake.restart();
+    const read = provider.listContainers().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await wire.held;
+    wire.sent.push("disconnect");
+    const closing = provider.disconnect();
+    wire.open();
+    await closing;
+    const error = await read;
+    expect(error).toBeInstanceOf(QueryCancelledError);
+    expect((error as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+    // Once the disconnect began: the new metadata session's release and the channel's close, and no statement.
+    expect(wire.sent.slice(wire.sent.indexOf("disconnect"))).toStrictEqual(["disconnect", "ReleaseSession", "close"]);
+    expect(wire.sent.filter((sent) => sent.startsWith("ExecutePlan"))).toStrictEqual([
+      "ExecutePlan SHOW CURRENT NAMESPACE",
+      "ExecutePlan SHOW CURRENT NAMESPACE",
+    ]);
+    expect(provider.hasRunsInFlight()).toBe(false);
   });
 });
 

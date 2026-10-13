@@ -5,7 +5,7 @@
  * before Spark ended the stream, a cut or a refused result among them, sends one Interrupt by the run's tag under its
  * own control deadline, because cancelling a gRPC call or reaching its deadline leaves the job running on Spark. A
  * Spark error is decoded with one FetchErrorDetails on the run's own session before a statement session is released.
- * The heartbeat holds the session for the whole run.
+ * The heartbeat holds the session for the whole run. A run that starts once cancelAll began sends nothing at all.
  */
 import { keyRowsByPosition } from "@/lib/db/utils/positional-rows";
 import { MAX_UNLIMITED_ROWS } from "@/lib/db/utils/query-limiter";
@@ -115,6 +115,8 @@ const nextTurn = () =>
 export class SparkRuns {
   private readonly byQuery = new Map<string, Run>();
   private readonly active = new Set<Run>();
+  /** Set once cancelAll began: every run that starts later is refused. */
+  private closed = false;
 
   constructor(private readonly deps: SparkRunDeps) {}
 
@@ -124,6 +126,9 @@ export class SparkRuns {
     session: () => Promise<SparkSessionHandle>;
     deadline: Date;
   }): Promise<SparkStatementResult> {
+    // A run that starts once cancelAll began is refused as cancelled before it asks for its session, so nothing is sent
+    // for it, and it is never registered.
+    if (this.closed) throw cancelledError();
     const run = this.register(input.queryId);
     let phase: "command" | "relation" = "command";
     let interrupt = false;
@@ -218,9 +223,11 @@ export class SparkRuns {
 
   /**
    * Stop for every run: each is marked, and each that has sent an ExecutePlan is stopped by `stop`, as cancel() stops
-   * it. Answers once every Interrupt answered or failed, without waiting for any run to settle.
+   * it. From its start, every run that starts later is refused as cancelled before it asks for its session. Answers
+   * once every Interrupt answered or failed, without waiting for any run to settle.
    */
   async cancelAll(): Promise<void> {
+    this.closed = true;
     await Promise.all(
       [...this.active].map(async (run) => {
         run.cancelled = true;
