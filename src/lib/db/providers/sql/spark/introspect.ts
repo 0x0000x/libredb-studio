@@ -2,7 +2,6 @@
  * The object surface over the provider's metadata session: every read is a statement this module writes, sent as a
  * command that Spark answers inline with no job, and every answer is read by column name, whole or not at all.
  */
-import { INVENTORY_TRUNCATION_REASON } from "@/lib/db/inventory-bounds";
 import { applySourceBound, callerBoundTruncationReason } from "@/lib/db/object-kinds";
 import type {
   Container,
@@ -48,6 +47,8 @@ export const SPARK_INTROSPECT_SENTENCES = Object.freeze({
   noSource: (kind: string) => `Studio reads no definition for an Apache Spark ${kind}.`,
   /** A bulk column read's truncation reason, so no full stop: its readers set it inside a sentence of their own. */
   describeBound: `Studio describes at most ${SPARK_DESCRIBE_OBJECTS_MAX.toLocaleString("en-US")} objects in one read, since Apache Spark needs one DESCRIBE TABLE per object`,
+  badLimit: (limit: number) =>
+    `An Apache Spark bulk column read limit must be a positive whole number, received ${limit}.`,
 });
 
 type Row = Readonly<Record<string, unknown>>;
@@ -306,13 +307,19 @@ export async function describeObject(
 /**
  * One DESCRIBE TABLE per object, in listing order and one at a time: OSS Spark has no catalog view that lists every
  * table's columns. At most `limit` objects and never more than SPARK_DESCRIBE_OBJECTS_MAX, with the reason of the bound
- * that bit when more remain. An object dropped since the listing is left out, since callers match details to objects by
- * path; any other failure fails the whole read.
+ * that bit when more remain; a `limit` that is not a positive whole number is refused, whatever the kind, before any
+ * statement. An object dropped since the listing is left out, since callers match details to objects by path; any other
+ * failure fails the whole read.
  */
 export async function describeObjects(
   deps: SparkIntrospectDeps,
   ...[container, kind, limit]: Parameters<DatabaseProvider["describeObjects"]>
 ): ReturnType<DatabaseProvider["describeObjects"]> {
+  // Refused rather than clamped: a 0 would describe nothing yet report a truncation, and a negative limit would slice
+  // from the listing's end, past SPARK_DESCRIBE_OBJECTS_MAX.
+  if (limit !== undefined && !(Number.isSafeInteger(limit) && limit > 0)) {
+    throw new SparkError("refused", SPARK_INTROSPECT_SENTENCES.badLimit(limit));
+  }
   if (kind === "function") return { details: [] };
   const objects = await listObjects(deps, container, kind);
   const bound = Math.min(limit ?? SPARK_DESCRIBE_OBJECTS_MAX, SPARK_DESCRIBE_OBJECTS_MAX);
@@ -331,12 +338,11 @@ export async function describeObjects(
 }
 
 /**
- * Why a bulk column read stopped short: with no limit the inventory's sentence, under a limit above
- * SPARK_DESCRIBE_OBJECTS_MAX Studio's own, and otherwise the caller's.
+ * Why a bulk column read stopped short: under a limit at or below SPARK_DESCRIBE_OBJECTS_MAX the caller's, and with no
+ * limit or a larger one Studio's own cap, in the provider's sentence: the inventory's sentence names another bound.
  */
 function describeBoundReason(limit: number | undefined): string {
-  if (limit === undefined) return INVENTORY_TRUNCATION_REASON;
-  return limit > SPARK_DESCRIBE_OBJECTS_MAX
+  return limit === undefined || limit > SPARK_DESCRIBE_OBJECTS_MAX
     ? SPARK_INTROSPECT_SENTENCES.describeBound
     : callerBoundTruncationReason(limit);
 }

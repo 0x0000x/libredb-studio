@@ -3,7 +3,6 @@
  * statement from a table, so every test names each statement it lets the module send.
  */
 import { describe, expect, test } from "bun:test";
-import { INVENTORY_TRUNCATION_REASON } from "@/lib/db/inventory-bounds";
 import { callerBoundTruncationReason } from "@/lib/db/object-kinds";
 import { SPARK_DESCRIBE_OBJECTS_MAX, SPARK_INTROSPECT_IN_FLIGHT_MAX } from "@/lib/db/providers/sql/spark/constants";
 import { SPARK_ERROR_SENTENCES, SparkError } from "@/lib/db/providers/sql/spark/errors";
@@ -262,6 +261,52 @@ describe("namespaces", () => {
     open();
     await expect(walk).rejects.toBe(first);
     expect(running).toBe(0);
+  });
+
+  test("a failed batch ends the walk: the next batch is never sent, and no statement is left in flight", async () => {
+    const failure = spark("[SCHEMA_NOT_FOUND] The schema `lake`.`n3` cannot be found.");
+    const top = Array.from({ length: SPARK_INTROSPECT_IN_FLIGHT_MAX + 1 }, (_, i) => ({ namespace: `n${i}` }));
+    const sent: string[] = [];
+    let inFlight = 0;
+    const deps: SparkIntrospectDeps = {
+      runSql: async (sql) => {
+        sent.push(sql);
+        if (sql === "SHOW CURRENT NAMESPACE") return result([{ catalog: "spark_catalog", namespace: "studio" }]);
+        if (sql === "SHOW NAMESPACES IN `lake`") return result(top);
+        // n3 fails at once; every other namespace answers none a timer later, so its batch is still running.
+        if (sql === "SHOW NAMESPACES IN `lake`.n3") throw failure;
+        inFlight++;
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        inFlight--;
+        return result([]);
+      },
+      confKeys: async () => [],
+    };
+    await expect(listNamespaces(deps, "lake")).rejects.toBe(failure);
+    expect(inFlight).toBe(0);
+    expect(sent).toStrictEqual([
+      "SHOW CURRENT NAMESPACE",
+      "SHOW NAMESPACES IN `lake`",
+      ...Array.from({ length: SPARK_INTROSPECT_IN_FLIGHT_MAX }, (_, i) => `SHOW NAMESPACES IN \`lake\`.n${i}`),
+    ]);
+  });
+
+  test("a failed batch ends the walk before the next level: no child of the failed namespace's sibling is asked", async () => {
+    const failure = spark("[SCHEMA_NOT_FOUND] The schema `lake`.`b` cannot be found.");
+    const { deps, sent } = stub({
+      ...CURRENT,
+      "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }, { namespace: "b" }],
+      "SHOW NAMESPACES IN `lake`.a": [{ namespace: "a.x" }],
+      "SHOW NAMESPACES IN `lake`.b": failure,
+      "SHOW NAMESPACES IN `lake`.a.x": [],
+    });
+    await expect(listNamespaces(deps, "lake")).rejects.toBe(failure);
+    expect(sent).toStrictEqual([
+      "SHOW CURRENT NAMESPACE",
+      "SHOW NAMESPACES IN `lake`",
+      "SHOW NAMESPACES IN `lake`.a",
+      "SHOW NAMESPACES IN `lake`.b",
+    ]);
   });
 
   test("more than 1,000 namespaces is refused with the walk's sentence, never a shorter list", async () => {
@@ -600,7 +645,7 @@ describe("columns and definitions", () => {
     expect(await describeObjects(deps, ["spark_catalog", "studio"], "function")).toStrictEqual({ details: [] });
   });
 
-  test(`with no limit, describeObjects stops at ${SPARK_DESCRIBE_OBJECTS_MAX} objects with the inventory reason`, async () => {
+  test(`with no limit, describeObjects stops at ${SPARK_DESCRIBE_OBJECTS_MAX} objects with Studio's reason, not the inventory's`, async () => {
     const count = SPARK_DESCRIBE_OBJECTS_MAX + 1;
     const tables = Array.from({ length: count }, (_, i) => ({
       namespace: "studio",
@@ -620,7 +665,10 @@ describe("columns and definitions", () => {
     };
     const batch = await describeObjects(deps, ["spark_catalog", "studio"], "table");
     expect(batch.details).toHaveLength(SPARK_DESCRIBE_OBJECTS_MAX);
-    expect(batch.truncated).toStrictEqual({ limit: SPARK_DESCRIBE_OBJECTS_MAX, reason: INVENTORY_TRUNCATION_REASON });
+    expect(batch.truncated).toStrictEqual({
+      limit: SPARK_DESCRIBE_OBJECTS_MAX,
+      reason: SPARK_INTROSPECT_SENTENCES.describeBound,
+    });
   });
 
   /** A namespace of `count` tables, t0 onwards, each with one column, and how many DESCRIBEs it was sent. */
@@ -660,6 +708,50 @@ describe("columns and definitions", () => {
     expect(bounded.details.map((d) => d.path[2])).toStrictEqual(Array.from({ length: 10 }, (_, i) => `t${i}`));
     expect(bounded.truncated).toStrictEqual({ limit: 10, reason: callerBoundTruncationReason(10) });
     expect(few.described()).toBe(10);
+  });
+
+  test("a read that ends exactly at its bound reports no truncation: 3 of 3 under 3, and 1,000 under 5,000 or none", async () => {
+    const container = ["spark_catalog", "studio"];
+    const detail = (name: string) => ({
+      path: ["spark_catalog", "studio", name],
+      columns: [{ name: "id", type: "int", nullable: true, isPrimary: false }],
+      indexes: [],
+      foreignKeys: [],
+    });
+    const three = tables(3);
+    expect(await describeObjects(three.deps, container, "table", 3)).toStrictEqual({
+      details: [detail("t0"), detail("t1"), detail("t2")],
+    });
+    expect(three.described()).toBe(3);
+    const thousand = tables(1_000);
+    const whole = { details: Array.from({ length: 1_000 }, (_, i) => detail(`t${i}`)) };
+    expect(await describeObjects(thousand.deps, container, "table", 5_000)).toStrictEqual(whole);
+    expect(await describeObjects(thousand.deps, container, "table")).toStrictEqual(whole);
+    expect(thousand.described()).toBe(2_000);
+  });
+
+  test.each<[string, number]>([
+    ["0", 0],
+    ["-1", -1],
+    ["1.5", 1.5],
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+  ])("a limit of %s is refused before any statement, for every kind", async (shown, limit) => {
+    const { deps, sent } = stub({});
+    const refusals = await Promise.all(
+      ["table", "view", "function"].map((kind) =>
+        describeObjects(deps, ["spark_catalog", "studio"], kind, limit).catch((error: unknown) => error),
+      ),
+    );
+    for (const refusal of refusals) {
+      expect(refusal).toBeInstanceOf(SparkError);
+      const { category, message } = refusal as SparkError;
+      expect({ category, message }).toStrictEqual({
+        category: "refused",
+        message: `An Apache Spark bulk column read limit must be a positive whole number, received ${shown}.`,
+      });
+    }
+    expect(sent).toStrictEqual([]);
   });
 
   const NOT_FOUND =
@@ -714,6 +806,10 @@ describe("columns and definitions", () => {
       ),
     ],
     ["another error class with a missing table in its cause", spark(`[INTERNAL_ERROR] x\nCause: ${NOT_FOUND}`)],
+    [
+      "another not-found class (a missing schema)",
+      spark("[SCHEMA_NOT_FOUND] The schema `spark_catalog`.`studio` cannot be found."),
+    ],
     ["a failure that is not Spark's own, whatever its text", new SparkError("connection-dropped", NOT_FOUND)],
   ])("%s on one DESCRIBE fails the whole describeObjects read", async (_label, failure) => {
     const { deps } = threeTables(failure);
