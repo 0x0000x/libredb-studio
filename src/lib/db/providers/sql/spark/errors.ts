@@ -1,0 +1,354 @@
+/**
+ * Every failure of the Apache Spark provider: its category, its sentence, and the mapping onto the repository's error
+ * classes at the provider boundary (spec 4.10, 3.3; the Snowflake pattern of toDatabaseError).
+ *
+ * Every server text passes `serverText` with the connection's secret forms before it reaches a sentence, so the token
+ * is never echoed (spec 6.2), and a text is cut only after that pass, so no cut leaves part of a token behind. A value
+ * that is not a gRPC status is never quoted at all: a local error of the client can repeat a header value. The
+ * ErrorInfo of a Spark error is read by status-details.ts, a bounded decoder. Pure: no I/O, no logger.
+ */
+import {
+  AuthenticationError,
+  ConnectionError,
+  DatabaseConfigError,
+  QueryCancelledError,
+  QueryError,
+} from "@/lib/db/errors";
+import { serverText } from "@/lib/db/utils/server-text";
+import { SPARK_ERROR_CAUSE_MAX_CHARS, SPARK_ERROR_CAUSES_MAX } from "./constants";
+import { readStatusDetails, type SparkErrorInfo } from "./status-details";
+
+export type SparkErrorCategory =
+  | "config"
+  | "unsent"
+  | "not-connected"
+  | "tls"
+  | "unauthenticated"
+  | "connection-dropped"
+  | "stream-failed"
+  | "ping-goaway"
+  | "receive-cap"
+  | "command-batch-bound"
+  | "batch-too-large"
+  | "deadline"
+  | "cancelled"
+  | "session-closed"
+  | "session-changed"
+  | "unimplemented"
+  | "spark"
+  | "version"
+  | "unreadable"
+  | "refused";
+
+/** The one error every module of the provider raises; `toDatabaseError` turns it into the repository's class. */
+export class SparkError extends Error {
+  readonly category: SparkErrorCategory;
+  constructor(category: SparkErrorCategory, message: string, options?: { readonly cause?: unknown }) {
+    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
+    this.name = "SparkError";
+    this.category = category;
+  }
+}
+
+/** What a sentence names, and the secret forms no sentence may echo. */
+export interface SparkErrorConnection {
+  readonly host: string;
+  readonly port: number;
+  readonly secretForms: readonly string[];
+}
+
+/** What a FetchErrorDetails answer adds to a Spark error (spec 4.10 step 2). */
+export interface SparkErrorDetails {
+  readonly errorClass?: string;
+  readonly cause?: string;
+}
+
+export interface SparkErrorContext {
+  readonly connection: SparkErrorConnection;
+  readonly phase: "connect" | "command" | "relation" | "control";
+  /** The connection's query timeout, which a statement's deadline names; required in the command and relation phases. */
+  readonly timeoutMs?: number;
+  readonly details?: SparkErrorDetails;
+}
+
+/** Every sentence a user reads from the Spark provider, in the words of spec 3.3, 4.5, 4.7, 4.10, 5.2, 5.4 and 5.5. */
+export const SPARK_ERROR_SENTENCES = Object.freeze({
+  notConnected: (host: string, port: number) =>
+    `No Spark Connect server answered at ${host}:${port}. Start it with sbin/start-connect-server.sh, or check Host and Port (15002 by default).`,
+  tlsPlaintextServer: (host: string, port: number) =>
+    `TLS was chosen, but ${host}:${port} answered without TLS. Spark Connect has no TLS of its own: point Host at a TLS proxy in front of it, or set SSL mode to disable and use an SSH tunnel.`,
+  tlsPortExpected: (host: string, port: number) => `${host}:${port} expects TLS. Choose an SSL mode under SSL / TLS.`,
+  tlsUntrusted:
+    "The server's certificate is not signed by a CA Studio trusts. Paste the CA of the TLS proxy under SSL / TLS, or choose verify-ca or require.",
+  tokenMissing:
+    "This Spark Connect server requires a token. Set Token to the server's spark.connect.authenticate.token.",
+  tokenWrong: "Spark refused the token. Set Token to the server's spark.connect.authenticate.token.",
+  versionTooOld: (version: string) =>
+    `This server runs Spark ${version}. Studio connects to Spark 4.1 and later, the first release that splits large results into chunks Studio can read.`,
+  versionUnreadable: (text: string) => `Studio could not read this server's Spark version (${text}).`,
+  notSparkConnect: (host: string, port: number) =>
+    `The gRPC server at ${host}:${port} does not answer Spark Connect's AnalyzePlan, so it is not a Spark Connect server.`,
+  tokenlessCaution: (host: string, port: number) =>
+    `This connection sends no token, and the server ran its calls: any client that reaches ${host}:${port} can run statements on this Spark server. Set spark.connect.authenticate.token on the server and in Token.`,
+  tokenUnchecked: (host: string, port: number) =>
+    `This connection sends a token, but the server also ran a call sent without one: it does not check tokens, so any client that reaches ${host}:${port} can run statements on this Spark server. Set spark.connect.authenticate.token on the server.`,
+  unsent: "The statement was cancelled before it was sent.",
+  localClientError: "The Spark client stopped the call before it reached the server. Nothing was sent.",
+  connectionDropped:
+    "The connection to Spark dropped while the statement ran. Studio asked Spark to stop it; run it again.",
+  streamFailed: (statusText: string) =>
+    `The connection to Spark failed while the statement ran (${statusText}). Studio asked Spark to stop it; run it again.`,
+  pingGoaway:
+    "The connection to Spark was closed by the server's keepalive rule while the statement ran. Studio asked Spark to stop the statement; run it again.",
+  receiveCapCommand:
+    "Spark answered this command in one message larger than Studio reads (16 MiB), and a command's answer cannot be split. Narrow it, for example with LIKE or IN.",
+  receiveCapRelation:
+    "Spark sent a result message larger than 16 MiB because result chunking is off in this session (spark.connect.session.resultChunking.maxChunkSize is 0 or less). Run SET spark.connect.session.resultChunking.maxChunkSize=4194304, or leave the setting out.",
+  commandBatchBound:
+    "Spark answers a command in one Arrow batch, and this answer is larger than the batch size this server allows (spark.connect.grpc.arrow.maxBatchSize). Narrow it, for example with LIKE or IN.",
+  batchTooLarge: (mib: number) =>
+    `Spark sends this result in Arrow batches of about ${mib} MiB, more than Studio reads for one statement (32 MiB), so no row is shown. Add a smaller LIMIT, or select fewer or narrower columns.`,
+  deadline: (timeoutMs: number) =>
+    `The statement ran past the connection's query timeout (${timeoutMs} ms); Studio asked Spark to stop it.`,
+  cancelled: "The query was cancelled.",
+  sessionChanged: "The Spark server restarted during this request, and the session it held is gone. Run it again.",
+  sessionClosed:
+    "Spark closed the session this request was using (it idled out, or the server restarted). Run it again.",
+  metadataSessionLost:
+    "Studio's Spark session for the tree and the panels was closed by the server (it idled out or the server restarted), and a new one could not complete the read.",
+  timeTypeOff: "TIME values are switched off on this Spark server; CAST the column to STRING to read it.",
+  maxResultSize:
+    "The result is larger than the server's spark.driver.maxResultSize; add a LIMIT or select fewer columns.",
+  unknownEmpty:
+    "Spark stopped this statement with an internal error and reported no reason (gRPC UNKNOWN). A statement nested thousands of levels deep is one known cause; the Spark driver log has the rest.",
+  compressed: (codec: string) =>
+    `Spark compressed this result (spark.sql.execution.arrow.compression.codec is ${codec} in this session), and Studio reads only uncompressed results. Run SET spark.sql.execution.arrow.compression.codec=none, or leave the setting out.`,
+  largeVarTypes:
+    "Spark sent this result with large string and binary types (spark.sql.execution.arrow.useLargeVarTypes is true in this session), and Studio reads only the standard ones. Run SET spark.sql.execution.arrow.useLargeVarTypes=false, or leave the setting out.",
+  unreadable: (what: string) => `Spark sent a result Studio could not read (${what}), so it is not shown.`,
+  cellUnreadable: (type: string, column: string) =>
+    `Spark sent a ${type} value in column "${column}" that Studio could not read, so the result is not shown.`,
+});
+
+// gRPC status codes (grpc/grpc `doc/statuscodes.md`), the numbers grpc-js reports.
+const CANCELLED = 1;
+const UNKNOWN = 2;
+const DEADLINE_EXCEEDED = 4;
+const RESOURCE_EXHAUSTED = 8;
+const UNIMPLEMENTED = 12;
+const UNAVAILABLE = 14;
+const UNAUTHENTICATED = 16;
+
+/** grpc-js's deadline texts for a call still waiting before its request left (resolving-call.ts, load-balancing-call.ts). */
+const PRE_SEND_DEADLINE = ["waiting for name resolution", "waiting for metadata filters", "Waiting for LB pick"];
+const SYSTEM_NOT_CONNECTED = new Set(["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "ENETUNREACH", "EAI_AGAIN"]);
+const PLAINTEXT_SERVER = /wrong version number|WRONG_VERSION_NUMBER|packet length too long/;
+const TLS_PORT_EXPECTED = /Protocol error/;
+const UNTRUSTED =
+  /unable to verify the first certificate|self[- ]signed certificate|unable to get local issuer certificate/;
+const PROXY_ANSWER = /^Received (?:RST_STREAM with code \d+|HTTP status code \d+)/;
+const RECEIVE_CAP = "Received message larger than max";
+const PING_GOAWAY = "Bandwidth exhausted or memory limit exceeded";
+const BATCH_BOUND = "assertion failed: remaining batches:";
+
+interface GrpcStatusLike {
+  readonly code: number;
+  readonly details: string;
+  readonly metadata?: { get(key: string): unknown[] };
+}
+
+function isStatus(error: unknown): error is GrpcStatusLike {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    typeof (error as { code?: unknown }).code === "number" &&
+    typeof (error as { details?: unknown }).details === "string"
+  );
+}
+
+function errorInfoOf(status: GrpcStatusLike): SparkErrorInfo | undefined {
+  const raw = status.metadata?.get("grpc-status-details-bin")[0];
+  return raw instanceof Uint8Array ? readStatusDetails(raw) : undefined;
+}
+
+const inStatement = (context: SparkErrorContext) => context.phase === "command" || context.phase === "relation";
+
+function sparkMessage(status: GrpcStatusLike, info: SparkErrorInfo | undefined, context: SparkErrorContext): string {
+  const forms = context.connection.secretForms;
+  const text = serverText(status.details.trim(), forms);
+  if (status.code === UNKNOWN && text === "" && info === undefined) return SPARK_ERROR_SENTENCES.unknownEmpty;
+  const lines = [text];
+  // Cut only after serverText has read the whole cause, so a token that crosses the cut is still found.
+  const cause =
+    context.details?.cause === undefined
+      ? ""
+      : serverText(context.details.cause, forms).slice(0, SPARK_ERROR_CAUSE_MAX_CHARS);
+  if (cause !== "" && !text.includes(cause)) lines.push(`Cause: ${cause}`);
+  if ((info?.errorClass ?? context.details?.errorClass) === "UNSUPPORTED_TIME_TYPE") {
+    lines.push(SPARK_ERROR_SENTENCES.timeTypeOff);
+  }
+  if (text.includes("spark.driver.maxResultSize")) lines.push(SPARK_ERROR_SENTENCES.maxResultSize);
+  return lines.join("\n");
+}
+
+/**
+ * The category and sentence of any failure the provider meets (spec 4.10). A `SparkError` is returned unchanged. The
+ * one throw is a caller's defect: a statement's deadline without `context.timeoutMs`, whose sentence names it.
+ */
+export function toSparkError(error: unknown, context: SparkErrorContext): SparkError {
+  if (error instanceof SparkError) return error;
+  if (error instanceof DatabaseConfigError) return new SparkError("config", error.message, { cause: error });
+  const { host, port, secretForms } = context.connection;
+  const options = { cause: error };
+  const notConnected = () => new SparkError("not-connected", SPARK_ERROR_SENTENCES.notConnected(host, port), options);
+  if (!isStatus(error)) {
+    const code = (error as { readonly code?: unknown } | null | undefined)?.code;
+    if (typeof code === "string" && SYSTEM_NOT_CONNECTED.has(code)) return notConnected();
+    // Never its own message: a local error of grpc-js can repeat a header value, and `authorization` holds the token.
+    return new SparkError("spark", SPARK_ERROR_SENTENCES.localClientError, options);
+  }
+  const { code, details } = error;
+  switch (code) {
+    case CANCELLED:
+      return new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled, options);
+    case DEADLINE_EXCEEDED:
+      if (!details.includes("remote_addr=") && PRE_SEND_DEADLINE.some((marker) => details.includes(marker))) {
+        return notConnected();
+      }
+      if (!inStatement(context)) return notConnected();
+      if (context.timeoutMs === undefined) {
+        throw new TypeError("toSparkError: a statement's deadline needs context.timeoutMs");
+      }
+      return new SparkError("deadline", SPARK_ERROR_SENTENCES.deadline(context.timeoutMs), options);
+    case UNAUTHENTICATED:
+      return new SparkError(
+        "unauthenticated",
+        details.includes("No authentication token provided")
+          ? SPARK_ERROR_SENTENCES.tokenMissing
+          : SPARK_ERROR_SENTENCES.tokenWrong,
+        options,
+      );
+    case UNIMPLEMENTED:
+      return new SparkError("unimplemented", SPARK_ERROR_SENTENCES.notSparkConnect(host, port), options);
+    case RESOURCE_EXHAUSTED:
+      if (details.includes(RECEIVE_CAP)) {
+        return new SparkError(
+          "receive-cap",
+          context.phase === "relation"
+            ? SPARK_ERROR_SENTENCES.receiveCapRelation
+            : SPARK_ERROR_SENTENCES.receiveCapCommand,
+          options,
+        );
+      }
+      if (details === PING_GOAWAY) return new SparkError("ping-goaway", SPARK_ERROR_SENTENCES.pingGoaway, options);
+      return new SparkError("spark", sparkMessage(error, undefined, context), options);
+    case UNAVAILABLE:
+      if (details.startsWith("Connection dropped")) {
+        return new SparkError("connection-dropped", SPARK_ERROR_SENTENCES.connectionDropped, options);
+      }
+      if (PLAINTEXT_SERVER.test(details)) {
+        return new SparkError("tls", SPARK_ERROR_SENTENCES.tlsPlaintextServer(host, port), options);
+      }
+      if (TLS_PORT_EXPECTED.test(details)) {
+        return new SparkError("tls", SPARK_ERROR_SENTENCES.tlsPortExpected(host, port), options);
+      }
+      if (UNTRUSTED.test(details)) return new SparkError("tls", SPARK_ERROR_SENTENCES.tlsUntrusted, options);
+      if (details.includes("No connection established") || details.startsWith("Name resolution failed")) {
+        return notConnected();
+      }
+      return inStatement(context)
+        ? new SparkError("stream-failed", SPARK_ERROR_SENTENCES.streamFailed(serverText(details, secretForms)), options)
+        : notConnected();
+  }
+  const info = errorInfoOf(error);
+  // A proxy's answer carries no ErrorInfo; tested before the spark row, which also claims INTERNAL (D03-C34, C35).
+  if (info === undefined && PROXY_ANSWER.test(details)) {
+    return inStatement(context)
+      ? new SparkError("stream-failed", SPARK_ERROR_SENTENCES.streamFailed(serverText(details, secretForms)), options)
+      : notConnected();
+  }
+  // Spark's own bound on a command answer: one Arrow batch (D03-C38).
+  if (
+    context.phase === "command" &&
+    info?.reason === "java.lang.AssertionError" &&
+    info.errorClass === undefined &&
+    info.sqlState === undefined &&
+    details.trim().startsWith(BATCH_BOUND)
+  ) {
+    return new SparkError("command-batch-bound", SPARK_ERROR_SENTENCES.commandBatchBound, options);
+  }
+  const errorClass = info?.errorClass ?? context.details?.errorClass;
+  if (errorClass === "OPERATION_CANCELED" || info?.sqlState === "HY008") {
+    return new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled, options);
+  }
+  if (errorClass === "INVALID_HANDLE.SESSION_CLOSED" || errorClass === "INVALID_HANDLE.SESSION_NOT_FOUND") {
+    return new SparkError("session-closed", SPARK_ERROR_SENTENCES.sessionClosed, options);
+  }
+  if (errorClass === "INVALID_HANDLE.SESSION_CHANGED") {
+    return new SparkError("session-changed", SPARK_ERROR_SENTENCES.sessionChanged, options);
+  }
+  return new SparkError("spark", sparkMessage(error, info, context), options);
+}
+
+interface FetchedError {
+  readonly message?: unknown;
+  readonly cause_idx?: unknown;
+  readonly spark_throwable?: { readonly error_class?: unknown } | null;
+}
+
+/**
+ * The FetchErrorDetails answer's root class and innermost cause, trimmed, at most `SPARK_ERROR_CAUSES_MAX` causes
+ * walked (spec 4.10 step 2); never a stack frame. The cause is kept whole: `toSparkError` cuts it to
+ * `SPARK_ERROR_CAUSE_MAX_CHARS` after `serverText` has read all of it.
+ */
+export function errorDetailsFromResponse(response: object): SparkErrorDetails {
+  const { root_error_idx: rootIndex, errors } = response as {
+    readonly root_error_idx?: unknown;
+    readonly errors?: unknown;
+  };
+  if (!Array.isArray(errors)) return {};
+  const at = (index: unknown): FetchedError | undefined =>
+    typeof index === "number" && Number.isInteger(index) && index >= 0 && index < errors.length
+      ? (errors[index] as FetchedError)
+      : undefined;
+  const root = at(rootIndex ?? 0);
+  if (root === undefined) return {};
+  const errorClass = root.spark_throwable?.error_class;
+  let current = root;
+  let innermost: FetchedError | undefined;
+  for (let step = 0; step < SPARK_ERROR_CAUSES_MAX; step += 1) {
+    const next = at(current.cause_idx);
+    if (next === undefined) break;
+    innermost = next;
+    current = next;
+  }
+  const cause = typeof innermost?.message === "string" ? innermost.message.trim() : "";
+  return {
+    ...(typeof errorClass === "string" && errorClass !== "" ? { errorClass } : {}),
+    ...(cause === "" ? {} : { cause }),
+  };
+}
+
+/** The repository's error class for a failure, at the provider boundary (spec 4.10, the Class column). */
+export function toDatabaseError(error: unknown, sql?: string): Error {
+  if (!(error instanceof SparkError))
+    return error instanceof Error ? error : new QueryError(String(error), "spark", sql);
+  switch (error.category) {
+    case "config":
+      return new DatabaseConfigError(error.message, "spark");
+    case "unsent":
+    case "cancelled":
+      return new QueryCancelledError(error.message, "spark", sql);
+    case "not-connected":
+    case "tls":
+    case "connection-dropped":
+    case "stream-failed":
+    case "unimplemented":
+    case "version":
+      return new ConnectionError(error.message, "spark");
+    case "unauthenticated":
+      return new AuthenticationError(error.message, "spark");
+    default:
+      return new QueryError(error.message, "spark", sql);
+  }
+}
