@@ -262,6 +262,7 @@ A statement then still waiting for a slot or for its session's setup, and every 
 A tree or panel read that fails once its connection's close began ends with the same sentence, whatever its call met, so a channel the close shut never reads as a server that did not answer.
 A connect that a disconnect or a second connect cut ends with that sentence too and never records a reachability error; a second connect closes the connection of a connect still opening at once, and the displaced connect never replaces the last error of the connect that displaced it.
 `connect()` answers only once every connection it displaced or replaced is closed, and `disconnect()` only once every close in progress has ended, so no channel of the provider is left open.
+A connect cut after the server received its version read and before the probe's release goes out leaves the probe session on the server until Spark's 60-minute idle timeout, a known limit ([section 10](#10-security)).
 
 ## 5. How a statement runs
 
@@ -589,6 +590,7 @@ Known limits:
 - under Bun, a client-certificate failure reads as no Spark Connect server answering, because the TLS proxy's alert reaches the status text under Node only.
 - a result of more than about 16,000 tiny batches is cut by the 16 MiB budget, with its bytes warning, because each kept batch counts 1,024 bytes beside its values.
 - a legacy negative-scale decimal whose scale is below -38 is refused as unreadable.
+- a connect that a disconnect or a second connect cuts after the server received its version read, and before the probe's release goes out, leaves the probe session on the server until Spark's 60-minute idle timeout, because the close shuts the channel before the release goes out.
 
 ## 11. Errors
 
