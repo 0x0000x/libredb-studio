@@ -3309,19 +3309,24 @@ const UNLISTED_REASON_MAX_CHARS = 200;
 
 /**
  * How many of the parents it could not list the walk names, each with the provider's sentence; the rest are counted.
- * Each note is read inside every packing of the inventory, at about 300 characters with a sentence at the cut, so five
- * of them stay well inside `AGENT_CONTEXT_PACK_MAX_CHARS` and leave the packing room for its rows however many
- * configured catalogs cannot load. Five is also how many unlisted containers the inventory route names in a refusal
- * before it counts the rest.
+ * Each note is read inside every packing of the inventory, and beside the parent's own name it is at most about 470
+ * characters, the sentence cut and its quoting bounded by `unlistedReason`, so five of them stay well inside
+ * `AGENT_CONTEXT_PACK_MAX_CHARS` and leave the packing room for its rows however many configured catalogs cannot load.
+ * Five is also how many unlisted containers the inventory route names in a refusal before it counts the rest.
  */
 const UNLISTED_PARENTS_NAMED_MAX = 5;
 
 /**
  * A provider's sentence as `AgentUnlistedParent.reason` carries it: on one line, so it cannot read as a line of the
  * inventory, and cut at `UNLISTED_REASON_MAX_CHARS` code points with the cut marked, so no surrogate pair is split.
+ * A control character is read as a space and a lone surrogate as U+FFFD, because the note quotes the sentence as JSON,
+ * which writes either as six characters: so quoted, a sentence at the cut stays near its own length.
  */
 function unlistedReason(message: string): string {
-  const line = message.replace(/\s+/g, " ").trim();
+  const line = message
+    .toWellFormed()
+    .replace(/[\s\p{Cc}]+/gu, " ")
+    .trim();
   let end = 0;
   let count = 0;
   for (const point of line) {

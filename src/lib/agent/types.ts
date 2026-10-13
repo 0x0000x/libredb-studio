@@ -563,7 +563,10 @@ export interface AgentUnlistedParent {
   readonly path: string;
   /** Its level's own word, singular: "Catalog", "Database". */
   readonly label: string;
-  /** The provider's sentence for the failed listing, on one line and cut at 200 code points, the cut marked "...". */
+  /**
+   * The provider's sentence for the failed listing, on one line, a control character read as a space and a lone
+   * surrogate as U+FFFD, and cut at 200 code points, the cut marked "...".
+   */
   readonly reason: string;
 }
 

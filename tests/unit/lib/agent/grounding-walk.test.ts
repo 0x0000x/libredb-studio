@@ -733,6 +733,49 @@ describe("a scoped walk over two levels where a catalog's namespaces cannot be l
         );
       }
     });
+
+    test("five whose sentences are mostly control characters leave both packings inside their bound, holding the rows", async () => {
+      // The note quotes a sentence as JSON, which writes a control character as six: read as they came, five such
+      // sentences at the cut were more than the bound on their own.
+      const { snapshot } = await captured(
+        walk(
+          {
+            spark_catalog: ["default"],
+            ...Object.fromEntries(
+              FIVE.map((name) => [
+                name,
+                new QueryError(`Spark could not load the catalog ${name}:${"\u0001".repeat(300)}`, "spark"),
+              ]),
+            ),
+          },
+          scoped,
+        ),
+      );
+
+      expect(snapshot.unreadContainers?.unlistedParents).toStrictEqual(
+        FIVE.map((name) => ({ path: name, label: "Catalog", reason: `Spark could not load the catalog ${name}:` })),
+      );
+      for (const packed of packings(snapshot)) {
+        expect(packed.length).toBeLessThanOrEqual(AGENT_CONTEXT_PACK_MAX_CHARS);
+        expect(packed).toContain("spark_catalog.default.ORDERS");
+      }
+    });
+  });
+
+  test("a control character in the sentence is read as a space, and a lone surrogate as the replacement character", async () => {
+    const { snapshot } = await captured(
+      walk(
+        {
+          spark_catalog: ["default"],
+          lakehouse: new QueryError("\u0000Spark\u0007could not\u001f load\u0085 the catalog \uD800.\u007f", "spark"),
+        },
+        scoped,
+      ),
+    );
+
+    expect(snapshot.unreadContainers?.unlistedParents).toStrictEqual([
+      { path: "lakehouse", label: "Catalog", reason: "Spark could not load the catalog \uFFFD." },
+    ]);
   });
 
   test("the session's catalog failing to list ends the capture, as before", async () => {
