@@ -170,6 +170,7 @@ describe("the catalog", () => {
         "error",
         ["error-max-result-size", "error-max-result-size-details", "error-max-result-size-command"],
       ],
+      ["show-namespaces-unloaded", "error", ["show-namespaces-unloaded", "show-namespaces-unloaded-details"]],
       ["show-create-table-missing", "error", ["show-create-table-missing", "show-create-table-missing-details"]],
     ]);
   });

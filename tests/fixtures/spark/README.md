@@ -89,10 +89,13 @@ The integration replay builds two cases from these captures and labels them: the
 | `show-create-table-missing` | spark | SparkConnectService/ExecutePlan | source: SHOW CREATE TABLE of a table that does not exist: command step | error | 2026-10-13T21:14:02.569Z | bun 1.4.2 |
 | `show-create-table` | spark | SparkConnectService/ExecutePlan | source: SHOW CREATE TABLE of a table: command step | pass | 2026-10-13T21:14:02.535Z | bun 1.4.2 |
 | `show-create-view` | spark | SparkConnectService/ExecutePlan | source: SHOW CREATE TABLE of a view: command step | pass | 2026-10-13T21:14:02.557Z | bun 1.4.2 |
+| `show-namespaces-unloaded-details` | spark | SparkConnectService/FetchErrorDetails | agent grounding walk: SHOW NAMESPACES IN studio_unloaded, a configured catalog Spark cannot load: FetchErrorDetails of its errorId | pass | 2026-10-13T22:17:46.490Z | bun 1.4.2 |
+| `show-namespaces-unloaded` | spark | SparkConnectService/ExecutePlan | agent grounding walk: SHOW NAMESPACES IN studio_unloaded, a configured catalog Spark cannot load: command step | error | 2026-10-13T22:17:46.478Z | bun 1.4.2 |
 | `show-namespaces` | spark | SparkConnectService/ExecutePlan | tree: SHOW NAMESPACES IN spark_catalog: command step | pass | 2026-10-13T11:06:35.573Z | bun 1.4.2 |
 | `show-tables-default` | spark | SparkConnectService/ExecutePlan | overview: SHOW TABLES of the current namespace, for the table count: command step | pass | 2026-10-13T21:14:02.386Z | bun 1.4.2 |
 | `show-tables-inline` | spark | SparkConnectService/ExecutePlan | a command answered inline with no Spark job: command step | pass | 2026-10-13T11:06:32.844Z | bun 1.4.2 |
 | `show-tables` | spark | SparkConnectService/ExecutePlan | tree and object surface: SHOW TABLES: command step | pass | 2026-10-13T21:14:02.351Z | bun 1.4.2 |
+| `show-user-functions-default` | spark | SparkConnectService/ExecutePlan | agent grounding walk: SHOW USER FUNCTIONS of the current namespace, for its count: command step | pass | 2026-10-13T22:17:46.536Z | bun 1.4.2 |
 | `show-user-functions-quoted` | spark | SparkConnectService/ExecutePlan | O13: function names that need quoting: command step | pass | 2026-10-13T21:14:02.438Z | bun 1.4.2 |
 | `show-user-functions` | spark | SparkConnectService/ExecutePlan | tree and object surface: SHOW USER FUNCTIONS: command step | pass | 2026-10-13T21:14:02.422Z | bun 1.4.2 |
 | `show-views-default` | spark | SparkConnectService/ExecutePlan | overview: SHOW VIEWS of the current namespace, for the table count: command step | pass | 2026-10-13T21:14:02.400Z | bun 1.4.2 |
@@ -119,6 +122,7 @@ The integration replay builds two cases from these captures and labels them: the
 | `cancel-interrupt-command` | spark-4-1 | SparkConnectService/ExecutePlan | Interrupt by tag of a running statement: command step | pass | 2026-10-13T21:14:10.207Z | bun 1.4.2 |
 | `cancel-interrupt-relation` | spark-4-1 | SparkConnectService/ExecutePlan | Interrupt by tag of a running statement: relation step | error | 2026-10-13T21:14:10.491Z | bun 1.4.2 |
 | `cancel-interrupt` | spark-4-1 | SparkConnectService/Interrupt | Interrupt by tag of a running statement | pass | 2026-10-13T21:14:10.490Z | bun 1.4.2 |
+| `config-catalog-keys` | spark-4-1 | SparkConnectService/Config | tree: Config get_all of spark.sql.catalog., values written <value> | pass | 2026-10-13T22:18:28.976Z | bun 1.4.2 |
 | `connect-current-namespace-studio` | spark-4-1 | SparkConnectService/ExecutePlan | connect with a catalog and a namespace: SHOW CURRENT NAMESPACE on the metadata session, in studio: command step | pass | 2026-10-13T22:01:32.819Z | bun 1.4.2 |
 | `connect-current-namespace` | spark-4-1 | SparkConnectService/ExecutePlan | connect: SHOW CURRENT NAMESPACE on the metadata session: command step | pass | 2026-10-13T11:07:12.242Z | bun 1.4.2 |
 | `connect-session-setup` | spark-4-1 | SparkConnectService/Config | connect: the metadata session's Config set of nine pairs | pass | 2026-10-13T11:07:12.187Z | bun 1.4.2 |
@@ -135,7 +139,14 @@ The integration replay builds two cases from these captures and labels them: the
 | `request-session-setup` | spark-4-1 | SparkConnectService/Config | a request session's Config set of seven pairs | pass | 2026-10-13T11:07:12.191Z | bun 1.4.2 |
 | `session-conf-readback` | spark-4-1 | SparkConnectService/Config | O9: Config get of the nine keys after the setup | pass | 2026-10-13T11:07:12.347Z | bun 1.4.2 |
 | `set-catalog` | spark-4-1 | SparkConnectService/ExecutePlan | session setup step 2: SET CATALOG as a string literal: command step | pass | 2026-10-13T11:07:12.266Z | bun 1.4.2 |
+| `show-catalogs` | spark-4-1 | SparkConnectService/ExecutePlan | tree: SHOW CATALOGS: command step | pass | 2026-10-13T22:18:28.966Z | bun 1.4.2 |
+| `show-namespaces-unloaded-details` | spark-4-1 | SparkConnectService/FetchErrorDetails | agent grounding walk: SHOW NAMESPACES IN studio_unloaded, a configured catalog Spark cannot load: FetchErrorDetails of its errorId | pass | 2026-10-13T22:18:29.042Z | bun 1.4.2 |
+| `show-namespaces-unloaded` | spark-4-1 | SparkConnectService/ExecutePlan | agent grounding walk: SHOW NAMESPACES IN studio_unloaded, a configured catalog Spark cannot load: command step | error | 2026-10-13T22:18:29.028Z | bun 1.4.2 |
+| `show-namespaces` | spark-4-1 | SparkConnectService/ExecutePlan | tree: SHOW NAMESPACES IN spark_catalog: command step | pass | 2026-10-13T22:18:28.999Z | bun 1.4.2 |
+| `show-tables-default` | spark-4-1 | SparkConnectService/ExecutePlan | overview: SHOW TABLES of the current namespace, for the table count: command step | pass | 2026-10-13T22:18:29.065Z | bun 1.4.2 |
 | `show-tables-inline` | spark-4-1 | SparkConnectService/ExecutePlan | a command answered inline with no Spark job: command step | pass | 2026-10-13T11:07:13.193Z | bun 1.4.2 |
+| `show-user-functions-default` | spark-4-1 | SparkConnectService/ExecutePlan | agent grounding walk: SHOW USER FUNCTIONS of the current namespace, for its count: command step | pass | 2026-10-13T22:18:29.260Z | bun 1.4.2 |
+| `show-views-default` | spark-4-1 | SparkConnectService/ExecutePlan | overview: SHOW VIEWS of the current namespace, for the table count: command step | pass | 2026-10-13T22:18:29.084Z | bun 1.4.2 |
 | `time-type-refused-command` | spark-4-1 | SparkConnectService/ExecutePlan | a TIME literal with TIME values off: command step | pass | 2026-10-13T21:14:10.072Z | bun 1.4.2 |
 | `time-type-refused-details` | spark-4-1 | SparkConnectService/FetchErrorDetails | a TIME literal with TIME values off: FetchErrorDetails of its errorId | pass | 2026-10-13T21:14:10.145Z | bun 1.4.2 |
 | `time-type-refused` | spark-4-1 | SparkConnectService/ExecutePlan | a TIME literal with TIME values off: relation step | error | 2026-10-13T21:14:10.130Z | bun 1.4.2 |

@@ -33,12 +33,22 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { captureContextSnapshot, fingerprintInventory, packContextForTask } from "@/lib/agent/context-snapshot";
+import { AgentRunDeadline } from "@/lib/agent/deadline";
+import { AGENT_WORKFLOW_BUDGETS } from "@/lib/agent/execution-policy";
+import { AgentRepairLedger } from "@/lib/agent/repair-ledger";
+import type { AgentToolContext } from "@/lib/agent/tools";
+import type { AgentInventory, AgentRunMode } from "@/lib/agent/types";
 import { AuthenticationError, ConnectionError, QueryError } from "@/lib/db/errors";
+import { ExecutionArtifactStore } from "@/lib/db/operations/artifacts";
+import { ExecutionBudgetTracker } from "@/lib/db/operations/budgets";
+import { createCanonicalOperationRegistry } from "@/lib/db/operations/descriptors";
+import { createTargetScope } from "@/lib/db/operations/policy";
 import { SPARK_ERROR_SENTENCES } from "@/lib/db/providers/sql/spark/errors";
 import type { SparkWireTransport } from "@/lib/db/providers/sql/spark/grpc-client";
 import { SparkProvider } from "@/lib/db/providers/sql/spark/index";
 import { SPARK_CUT_WARNINGS } from "@/lib/db/providers/sql/spark/result-stream";
-import type { DatabaseConnection } from "@/lib/types";
+import type { DatabaseConnection, QueryResult } from "@/lib/types";
 import { assertObjectSurface } from "../../helpers/object-surface-conformance";
 import { readSparkCapture, type SparkCaptureVersion } from "../../helpers/spark-captures";
 import { type RecordedSparkTransport, recordedSparkTransport } from "../../helpers/spark-fixtures";
@@ -129,6 +139,26 @@ const CONNECT_STUDIO: readonly SparkCaptureName[] = [
   "use-namespace",
   "connect-current-namespace-studio",
 ];
+/**
+ * The agent's grounding walk after CONNECT, in the order the provider sends it: the catalogs, each catalog's
+ * namespaces, studio_unloaded's listing refused and its details fetched, then the counts of the session-default
+ * namespace. spark_catalog.default holds nothing, so nothing is listed or described.
+ */
+const GROUNDING_WALK: readonly SparkCaptureName[] = [
+  "connect-current-namespace",
+  "show-catalogs",
+  "config-catalog-keys",
+  "connect-current-namespace",
+  "show-namespaces",
+  "connect-current-namespace",
+  "show-namespaces-unloaded",
+  "show-namespaces-unloaded-details",
+  "show-views-default",
+  "show-tables-default",
+  "show-user-functions-default",
+];
+/** Spark's text for SHOW NAMESPACES IN `studio_unloaded`, a configured catalog it cannot load (show-namespaces-unloaded). */
+const UNLOADED_CATALOG_TEXT = "requirement failed: Option 'url' is required.";
 
 const config = (extra: Partial<DatabaseConnection> = {}): DatabaseConnection =>
   ({
@@ -202,6 +232,30 @@ function withNamespaces(base: SparkWireTransport, spellings: readonly string[]):
         };
       },
     };
+  };
+}
+
+/** What the agent's capture is handed, as tests/integration/db/etcd-provider.test.ts builds it, in the run's mode. */
+function agentContext(provider: SparkProvider, mode: AgentRunMode): AgentToolContext {
+  const clock = () => 1_000;
+  const connection = config();
+  return {
+    runId: "run-spark",
+    modelId: "unmeasured-model-for-tests",
+    mode,
+    workflowType: "investigation",
+    actor: { sessionId: "session-1", role: "user" },
+    connection,
+    capabilities: provider.getCapabilities(),
+    labels: provider.getLabels(),
+    registry: createCanonicalOperationRegistry(),
+    scope: createTargetScope(connection.id),
+    tracker: new ExecutionBudgetTracker(),
+    artifacts: new ExecutionArtifactStore<QueryResult>({ ttlMs: 60_000, maxArtifacts: 16 }),
+    deadline: new AgentRunDeadline(AGENT_WORKFLOW_BUDGETS.investigation.policy.budgets.maxTotalRunMs * 2, clock),
+    repairs: new AgentRepairLedger(),
+    acquireProvider: async () => provider,
+    clock,
   };
 }
 
@@ -309,6 +363,58 @@ for (const version of ["4.2.0", "4.1.3"] as const) {
       expect(String(Object.values(result.rows[0])[0])).toContain("== Physical Plan ==");
       await provider.disconnect();
     });
+
+    for (const mode of ["agent", "planning"] as const) {
+      test(`the ${mode} run's grounding walk reads the session-default namespace only, and names the catalog Spark cannot list as not read`, async () => {
+        const transport = recorded(version, [...new Set([...CONNECT, ...GROUNDING_WALK])]);
+        const provider = new SparkProvider(config(), {}, { transport });
+        await provider.connect();
+        const before = transport.served.length;
+        const capture = await captureContextSnapshot(agentContext(provider, mode));
+        // Every catalog's namespaces are listed, since the walk lists each level before it narrows to the session's
+        // namespace; then only spark_catalog.default, which SHOW CURRENT NAMESPACE answers, is counted.
+        expect(transport.served.slice(before)).toStrictEqual([...GROUNDING_WALK]);
+        // studio_unloaded's namespaces were never listed, so they are in no count: the four other namespaces of
+        // spark_catalog are.
+        const inventory: AgentInventory = {
+          objects: [],
+          kinds: [
+            { id: "table", role: "relation", label: "Table", labelPlural: "Tables" },
+            { id: "view", role: "relation", label: "View", labelPlural: "Views" },
+            { id: "function", role: "routine", label: "Function", labelPlural: "Functions" },
+          ],
+          unreadContainers: {
+            count: 4,
+            label: "Namespace",
+            labelPlural: "Namespaces",
+            read: ["spark_catalog.default"],
+            unlistedParents: [{ path: "studio_unloaded", label: "Catalog", reason: UNLOADED_CATALOG_TEXT }],
+          },
+          defaultContainer: ["spark_catalog", "default"],
+        };
+        expect(capture).toStrictEqual({
+          kind: "captured",
+          snapshot: {
+            connectionId: "spark-replay",
+            fingerprint: fingerprintInventory(inventory),
+            capturedAtMs: 1_000,
+            ...inventory,
+            readVia: "provider-inventory",
+          },
+          charged: { statements: 1, elapsedMs: 0 },
+        });
+        if (capture.kind !== "captured") throw new Error(`expected a capture, got ${capture.kind}`);
+        // The run is told which catalog was not read, in Spark's words.
+        expect(
+          packContextForTask(capture.snapshot, "which tables hold orders")
+            .split("\n")
+            .filter((line) => line.includes("was not read")),
+        ).toStrictEqual([
+          `Not read: 4 other Namespaces. The Catalog "studio_unloaded" was not read: listing its Namespaces failed with "${UNLOADED_CATALOG_TEXT}". This inventory covers only what it read in ("spark_catalog.default"), so an object in any other Namespace is not listed below. Do not read its absence as an absence in the database.`,
+        ]);
+        await provider.disconnect();
+      });
+    }
   });
 }
 
