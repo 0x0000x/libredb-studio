@@ -68,7 +68,7 @@ describe("parseTables and findControlTable", () => {
     expect(table?.rows).toHaveLength(PROGRAMME_CONTROL_IDS.length);
   });
 
-  test("the programme ends with the S3 controls, the Kubernetes request allowlist, the RabbitMQ read path, then the Apache Spark session and answer bounds", () => {
+  test("the programme ends with the Oxia read-only client, the DuckDB extension and external-access controls, the S3 controls, the Kubernetes request allowlist, the RabbitMQ read path, then the Apache Spark session and answer bounds", () => {
     expect(PROGRAMME_CONTROL_IDS.slice(-8)).toEqual(["3.15", "3.16", "3.17", "3.18", "3.19", "3.20", "3.21", "3.22"]);
     expect(PROGRAMME_CONTROL_IDS).toHaveLength(41);
   });
