@@ -1,15 +1,17 @@
 /**
  * A result's columns as Studio shows them (spec 5.1, 5.2, 3.6): the value kind values.ts maps a cell by, and Spark's
  * own spelling of the column type for `columnTypes`, the form Spark's simpleString writes, never cut (`decimal(10,2)`,
- * `interval year to month`, `struct<a b:int>`, a struct field name as it is). The relation path reads the `DataType`
- * proto Spark sends first, as Spark's own client reads it (DataTypeProtoConverter), held to the 64 levels, the 10,000
- * fields and the decimal bound the IPC schema is held to (5.5); the command path, which sends no `DataType`, reads the
- * Arrow types as Spark reads them back (ArrowUtils). On the relation path the two must name the same columns (5.1).
- * Pure: no I/O, no logger.
+ * `interval year to month`), but with each struct field name spelled as Spark's quoteIfNeeded spells it
+ * (``struct<`a b`:int,ok:bigint>``), so a struct's spelling is type text Spark parses back as the same struct, which
+ * the SQL export hands to FROM_JSON. The relation path reads the `DataType` proto Spark sends first, as Spark's own
+ * client reads it (DataTypeProtoConverter), held to the 64 levels, the 10,000 fields and the decimal bound the IPC
+ * schema is held to (5.5); the command path, which sends no `DataType`, reads the Arrow types as Spark reads them
+ * back (ArrowUtils). On the relation path the two must name the same columns (5.1). Pure: no I/O, no logger.
  */
 import type { ArrowColumnData, ArrowColumns } from "./arrow";
 import { SPARK_SCHEMA_MAX_DEPTH, SPARK_SCHEMA_MAX_FIELDS } from "./constants";
 import { SPARK_ERROR_SENTENCES, SparkError } from "./errors";
+import { spellSparkName } from "./namespace";
 import type { IntervalFields, IntervalUnit } from "./temporal";
 
 /** The kind of a column's values, which values.ts maps each cell by. */
@@ -180,7 +182,12 @@ function mapKind(out: string[], key: () => SparkValueKind, value: () => SparkVal
   return { type: "map", key: keyKind, value: valueKind };
 }
 
-/** A struct, each field name written as it is, unquoted, as Spark's StructType.simpleString writes it. */
+/**
+ * A struct, each field name spelled by spellSparkName, bare where Spark's quoteIfNeeded leaves it bare and backticked
+ * otherwise (L08-C21), since Spark's type grammar reads a field name as an identifier (complexColType). Spark's
+ * simpleString writes every name bare, which Spark cannot parse back for a name such as `a b` and reads as another
+ * shape for one such as `x:int,y`. The kind keeps each name as it is.
+ */
 function structKind<F extends { readonly name: string }>(
   out: string[],
   fields: readonly F[],
@@ -189,7 +196,7 @@ function structKind<F extends { readonly name: string }>(
   out.push("struct<");
   const kinds = fields.map((field, index) => {
     if (index > 0) out.push(",");
-    out.push(field.name, ":");
+    out.push(spellSparkName(field.name), ":");
     return { name: field.name, kind: kindOf(field) };
   });
   out.push(">");

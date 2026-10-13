@@ -30,6 +30,24 @@ function refusalOf(read: () => unknown): unknown {
 }
 const unreadable = (what: string) => ({ category: "unreadable", message: SPARK_ERROR_SENTENCES.unreadable(what) });
 
+/**
+ * A struct whose field names hold a backtick, a quote, and a colon and a comma, as both paths spell it: each such name
+ * backticked with a backtick inside doubled, as Spark's quoteIfNeeded writes it, so the spelling is type text Spark
+ * parses back as the same struct (the SQL export hands it to FROM_JSON); the kind keeps every name as it is.
+ */
+const QUOTED_FIELDS: Omit<SparkColumn, "name"> = {
+  spelling: "struct<`a``b`:int,`it's`:string,`x:int,y`:bigint,ok:boolean>",
+  kind: {
+    type: "struct",
+    fields: [
+      { name: "a`b", kind: { type: "int" } },
+      { name: "it's", kind: { type: "string" } },
+      { name: "x:int,y", kind: { type: "bigint" } },
+      { name: "ok", kind: { type: "boolean" } },
+    ],
+  },
+};
+
 describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
   test("every scalar type", () => {
     const columns = columnsFromDataType(
@@ -126,7 +144,7 @@ describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
     ]);
   });
 
-  test("nested types spell their parts as Spark's simpleString does, a field name as it is", () => {
+  test("nested types spell their parts, a field name quoted where Spark would", () => {
     const [column] = columnsFromDataType(
       struct([
         [
@@ -143,7 +161,7 @@ describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
         ],
       ]),
     );
-    expect(column.spelling).toBe("map<string,array<struct<a b:int,ok:bigint>>>");
+    expect(column.spelling).toBe("map<string,array<struct<`a b`:int,ok:bigint>>>");
     expect(column.kind).toStrictEqual({
       type: "map",
       key: { type: "string" },
@@ -158,6 +176,19 @@ describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
         },
       },
     });
+  });
+
+  test("a struct field name Spark would quote is backticked, a backtick doubled, so the spelling parses back", () => {
+    expect(
+      one(
+        struct([
+          ["a`b", t("integer")],
+          ["it's", t("string")],
+          ["x:int,y", t("long")],
+          ["ok", t("boolean")],
+        ]),
+      ),
+    ).toStrictEqual({ name: "c", ...QUOTED_FIELDS });
   });
 
   test("a field the proto leaves out reads as Spark reads it", () => {
@@ -472,6 +503,24 @@ describe("columnsFromArrow: the command path, from Arrow types", () => {
     expect(columns[5].kind).toStrictEqual({ type: "geography", srid: -1 });
   });
 
+  test("a struct field name Spark would quote is backticked here too, as the relation path spells it", () => {
+    expect(
+      fromStream([
+        {
+          name: "c",
+          kind: "struct",
+          length: 1,
+          children: [
+            { name: "a`b", kind: "int32", values: [1] },
+            { name: "it's", kind: "utf8", values: ["x"] },
+            { name: "x:int,y", kind: "int64", values: [BigInt(1)] },
+            { name: "ok", kind: "bool", values: [true] },
+          ],
+        },
+      ]),
+    ).toStrictEqual([{ name: "c", ...QUOTED_FIELDS }]);
+  });
+
   for (const version of ["4.2.0", "4.1.3"] as const satisfies readonly SparkCaptureVersion[]) {
     test(`the captured inline answer of ${version} reads from its Arrow types`, () => {
       const capture = readSparkCapture(version, "show-tables-inline");
@@ -570,7 +619,9 @@ describe("the two schemas of the relation path", () => {
     test(`the captured every-type schema of ${version} is spelled as Spark's own DESCRIBE spells it`, () => {
       const { fromDataType } = relationCapture(version, "every-type-relation");
       // DESCRIBE spells the 32 stored columns from the table, where a char or varchar column keeps its length; a
-      // result schema reports such a column as string (spec 5.2), and the two computed columns are not stored.
+      // result schema reports such a column as string (spec 5.2), and the two computed columns are not stored. Every
+      // struct field name in the table is bare, so DESCRIBE, which writes a field name unquoted, and this module, which
+      // backticks a name Spark would quote, spell it alike.
       expect(Object.fromEntries(fromDataType.map((column) => [column.name, column.spelling]))).toStrictEqual({
         ...describedSpellings(),
         c_char: "string",
