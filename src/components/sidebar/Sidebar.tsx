@@ -10,12 +10,57 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ObjectTree, type ObjectSource, type TreeRowActionHandlers } from "@/components/object-tree";
 import { KeyBrowser, type KeyPatternRequest } from "@/components/key-browser";
 import { prefixPattern } from "@/components/key-browser/tree";
-import { containerDepth } from "@/lib/db/object-kinds";
+import { containerDepth, enumerableKinds } from "@/lib/db/object-kinds";
 import { GitHubRepoLink } from "@/components/github-repo-link";
 import { getAppVersion } from "@/lib/app-version";
 import { cn } from "@/lib/utils";
 import { ConnectionsList } from "./ConnectionsList";
 import type { ConnectionGroup } from "@/lib/storage/types";
+
+/**
+ * The two readings of a connection the sidebar can draw: its objects, or its keys.
+ *
+ * Named rather than written inline because the state below holds it next to a connection id, and a
+ * pair of string literals in that position reads as two unrelated strings.
+ */
+type SidebarView = "objects" | "keys";
+
+/**
+ * A view the reader PRESSED, together with what they could see when they pressed it.
+ *
+ * `enumeratedNothing` is what tells an informed choice from an inherited one. A reader who presses
+ * Objects on an OPC UA server has SEEN what that tab says and asked for it anyway, so the choice
+ * travels to the next OPC UA server; a reader whose last choice was Objects on Postgres chose
+ * nothing about an engine with no objects, so that one does not travel.
+ */
+interface ChosenSidebarView {
+  readonly connectionId: string | null;
+  readonly view: SidebarView;
+  readonly enumeratedNothing: boolean;
+}
+
+/**
+ * The view ON SCREEN for this connection, derived every render rather than stored, so a default can
+ * never outlive the connection it was right for.
+ *
+ * THREE NAMED ARMS, AND THE THIRD IS THE ONE A STORED DEFAULT GOT WRONG:
+ *  - no choice at all: the engine's own default, which is `keys` only where nothing is enumerable;
+ *  - a choice made on THIS connection: honoured as it stands, including `objects` on an engine with
+ *    nothing to enumerate - a reader who presses that tab asked to see what is there;
+ *  - a choice carried from ANOTHER connection: honoured too, except that `objects` is not carried
+ *    onto an engine that enumerates nothing, since the tab it names would be empty by design.
+ */
+function sidebarViewFor(options: {
+  readonly chosen: ChosenSidebarView | null;
+  readonly connectionId: string | null;
+  readonly enumeratesNothing: boolean;
+}): SidebarView {
+  const { chosen, connectionId, enumeratesNothing } = options;
+  if (chosen === null) return enumeratesNothing ? "keys" : "objects";
+  const carried = chosen.connectionId !== connectionId;
+  if (carried && chosen.view === "objects" && enumeratesNothing && !chosen.enumeratedNothing) return "keys";
+  return chosen.view;
+}
 
 interface SidebarProps {
   connections: DatabaseConnection[];
@@ -158,18 +203,27 @@ export const Sidebar = React.memo(function Sidebar({
   const appVersion = getAppVersion();
   const notChecked = connectionPulse === "not-checked";
   /**
-   * Which reading of the active connection the panel below shows.
+   * The reading of the connection the READER CHOSE, and the connection they chose it on, or null
+   * while they have chosen nothing.
    *
-   * `objects` is the default and stays the default for every engine: the key browser is an ADDITION
-   * to the sidebar rather than a replacement for the object tree, so an engine that gains the
-   * capability gains a tab and every engine without it is untouched by it.
+   * A CHOICE AND A DEFAULT ARE TWO DIFFERENT THINGS, and holding only the current reading here
+   * conflated them. `objects` is the default for every engine that enumerates something: the key
+   * browser is an ADDITION to the sidebar rather than a replacement for the object tree, so an
+   * engine that gains the capability gains a tab and every engine without it is untouched by it.
+   * An engine that enumerates NOTHING defaults to `keys` instead, because that is the only tab it
+   * has anything to put in - and that default is derived per connection below, never stored. Storing
+   * it is the bug this shape exists to make impossible: one OPC UA or MQTT connection used to leave
+   * `keys` in this state for good, so the next Redis, etcd, Oxia or S3 connection opened on a key
+   * walk nobody asked for with the object tree simply absent (measured in a browser; `docs/BACKLOG.md`
+   * U108 records the sibling defect for `keyPatternRequest`).
    *
-   * Deliberately not reset when the connection changes. A reader who chose Keys and then switched
-   * between two Redis servers meant to keep looking at keys, and the capability check below is what
-   * keeps the choice honest: on an engine without the walk, `keys` renders the object tree anyway
-   * and the tabs are not drawn at all.
+   * The CHOICE is deliberately not dropped when the connection changes: a reader who chose Keys and
+   * then switched between two Redis servers meant to keep looking at keys. It carries one exception,
+   * below - a chosen `objects` is not carried ONTO an engine with nothing to enumerate - and the
+   * capability check is what keeps the rest honest: on an engine without the walk, `keys` renders the
+   * object tree anyway and the tabs are not drawn at all.
    */
-  const [view, setView] = React.useState<"objects" | "keys">("objects");
+  const [chosenView, setChosenView] = React.useState<ChosenSidebarView | null>(null);
   /**
    * The connection whose key panel is being kept mounted, or null while none is.
    *
@@ -198,7 +252,32 @@ export const Sidebar = React.memo(function Sidebar({
    * `readsColumns`: a shell that answers the tree's reads itself is a shell with no routes of its own.
    */
   const keyScan = objectSource === undefined ? metadata?.capabilities.keyScan : undefined;
+  /**
+   * AN ENGINE THAT ENUMERATES NOTHING OPENS ON KEYS, and that is not a preference: it is the only
+   * tab it has anything to put in. `objects` is still the default everywhere else - the key browser
+   * is an addition, not a replacement - but MQTT and OPC UA declare a key walk and NO enumerable
+   * object kind at all, so the object tree calls `listObjects`, the provider refuses by design, and
+   * what a reader meets on their first connect is an empty panel and a red "Schema Error" toast
+   * telling them to browse in the Keys panel. Measured in a browser on OPC UA, which is how this
+   * was found at all: the toast read "opcua enumerates the kind "node" in the Keys panel alone, so
+   * no inventory or search lists it", which is true, by design, and drawn as a failure.
+   *
+   * Read from the DECLARATION rather than a type-id: an engine is treated this way because it says
+   * it has nothing to enumerate, which is what `enumerableKinds` answers (#1089 3.4).
+   */
+  const enumeratesNothing =
+    keyScan !== undefined && metadata != null && enumerableKinds(metadata.capabilities).length === 0;
+  // Derived every render; the three arms and why they are these three are on `sidebarViewFor`.
+  const view: SidebarView = sidebarViewFor({ chosen: chosenView, connectionId, enumeratesNothing });
   const showingKeys = keyScan !== undefined && view === "keys";
+  /*
+   * A SHOWN PANEL IS A LIVE PANEL, recorded here rather than in each handler that can reach it: the
+   * id is what keeps the walk mounted after the reader looks at the object tree, and the one place
+   * that knows a walk started is the render that drew it. Set during RENDER for the reason
+   * `keysPanelFor` gives above - an effect commits one render late, and a panel that goes missing for
+   * one render has taken its sample from cursor `"0"` again by the time it comes back.
+   */
+  if (showingKeys && keysPanelFor !== connectionId) setKeysPanelFor(connectionId);
   /**
    * The walk's shape, read once through `keyScanShape`, so the handover below builds the pattern the
    * engine's walk reads (spec 3.4, 4.6). Undefined where no walk is shown, which is also where no row
@@ -221,7 +300,21 @@ export const Sidebar = React.memo(function Sidebar({
    * The panel applies it once and then owns the pattern — the reader can edit it, clear it, or walk
    * something else — so nothing here re-imposes it on a later render.
    */
-  const [keyPatternRequest, setKeyPatternRequest] = React.useState<KeyPatternRequest | undefined>(undefined);
+  const [keyPatternRequest, setKeyPatternRequest] = React.useState<
+    { readonly connectionId: string | null; readonly request: KeyPatternRequest } | undefined
+  >(undefined);
+  /*
+   * AND IT BELONGS TO THE CONNECTION IT WAS MADE ON. The request used to be held for the whole
+   * sidebar, so the Keys panel of the NEXT connection opened on the previous one's pattern -
+   * `docs/BACKLOG.md` U108, measured on Redis `bulk:*` carried onto etcd and Oxia, where it read
+   * `Scanned 0`. It was deferred because a reader had to press Keys to meet it; the default above
+   * makes it the FIRST screen after connecting on MQTT and OPC UA, where a Redis glob matches
+   * nothing in a `prefix` walk, so it is scoped here rather than left for later.
+   */
+  const patternForThisConnection =
+    keyPatternRequest !== undefined && keyPatternRequest.connectionId === connectionId
+      ? keyPatternRequest.request
+      : undefined;
 
   /**
    * Show one row's key pattern in the panel built to walk it.
@@ -246,18 +339,27 @@ export const Sidebar = React.memo(function Sidebar({
       const capabilities = metadata?.capabilities;
       const database = capabilities !== undefined && containerDepth(capabilities) > 0 ? object.path[0] : undefined;
       setKeyPatternRequest({
-        // IN THE WALK'S OWN SHAPE, from `prefixPattern`, which reads the row's NAME. The scoped walk
-        // holds a path and asks `pathPattern`, which is this helper under `glob`, so the two cannot
-        // drift there (#427), and the same rule with no name to read under `prefix`. Under `glob` it is
-        // ESCAPED, and only in its prefix half: a key prefix is data that may itself contain a glob
-        // metacharacter, while the `*` the row is advertised with is the one the pattern exists for.
-        // Under `prefix` it is the bare prefix and its separator, unescaped, so `/apisix/routes/*` hands
-        // over `/apisix/routes/` (spec 4.6).
-        pattern: prefixPattern(object.name, keyShape),
-        ...(database === undefined ? {} : { database }),
+        connectionId,
+        request: {
+          // IN THE WALK'S OWN SHAPE, from `prefixPattern`, which reads the row's NAME. The scoped walk
+          // holds a path and asks `pathPattern`, which is this helper under `glob`, so the two cannot
+          // drift there (#427), and the same rule with no name to read under `prefix`. Under `glob` it is
+          // ESCAPED, and only in its prefix half: a key prefix is data that may itself contain a glob
+          // metacharacter, while the `*` the row is advertised with is the one the pattern exists for.
+          // Under `prefix` it is the bare prefix and its separator, unescaped, so `/apisix/routes/*` hands
+          // over `/apisix/routes/` (spec 4.6).
+          pattern: prefixPattern(object.name, keyShape),
+          ...(database === undefined ? {} : { database }),
+        },
       });
-      setView("keys");
-      setKeysPanelFor(connectionId);
+      // A choice, and recorded as one: the reader asked for this walk on THIS connection.
+      // Browse Keys is only offered where the panel is, so this engine's enumerable kinds are what
+      // the flag records; the row menu cannot be reached on an engine without the walk.
+      setChosenView({
+        connectionId,
+        view: "keys",
+        enumeratedNothing: capabilities !== undefined && enumerableKinds(capabilities).length === 0,
+      });
     },
     [connectionId, keyShape, metadata],
   );
@@ -357,18 +459,18 @@ export const Sidebar = React.memo(function Sidebar({
             <>
               {keyScan !== undefined && (
                 <div className="flex items-center gap-1 pb-2" role="tablist" aria-label="Sidebar view">
-                  {(["objects", "keys"] as const).map((option) => (
+                  {(["objects", "keys"] as const satisfies readonly SidebarView[]).map((option) => (
                     <button
                       key={option}
                       type="button"
                       role="tab"
                       aria-selected={view === option}
-                      onClick={() => {
-                        setView(option);
-                        // Choosing Keys is what mounts the panel; the id recorded here is what keeps its
-                        // walk alive while the reader looks at something else.
-                        if (option === "keys") setKeysPanelFor(connectionId);
-                      }}
+                      // The reader's choice, recorded WITH the connection they made it on, so the
+                      // engine's default never overrides it and it never becomes another engine's
+                      // default. Mounting the panel is the render's job, not this handler's.
+                      onClick={() =>
+                        setChosenView({ connectionId, view: option, enumeratedNothing: enumeratesNothing })
+                      }
                       className={cn(
                         "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
                         view === option
@@ -392,7 +494,7 @@ export const Sidebar = React.memo(function Sidebar({
                     connection={activeConnection}
                     capability={keyScan}
                     databaseLevel={databaseLevel}
-                    request={keyPatternRequest}
+                    request={patternForThisConnection}
                     onOpenKey={onOpenKey}
                   />
                 </div>

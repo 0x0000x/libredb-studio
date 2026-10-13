@@ -2021,6 +2021,7 @@ describe("useConnectionForm", () => {
     firestore: true,
     rabbitmq: true,
     snowflake: true,
+    opcua: true,
   };
 
   test("dbTypes offers every database type a connection can carry", () => {

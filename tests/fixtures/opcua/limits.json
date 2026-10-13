@@ -1,0 +1,7 @@
+{
+  "maxNodesPerRead": 2500,
+  "maxNodesPerBrowse": 2500,
+  "maxNodesPerHistoryReadData": 1000,
+  "maxBrowseContinuationPoints": 10,
+  "maxHistoryContinuationPoints": 100
+}

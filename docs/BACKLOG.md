@@ -31,7 +31,7 @@ None of it is a GitHub issue.
 - [Drivers and connections](#drivers-and-connections) — D1-D344, U17 · 244
 - [Value interpolation](#value-interpolation) — V1
 - [Row editing](#row-editing) — R1–R3 · 3
-- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U131 · 121
+- [Studio UI and query execution](#studio-ui-and-query-execution) — X2-X27, U2-U138 · 128
 - [Dependencies](#dependencies) — P1-P9 · 7
 - [Documentation](#documentation) — DOC3-DOC25 · 22
 - [Release pipeline](#release-pipeline) — REL1-REL8 · 8
@@ -39,7 +39,7 @@ None of it is a GitHub issue.
 - [Security Phase 1 deferrals](#security-phase-1-deferrals) — H1–H14 · 4
 - [Security Phase 2 deferrals](#security-phase-2-deferrals) — C3–C11 · 6
 - [Security Phase 3 deferrals](#security-phase-3-deferrals) — K4-K8 · 5
-- [Security scanner triage](#security-scanner-triage) — SCAN1 · 1
+- [Security scanner triage](#security-scanner-triage) — SCAN1-SCAN2 · 2
 - [Agent M1 deferrals (#328)](#agent-m1-deferrals-328) — A2–A8 · 6
 - [Agent M2 deferrals (#329)](#agent-m2-deferrals-329) — B2-B110 · 46
 - [Passkey deferrals (#785)](#passkey-deferrals-785) — PK1-PK9 · 8
@@ -5216,7 +5216,79 @@ Found 2026-10-12 while reading the connection dialog for a new provider.
 
 **Done when:** the sentence under the schema box comes from the engine's declaration, or is drawn only for an engine whose declaration says it applies, Firestore's box carries no Create Table or `SHOW SCHEMAS` advice, and a component test renders the dialog for Firestore and for Trino and pins which of the two draws it.
 
-### U125. Studio has no shared result cursor for paging
+### U125. A Test Connection answer lands below the fold, so pressing the button looks like nothing happened
+
+The result of Test Connection is drawn where it sits in the dialog's form (`src/components/ConnectionModal.tsx`), and the dialog scrolls; nothing scrolls the answer into view after the press.
+Measured 2026-10-12 in a browser on an OPC UA connection: after pressing the button, the answer's box was at y≈2798 while the dialog's scroll viewport ended at y=578, so the screen was unchanged and the sentence sat behind the sticky footer until the reader scrolled. Scrolled to, the same sentence is legible at 6.87:1.
+Reproduced identically on a Redis connection and an MQTT connection, so it belongs to the dialog rather than to any provider; it is the only feedback the connect path has before Establish Connection.
+
+Found 2026-10-12 by the browser pass of the OPC UA provider; pre-existing.
+
+**Done when:** pressing Test Connection brings its answer into view (scrolling the result into the dialog's viewport, or drawing it beside the button), with a dialog test that asserts the answer is inside the viewport after the press.
+
+### U126. Deep key rows whose names share a long prefix clip to the same text
+
+A key row's label is truncated from the END (`truncate` in `src/components/key-browser/KeyBrowser.tsx`), and at depth the row has little width left: measured 2026-10-12 in a browser on the OPC UA fixture, level `OpcPlc/Telemetry/Historian/HistorianInt32/HA Configuration/` draws its rows at 8 + 6x12 = 80px of indent plus a twisty, a glyph and the type cell, leaving about 100px for the name in a 280px sidebar.
+Eleven of its thirteen rows clip, and two adjacent rows both read `Exceptio...`: `ExceptionDeviation` and `ExceptionDeviationFormat` share their first 18 characters, so no width this panel can give them tells them apart - the part that differs is the part cut off.
+Drawing each row by its own segment rather than the whole key (this round) fixed the shallow case and narrowed this one to names that share a long prefix; the row's `title` carries the full name, and the grid's own cells are unaffected.
+S3 shares the level walk and the same drawing.
+
+Found 2026-10-12 by the browser pass of the OPC UA provider.
+
+**Done when:** a key row whose name does not fit keeps the part that distinguishes it - a middle ellipsis (`Exception...Format`) or an end-anchored truncation - with a test that renders two siblings sharing a long prefix and asserts the two labels differ.
+
+### U127. A connection cannot be edited on a phone, and its row's controls are invisible there
+
+The mobile DB tab renders `ConnectionsList` without `onEditConnection` (`src/components/Studio.tsx`), so no Edit control exists on a phone, and the row's remaining controls are drawn at `opacity: 0` behind a hover gate that a touch screen never satisfies.
+Measured 2026-10-12 at 390x844 in a browser: the four controls on a connection row report 20x20 px at opacity 0, below the 44x44 a touch target needs and invisible until tapped blind; the Edit control is absent from the DOM.
+So a connection created on a phone can never have its endpoint, username or security mode changed there. It is not engine-specific - the same list draws every engine - and the delete prompt, which does render, was confirmed to ask first on the phone.
+
+Found 2026-10-12 by the browser pass of the OPC UA provider; pre-existing.
+
+**Done when:** a touch viewport draws the row's actions visibly at 44x44 or larger and offers Edit, with a mobile test that taps Edit on a connection row and asserts the dialog opens filled.
+
+### U128. The results grid truncates the column that identifies a row while leaving the width beside it empty
+
+Grid columns are sized without regard to the free width of the panel, so a long first column is clipped at every window size even when hundreds of pixels sit unused to its right.
+Measured 2026-10-12 in a browser on an OPC UA read, whose first column is the node id: at 1280, 1440 and 1920 px the `nodeId` cell read `ns=3;s=His...` on every row while the grid's own right edge had free space; WRAP makes it readable, and WRAP is not the default a reader meets.
+The identifying column being the clipped one is what makes it a defect rather than a preference: the rows of a read differ only there.
+
+Found 2026-10-12 by the browser pass of the OPC UA provider; pre-existing.
+
+**Done when:** columns consume the panel's free width (or size to content) before truncating, with a test that renders a result whose first column is long and asserts no cell is clipped while free width remains.
+
+### U129. The Docs tab reports "0 tables" on an engine that has none
+
+The Docs panel is built around a table reference, so on an engine whose `objectKinds` hold no table-shaped kind it draws "0 tables" and an empty "Table Reference" - a count about a thing the engine does not have, next to an Objects tree that says in words where the nodes are.
+Measured 2026-10-12 in a browser on an OPC UA connection; MQTT has the same shape.
+
+Found 2026-10-12 by the browser pass of the OPC UA provider.
+
+**Done when:** the Docs tab says what the Objects tree says for such an engine, or is not offered there, with a test over an engine whose kinds are all `enumeratedBy: "key-browser"`.
+
+### U130. The OPC UA certificate pin is compared against a different dial's certificate than the session uses
+
+The pin (`serverCertificateThumbprint`) is computed in `src/lib/db/providers/industrial/opcua/library.ts` from the certificate returned by this provider's OWN `GetEndpoints` dial, which is built with `MessageSecurityMode.None` and the None policy, and it is compared once in `session.ts` before the session opens.
+The certificate the session then uses does not come from that reply. `node-opcua` performs a second, independent discovery inside `connect` whenever the mode is not None (`client_base_impl.js`, `fetchServerCertificate` to `__findEndpoint`), and that TmpClient carries no security mode or policy either.
+Nothing binds the two dials, so a host answering the typed address can serve the genuine certificate on the pin dial and a different one on the channel dial, and the pin matches.
+
+This grants no access on its own: the strict certificate manager still pushes the session's certificate through `checkCertificate`, which answers `BadCertificateUntrusted` for anything the administrator's trust list does not hold, so the trust list remains the gate.
+What is wrong is the promise. `connection.ts` already says of the None mode that the check "catches an honest certificate rotation and nothing an attacker does"; the same is true on Sign and SignAndEncrypt, where the pin IS enforced, and only the provider doc said so.
+Found 2026-10-12 by an audit of CodeQL alert 660, which was looking at something else (see SCAN2).
+Not measured against a server that answers the two dials differently.
+
+**Done when:** the pin is compared against the certificate the open session actually negotiated rather than against the discovery reply, with a test that a differing second certificate refuses.
+
+### U131. The OPC UA screenshot walkthrough waits by the clock rather than on a condition
+
+`e2e/opcua-screens.spec.ts` holds fifteen `page.waitForTimeout` calls between 500ms and 8s, which SonarCloud reports as `typescript:S2925` ("Replace this fixed wait with a synchronization on an observable condition") on exactly those fifteen lines, and which is the shape that makes a spec slow when it passes and flaky when it does not.
+The #1719 E2E run put two specs under "flaky", `e2e/mqtt-provider.spec.ts` and `e2e/session-expired.spec.ts`, and neither is this one: `e2e/opcua-provider.spec.ts` was one of the two FAILED, on a stale assertion since fixed.
+So the cost here is the shape rather than a failure already observed in it.
+The waits stand in for a walk settling, which has no single observable the spec can currently await.
+
+**Done when:** every fixed wait in that spec is replaced by a wait on an observable condition, or the panel exposes a settled marker the spec can await.
+
+### U132. Studio has no shared result cursor for paging
 
 Each engine that offers Load More pages its own way, and an engine whose server keeps a result, such as Snowflake, has no contract to page it by.
 
@@ -5224,7 +5296,7 @@ Found 2026-10-12 while designing the Snowflake provider.
 
 **Done when:** a provider can return an opaque cursor with a result, the routes and the grid page by it under an owner check, and one engine uses it end to end, with tests.
 
-### U126. The connection dialog shows no key fingerprint before Test
+### U133. The connection dialog shows no key fingerprint before Test
 
 A Snowflake key's fingerprint reaches the user only inside the key-pair refusal, so a user cannot check which key is loaded before a request is sent.
 
@@ -5232,7 +5304,7 @@ Found 2026-10-12 while designing the Snowflake provider.
 
 **Done when:** a provider can declare a pre-request panel on `DatabaseUIConfig`, the dialog shows the key's SHA-256 fingerprint and registration name as soon as the key reads, and the component test covers it.
 
-### U127. `ConnectionModalProps.onTestConnection` does not declare what the form reads
+### U134. `ConnectionModalProps.onTestConnection` does not declare what the form reads
 
 The exported `ConnectionModal` types its `onTestConnection` result as `success`, `latency`, `error` and `fixStatement`, while the form hook also reads `degraded`, `message` and `warnings` from it (`src/hooks/use-connection-form.ts`).
 An embedding host that returns Snowflake's cautions has to step outside the declared type to do it.
@@ -5241,7 +5313,7 @@ Found 2026-10-12 while designing the Snowflake provider.
 
 **Done when:** the exported result type declares every field the hook reads, the type test pins it, and the embedding docs show an adapter returning warnings.
 
-### U128. `WorkspaceProps.onTestConnection` is declared and never read
+### U135. `WorkspaceProps.onTestConnection` is declared and never read
 
 `WorkspaceProps` in `src/workspace/types.ts` declares `onTestConnection`, and `StudioWorkspace` never calls it, so a host that supplies it gets no effect.
 Its fixed field list also carries none of the newer connection fields, Snowflake's among them.
@@ -5250,7 +5322,7 @@ Found 2026-10-12 while designing the Snowflake provider.
 
 **Done when:** the prop is either wired to the workspace's connection dialog with the full connection shape, or removed, with the package type test updated.
 
-### U129. Plan mode's walk enumerates containers without regard to scope
+### U136. Plan mode's walk enumerates containers without regard to scope
 
 Plan mode grounds through the provider walk scoped to the session-default container; on Snowflake a connection with a Database and no Schema walks that database's schemas instead, INFORMATION_SCHEMA left out, and one with neither walks nothing, all inside the walk's 10 s timer (`src/lib/agent/tools.ts`).
 
@@ -5258,7 +5330,7 @@ Found 2026-10-12 while designing the Snowflake provider.
 
 **Done when:** the walk can enumerate the containers a run's objective names, within the same timer, with tests on an engine with several databases.
 
-### U130. Snowflake SQL has no editor language of its own
+### U137. Snowflake SQL has no editor language of its own
 
 The editor highlights Snowflake statements as generic SQL, so `//` comments, backslash escapes in strings and `$$` bodies are coloured as if they were code.
 
@@ -5266,7 +5338,7 @@ Found 2026-10-12 while designing the Snowflake provider.
 
 **Done when:** a Snowflake Monarch language reads `//`, `\'` and `$$` as the grammar row does, is registered for the `snowflake` type, and the editor tests cover each form.
 
-### U131. A result cut inside a script gets no limited badge
+### U138. A result cut inside a script gets no limited badge
 
 The multi-query route in `src/app/api/db/multi-query/route.ts` builds a script's main result from the last result with rows, carrying its warnings and column types but no `pagination`.
 So a result the provider cut inside a script gets neither the grid's limited badge nor the export menu's cut sentence, only the provider's own warning.
@@ -6198,6 +6270,27 @@ Not fixed there: it needs a new audit reason, a security control count change an
 
 A scanner finding that is open, is not failing a required check, and needs a written ruling before it can be dismissed or fixed.
 CodeQL alerts anchor to a source location, so moving the code re-reports them and a dismissal made against the wrong location does not hold.
+
+### SCAN2. CodeQL alert 660, SHA-1 in the OPC UA certificate thumbprint, closed by moving the pin to SHA-256
+
+`js/weak-cryptographic-algorithm`, security severity high, raised against `refs/pull/1719/merge` at `src/lib/db/providers/industrial/opcua/library.ts:78`, and the same line as `typescript:S4790` on SonarCloud.
+CodeQL's text: "A broken or weak cryptographic algorithm depends on sensitive data from an access to serverCertificate."
+
+The line computed the SHA-1 thumbprint of the server's DER certificate, which `session.ts` compares against the operator's pin.
+
+The stated CONSEQUENCE was measured on 2026-10-12 and does not hold, and that is worth recording because it is what the next reader will want.
+The hashed DER is not sensitive: an OPC UA server publishes it to any unauthenticated caller in its `GetEndpoints` reply (Part 4 5.5.4), and this repository already classifies the derived thumbprint as `public` in `src/lib/storage/connection-secrets.ts`.
+Nor was the pin defeatable: defeating a pin of a certificate that already exists needs a SECOND PREIMAGE, which SHA-1 still resists, and not the collision resistance that SHAttered 2017 and Leurent and Peyrin 2020 broke.
+The thing actually worth fixing that the audit turned up is U130, which is about which certificate the pin is compared against rather than about the hash.
+
+The ALGORITHM was weak all the same, and nothing had shipped with a SHA-1 pin, so there was no compatibility to keep.
+The thumbprint is SHA-256 now, 64 lowercase hex, which is what `openssl x509 -fingerprint -sha256` prints. The digest has to be named: measured on OpenSSL 3.6.3, `-fingerprint` with no digest still prints the SHA-1 one.
+Measured against the running fixture on 2026-10-13: the same certificate is `451da1b4...` under SHA-1 and `b9432ed1...` under SHA-256, and the recorded endpoints fixture was re-derived from the DER it already carries rather than retyped.
+One thing this does NOT buy, and a reader should not believe it does: `node-opcua-pki` keys its own trust list on a SHA-1 fingerprint with no comparison of the stored bytes, so the library's trust decision is still SHA-1 whatever this provider writes.
+
+A SonarCloud `typescript:S5332` finding on the same provider ("Using http protocol is insecure") is the OPC Foundation's own policy URI, `http://opcfoundation.org/UA/SecurityPolicy#None`, which is an identifier nothing dereferences and which a server compares as bytes; `https` there would stop matching every server. It is declared once, in `constants.ts`, with that reason.
+
+**Done when:** alert 660 is closed by the SHA-256 change on `main`, and the `S5332` finding on the one declaration of that URI is marked as the protocol identifier it is.
 
 ### SCAN1. CodeQL alert 536, polynomial ReDoS in the MCP error redactor, needs a ruling
 

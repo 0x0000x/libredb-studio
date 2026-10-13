@@ -39,6 +39,7 @@ describe("QUERY_DIALECTS", () => {
       "libredb",
       "milvus",
       "mqtt",
+      "opcua",
       "oxia",
       "qdrant",
       "rabbitmq",
@@ -132,6 +133,12 @@ describe("QUERY_DIALECTS", () => {
         offersCodeGeneration: false,
         offersCountQuery: false,
         offersSqlExport: false,
+      },
+      opcua: {
+        tabType: "opcua",
+        offersColumnProfiling: false,
+        offersCodeGeneration: false,
+        offersCountQuery: false,
       },
     });
   });

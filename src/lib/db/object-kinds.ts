@@ -105,7 +105,10 @@ export function kindsForContainer(
 export function kindGroup(spec: ObjectKindSpec): { readonly id: string; readonly label: string } | undefined {
   const group: unknown = spec.group;
   if (typeof group !== "object" || group === null) return undefined;
-  const { id, label } = group as { readonly id?: unknown; readonly label?: unknown };
+  const { id, label } = group as {
+    readonly id?: unknown;
+    readonly label?: unknown;
+  };
   return typeof id === "string" && typeof label === "string" ? { id, label } : undefined;
 }
 
@@ -397,7 +400,10 @@ export function offersTestDataGeneration(capabilities: ProviderCapabilities, id:
  * this file exists: `role` is the provider's own word about its own engine, and a hardcoded
  * set would be wrong for every engine this repository has not heard of.
  *
- * Two readers, and they want it for two different reasons. `use-connection-manager.ts` names
+ * SIX READERS, measured, and they want it for two different reasons - the sidebar's inventory read
+ * (`use-connection-manager.ts`), the schema diff, the two shells (`Studio.tsx`,
+ * `StudioWorkspace.tsx`), MCP's `inspect_schema` and the surface conformance guard.
+ * `use-connection-manager.ts` names
  * these kinds when it asks the inventory route for objects, which is both a correctness fact
  * and a cost one: the flat readings hold relations and nothing else, so every routine,
  * trigger and event in a full answer is an object the join can never match and can only
@@ -409,9 +415,26 @@ export function offersTestDataGeneration(capabilities: ProviderCapabilities, id:
  *
  * A relation kind that declares `machineNames: "withheld"` is refused rather than listed or skipped: every
  * reader here lists a relation's names, MCP's `inspect_schema` among them, so the declaration could not hold.
+ *
+ * A KIND THE KEYS PANEL ENUMERATES IS NOT ONE OF THESE, for the same reason it is not in
+ * `enumerableKinds`: every reader of this function LISTS what it names, and that kind is listed by
+ * the Keys panel alone. Measured in a browser on OPC UA, where it was not excluded: connecting
+ * asked the inventory route for the `node` kind, the provider refused it by design ("nodes are
+ * listed in the Keys panel, one level at a time"), and the reader's first screen after connecting
+ * carried a red "Schema Error" toast quoting that sentence - a refusal drawn as a failure, on
+ * every connect. `use-connection-manager.ts` already has the branch for an engine with no such
+ * kind: "nothing declared a kind whose rows this list renders, so there is nothing to ask for and
+ * nothing to show. It is not reported as an error, because no reading failed."
+ *
+ * ONE ENGINE'S ANSWER CHANGES, measured over all 33 shipped declarations: `opcua`, from `["node"]`
+ * to `[]`. MQTT's own kind declares `role: "config"` rather than `"relation"`, so it was never
+ * among these and answers `[]` either way - what the two engines share is `enumerableKinds`, which
+ * is the rule the sidebar and the tree read.
  */
 export function relationKindIds(capabilities: ProviderCapabilities): readonly string[] {
-  const relations = declaredKinds(capabilities).filter((kind) => kind.role === "relation");
+  const relations = declaredKinds(capabilities).filter(
+    (kind) => kind.role === "relation" && kind.enumeratedBy === undefined,
+  );
   const withheld = relations.find((kind) => kindNamesWithheld(kind));
   if (withheld !== undefined) {
     throw new Error(
@@ -547,9 +570,11 @@ export function kindAcceptsSourceEdits(capabilities: ProviderCapabilities, id: s
  * `isCountUnavailable` uses does not compile here at all, because `ObjectSourcePart` has three
  * required members on the refused arm, and that red build is the safe direction.
  */
-export function isSourcePartUnavailable(
-  part: ObjectSourcePart,
-): part is { readonly id: string; readonly label: string; readonly unavailable: string } {
+export function isSourcePartUnavailable(part: ObjectSourcePart): part is {
+  readonly id: string;
+  readonly label: string;
+  readonly unavailable: string;
+} {
   return "unavailable" in part;
 }
 
@@ -606,7 +631,10 @@ export function sourceBoundTruncationReason(limit: number): string {
 export function applySourceBound(
   text: string,
   limit: number | undefined,
-): { readonly text: string; readonly truncated?: { readonly limit: number; readonly reason: string } } {
+): {
+  readonly text: string;
+  readonly truncated?: { readonly limit: number; readonly reason: string };
+} {
   if (limit === undefined || text.length <= limit) return { text };
   const cut = text.slice(0, limit);
   // The bound counts UTF-16 CODE UNITS, so it can land BETWEEN the two halves of a surrogate
@@ -620,7 +648,10 @@ export function applySourceBound(
   // bound nobody set.
   const last = cut.charCodeAt(cut.length - 1);
   const kept = last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
-  return { text: kept, truncated: { limit, reason: sourceBoundTruncationReason(limit) } };
+  return {
+    text: kept,
+    truncated: { limit, reason: sourceBoundTruncationReason(limit) },
+  };
 }
 
 /**

@@ -56,6 +56,8 @@ const OFFERED: Readonly<Record<DatabaseType, boolean>> = Object.freeze({
   mqtt: false,
   firestore: false,
   rabbitmq: false,
+  // Generating test data would be a write, and this provider has no code that can write (#1677).
+  opcua: false,
 });
 
 const TYPES = Object.keys(OFFERED) as DatabaseType[];

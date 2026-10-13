@@ -71,6 +71,7 @@
       <li>Kubernetes (read-only)</li>
       <li>MQTT (read-only)</li>
       <li>RabbitMQ (read-only)</li>
+      <li>OPC UA (read-only)</li>
     </ul>
     <p>What you get:</p>
     <ul>

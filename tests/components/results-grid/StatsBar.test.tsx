@@ -496,6 +496,36 @@ describe("results-grid/StatsBar", () => {
     expect(badge.textContent).toContain("2 warnings");
   });
 
+  /*
+   * TWO IDENTICAL NOTICES ARE TWO ROWS, which is what a driver really sends: Postgres keys nothing
+   * on a notice and this component de-duplicates nothing, so the same sentence can arrive twice. A
+   * row keyed on the sentence alone collided, and React reused one row's DOM for the other.
+   */
+  test("the same warning twice draws two rows, because the keys do not collide", () => {
+    const repeated = { message: "rows were sampled", code: "01000" };
+    const { getByTestId } = render(
+      <StatsBar
+        result={{ ...makeResult(), warnings: [repeated, { ...repeated }, { message: "index advice available" }] }}
+        filteredRowCount={2}
+        activeFilterCount={0}
+        onClearFilters={mock(() => {})}
+        viewMode="card"
+        onSetViewMode={mock(() => {})}
+        wrapText={false}
+        onToggleWrapText={mock(() => {})}
+        hasSensitive={false}
+        effectiveMaskingEnabled={false}
+        userCanToggle={false}
+      />,
+    );
+
+    const rows = getByTestId("stats-warnings").querySelectorAll("li");
+    expect(rows).toHaveLength(3);
+    expect(rows[0]?.textContent).toBe(rows[1]?.textContent);
+    // The repeat carries which repeat it is, so no two rows ask React for the same identity.
+    expect(rows[2]?.textContent).toContain("index advice available");
+  });
+
   test("falls back to the engine's code when a warning carries no message", () => {
     // `0` is a legal code, so absence must be tested as absence - not as falsiness.
     const { getByTitle } = render(

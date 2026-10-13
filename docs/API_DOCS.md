@@ -27,12 +27,12 @@
 
 ## Overview
 
-LibreDB Studio provides a RESTful API for database management operations. The API supports PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Snowflake, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage and Kubernetes.
+LibreDB Studio provides a RESTful API for database management operations. The API supports PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Snowflake, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage, Kubernetes and OPC UA.
 
 ### Key Features
 
 - **JWT Authentication** - Secure token-based authentication stored in HTTP-only cookies
-- **Multi-Database Support** - Thirty-four engines: PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Snowflake, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, MQTT, RabbitMQ, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage, Kubernetes
+- **Multi-Database Support** - Thirty-five engines: PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Snowflake, Apache Cassandra, Redis, Prometheus, InfluxDB (InfluxQL), InfluxDB 3 (SQL), Apache Kafka, MQTT, RabbitMQ, etcd, Neo4j, Milvus, Qdrant, Oxia, Databend, S3-compatible object storage, Kubernetes, OPC UA
 - **AI-Powered Insights** - EXPLAIN explanations, query-safety analysis and schema docs, streamed
 - **Real-time Health Monitoring** - Database metrics and performance insights
 
@@ -496,7 +496,7 @@ The declaration is read without connecting, so each refusal costs no socket, and
 |-----------|--------|------|
 | `database` present and not a non-negative integer | `400` | `{ "error": "\"database\" must be a non-negative integer" }` — the same sentence `POST /api/db/keys/scan` refuses with, shared in `optionalDatabase` |
 | The provider declares no `keyScan` | `400` | `{ "error": "<type> declares no key-space walk: \"database\" names the database a key was walked in, and only an engine that needs such a name accepts it" }` |
-| The provider declares `keyScan` and no container level (etcd, Oxia, S3-compatible object storage) | `400` | `{ "error": "<type> walks one key space and declares no database level: \"database\" names the numbered database a key was walked in, and this engine has none to name" }` |
+| The provider declares `keyScan` and no container level (etcd, Oxia, S3-compatible object storage, MQTT, Firestore, OPC UA) | `400` | `{ "error": "<type> walks one key space and declares no database level: \"database\" names the numbered database a key was walked in, and this engine has none to name" }` |
 | The server has no such database | `400` | `{ "error": "Redis refused database <n>: ERR DB index is out of range", "code": "QUERY_ERROR", "statusCode": 400 }`, never a read of database 0 |
 
 **A connection type's console text bound:**
@@ -2146,7 +2146,7 @@ The object is one shape on the wire. Fields the server reads from a request body
 change how a connection is opened — are the coordinates and credentials (`id`, `name`, `type`,
 `host`, `port`, `user`, `password`, `database`, `schema`, `connectionString`), plus `ssl`,
 `sshTunnel`, `serviceName` (Oracle), `instanceName` (MSSQL), `localDataCenter` (Cassandra),
-`authSource` (MongoDB), `saslMechanism` (Kafka), `allowInsecureAuth` (Db2, InfluxDB, InfluxDB 3, Oxia, Databend, S3, MQTT, RabbitMQ), `dataServers` (Oxia), `warehouse` (Databend, Snowflake), `region` (S3), `apiPath` (Kubernetes, RabbitMQ), `namespaces` and `tlsServerName` (Kubernetes), `location` (BigQuery), `amqpPort` (RabbitMQ), `authMethod`, `privateKey`, `privateKeyPassphrase` and `role` (Snowflake), `queryTimeout`, `agentUser`, `agentPassword`, `apiKeyId`/`apiKeySecret`
+`authSource` (MongoDB), `saslMechanism` (Kafka), `allowInsecureAuth` (Db2, InfluxDB, InfluxDB 3, Oxia, Databend, S3, MQTT, RabbitMQ), `dataServers` (Oxia), `warehouse` (Databend, Snowflake), `region` (S3), `apiPath` (Kubernetes, RabbitMQ), `namespaces` and `tlsServerName` (Kubernetes), `location` (BigQuery), `amqpPort` (RabbitMQ), `securityMode`, `serverCertificateThumbprint`, `securityPolicyUri`, `clientCertificatePath` and `clientPrivateKeyPath` (OPC UA), `authMethod`, `privateKey`, `privateKeyPassphrase` and `role` (Snowflake), `queryTimeout`, `agentUser`, `agentPassword`, `apiKeyId`/`apiKeySecret`
 (Elasticsearch, #708), and `readOnly` (#1089). `color`, `environment`, `group`,
 `managed`, `seedId`, and `createdAt` are client-side bookkeeping that travel in the same object.
 
@@ -2181,6 +2181,11 @@ interface DatabaseConnection {
   apiPath?: string;     // Kubernetes and RabbitMQ: a server path prefix every API request goes under, each with its own rule. Kubernetes: such as /k8s/clusters/c-1 behind a Rancher proxy; starts with / and names segments of letters, digits, dots, hyphens, underscores, tildes, colons or @, with no api, apis, proxy, namespaces, nodes, services, pods, openapi or version segment, no //, . or .. segment, %, query or fragment. RabbitMQ (Path prefix): the management API's path, such as /rabbitmq; starts with /, takes a plain path with no %, ? or #, no empty, . or .. segment and no api segment. For both, one trailing / is removed, so / alone is no prefix
   namespaces?: string;  // Kubernetes only: the namespaces the object tree lists, at most 1,000 DNS-1123 labels separated by commas or spaces; when set, no namespace list call is made
   tlsServerName?: string; // Kubernetes only: the host name the API server's certificate is checked against and sent as SNI (kubeconfig tls-server-name)
+  securityMode?: string;  // OPC UA only: the security mode asked of the server, None, Sign or SignAndEncrypt. Studio's own SSLMode does not map onto these, so the field carries OPC UA's own name; a mode the server does not offer is refused rather than quietly weakened
+  serverCertificateThumbprint?: string; // OPC UA only: the SHA-256 thumbprint the server's certificate must present, 64 hexadecimal characters (colons and spaces ignored). Without it any certificate the trust list accepts is accepted, and the library's default trust list accepts a server on first sight
+  securityPolicyUri?: string; // OPC UA only, seed file only (no dialog field): the security policy to insist on. An endpoint is a mode AND a policy, so naming one narrows the choice to that pair and is refused when the server offers no such pair
+  clientCertificatePath?: string; // OPC UA only, seed file only (no dialog field): the client certificate to present, as a path on the host. Supplied with clientPrivateKeyPath or not at all; absent, the library generates one under the PKI root
+  clientPrivateKeyPath?: string;  // OPC UA only, seed file only (no dialog field): the private key for clientCertificatePath. A path and never a key, so the key itself never enters a connection record
   location?: string;    // BigQuery only: where jobs run (EU, US, europe-west3, ...); absent, the provider detects it from the datasets. Not a secret
   amqpPort?: string;    // RabbitMQ only: the AMQP 0-9-1 port of stream reads; empty means browse only.
   authMethod?: 'keypair' | 'pat'; // Snowflake only: the sign-in method, a key-pair JWT signed with privateKey or a programmatic access token in password; absent means keypair. Not the SSH tunnel's sshTunnel.authMethod. Not a secret
@@ -2197,7 +2202,7 @@ interface DatabaseConnection {
   apiKeySecret?: string;   // the pair's secret half; either alone (after trim) falls back to user/password rather than sending a key built from an empty half
 }
 
-type DatabaseType = 'postgres' | 'mysql' | 'sqlite' | 'libsql' | 'duckdb' | 'mongodb' | 'redis' | 'oracle' | 'db2' | 'mssql' | 'libredb' | 'couchbase' | 'clickhouse' | 'druid' | 'elasticsearch' | 'opensearch' | 'trino' | 'bigquery' | 'snowflake' | 'cassandra' | 'prometheus' | 'kafka' | 'etcd' | 'neo4j' | 'milvus' | 'qdrant' | 'influxdb' | 'influxdb3' | 'oxia' | 'databend' | 's3' | 'kubernetes' | 'mqtt' | 'firestore' | 'rabbitmq';
+type DatabaseType = 'postgres' | 'mysql' | 'sqlite' | 'libsql' | 'duckdb' | 'mongodb' | 'redis' | 'oracle' | 'db2' | 'mssql' | 'libredb' | 'couchbase' | 'clickhouse' | 'druid' | 'elasticsearch' | 'opensearch' | 'trino' | 'bigquery' | 'snowflake' | 'cassandra' | 'prometheus' | 'kafka' | 'etcd' | 'neo4j' | 'milvus' | 'qdrant' | 'influxdb' | 'influxdb3' | 'oxia' | 'databend' | 's3' | 'kubernetes' | 'mqtt' | 'firestore' | 'rabbitmq' | 'opcua';
 type ConnectionEnvironment = 'production' | 'staging' | 'development' | 'local' | 'other';
 ```
 

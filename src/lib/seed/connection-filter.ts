@@ -122,6 +122,18 @@ export function filterByRoles(connections: SeedConnection[], userRoles: string[]
         // The AMQP port, copied for the reason skipObjectScan is: dropped here, a seeded port would never reach the
         // connection the file declared it for.
         amqpPort: conn.amqpPort,
+        // OPC UA's mode and certificate pin (#1677), copied for the reason skipObjectScan is, and
+        // this is the pair where dropping them is worst: the seeded connection would still open, to
+        // the right address, and it would trust whatever certificate the server presented. A
+        // connection listed as pinned that is not pinned is the failure the pin exists to prevent.
+        securityMode: conn.securityMode,
+        serverCertificateThumbprint: conn.serverCertificateThumbprint,
+        // And the three with no dialog box, copied for the same reason: dropped here, a deployment
+        // that mounted a client certificate would dial with a freshly generated one instead, which
+        // a server holding a trust list refuses with BadSecurityChecksFailed.
+        securityPolicyUri: conn.securityPolicyUri,
+        clientCertificatePath: conn.clientCertificatePath,
+        clientPrivateKeyPath: conn.clientPrivateKeyPath,
         createdAt: new Date(),
         managed: conn.managed ?? true,
         roles: conn.roles,

@@ -53,6 +53,8 @@ const COLUMN_GRAMMAR: Record<DatabaseType, [string, string] | null> = {
   mqtt: null,
   firestore: null,
   rabbitmq: null,
+  // No migration dialect: a node has attributes defined by its type in the server's model (#1677).
+  opcua: null,
 };
 
 describe("migration dialect regressions (#284)", () => {

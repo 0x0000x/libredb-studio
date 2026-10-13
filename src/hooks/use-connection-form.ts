@@ -110,6 +110,14 @@ const FIELD_OWNERSHIP: Record<keyof DatabaseConnection, FieldOwnership> = {
   tlsServerName: "edited",
   // The AMQP port box owns it, so emptying it has to CLEAR it, as warehouse.
   amqpPort: "edited",
+  securityMode: "edited",
+  serverCertificateThumbprint: "edited",
+  // OPC UA's three deployment fields have no box in this dialog - they come from a seed file - so
+  // editing a seeded connection must hand them back unchanged rather than drop them. Preserved,
+  // which is what every field the form does not own is.
+  securityPolicyUri: "preserved",
+  clientCertificatePath: "preserved",
+  clientPrivateKeyPath: "preserved",
   group: "preserved",
   managed: "preserved",
   seedId: "preserved",
@@ -237,6 +245,8 @@ export const CONNECTION_FORM_DEFAULTS = {
   tlsServerName: "",
   // A leftover AMQP port would send the next connection's reads to the previous server's listener.
   amqpPort: "",
+  securityMode: "",
+  serverCertificateThumbprint: "",
   // SSH tunnel. A leftover tunnel sends the next connection through the previous one's
   // bastion, with that bastion's password or private key.
   showSSH: false,
@@ -610,6 +620,8 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
    * it and names the field when it refuses it.
    */
   const [amqpPort, setAmqpPort] = useState(D.amqpPort);
+  const [securityMode, setSecurityMode] = useState(D.securityMode);
+  const [serverCertificateThumbprint, setServerCertificateThumbprint] = useState(D.serverCertificateThumbprint);
 
   // SSH Tunnel
   const [showSSH, setShowSSH] = useState(D.showSSH);
@@ -670,6 +682,8 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
       namespaces: setNamespaces,
       tlsServerName: setTlsServerName,
       amqpPort: setAmqpPort,
+      securityMode: setSecurityMode,
+      serverCertificateThumbprint: setServerCertificateThumbprint,
       showSSH: setShowSSH,
       sshEnabled: setSSHEnabled,
       sshHost: setSSHHost,
@@ -721,6 +735,8 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
       apiPath: setApiPath,
       namespaces: setNamespaces,
       tlsServerName: setTlsServerName,
+      securityMode: setSecurityMode,
+      serverCertificateThumbprint: setServerCertificateThumbprint,
       location: setLocation,
       amqpPort: setAmqpPort,
       // An imported method is stored as written; the provider refuses one it does not know, naming the field.
@@ -868,6 +884,9 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
       setTlsServerName(editConnection.tlsServerName ?? "");
       // The reset above already empties the box for a connection that names no AMQP port; this sets the stored one.
       setAmqpPort(editConnection.amqpPort ?? "");
+      // The same rule for OPC UA's two: a connection that pins no certificate must show an empty box.
+      setSecurityMode(editConnection.securityMode ?? "");
+      setServerCertificateThumbprint(editConnection.serverCertificateThumbprint ?? "");
       // SSL
       if (editConnection.ssl) {
         setSSLMode(editConnection.ssl.mode);
@@ -1121,6 +1140,14 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
       // The dataServers rule for Kubernetes' three fields: only for an engine that takes each, only when typed.
       ...(addressedFields.has("apiPath") && apiPath.trim() !== "" ? { apiPath } : {}),
       ...(addressedFields.has("namespaces") && namespaces.trim() !== "" ? { namespaces } : {}),
+      // The same rule for OPC UA's two. An empty security mode is not sent: the provider's own default
+      // is SignAndEncrypt, and writing "" here would save a connection whose mode reads as unset.
+      ...(addressedFields.has("securityMode") && securityMode.trim() !== ""
+        ? { securityMode: securityMode.trim() }
+        : {}),
+      ...(addressedFields.has("serverCertificateThumbprint") && serverCertificateThumbprint.trim() !== ""
+        ? { serverCertificateThumbprint: serverCertificateThumbprint.trim() }
+        : {}),
       ...(addressedFields.has("tlsServerName") && tlsServerName.trim() !== "" ? { tlsServerName } : {}),
       // The dataServers rule for the AMQP port: only for an engine that takes it, only when typed.
       ...(addressedFields.has("amqpPort") && amqpPort.trim() !== "" ? { amqpPort } : {}),
@@ -1173,6 +1200,8 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
     namespaces,
     tlsServerName,
     amqpPort,
+    securityMode,
+    serverCertificateThumbprint,
   ]);
 
   /**
@@ -1594,6 +1623,7 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
     "firestore",
     "rabbitmq",
     "snowflake",
+    "opcua",
   ];
   const dbTypes = selectableTypes.map((t) => {
     const cfg = getDBConfig(t);
@@ -1660,6 +1690,13 @@ export function useConnectionForm({ isOpen, onConnect, editConnection, onTestCon
     setClientCert,
     clientKey,
     setClientKey,
+
+    // OPC UA: the security mode is the server's own word (None, Sign, SignAndEncrypt), which
+    // Studio's SSL modes do not map onto, and the thumbprint is the certificate this connection pins.
+    securityMode,
+    setSecurityMode,
+    serverCertificateThumbprint,
+    setServerCertificateThumbprint,
 
     // Advanced (Oracle/MSSQL)
     showAdvanced,

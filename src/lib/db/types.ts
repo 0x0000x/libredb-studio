@@ -985,7 +985,8 @@ export interface ProviderCapabilities {
     | "mqtt"
     | "firestore"
     | "rabbitmq"
-    | "kubectl";
+    | "kubectl"
+    | "opcua";
   supportsExplain: boolean;
   /**
    * Present iff supportsExplain is true (enforced by provider tests).

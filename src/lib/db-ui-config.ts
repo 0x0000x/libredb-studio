@@ -8,6 +8,7 @@ import {
   OracleIcon,
   MSSQLIcon,
   LibreDBIcon,
+  OpcuaIcon,
   CouchbaseIcon,
   ClickHouseIcon,
   DruidIcon,
@@ -111,6 +112,11 @@ export interface DatabaseUIConfig {
     | "privateKey"
     | "privateKeyPassphrase"
     | "role"
+    // OPC UA only: the security mode the server is asked for, and the server certificate pinned per
+    // connection, two text boxes. The mode is OPC UA's own name rather than a translation of
+    // Studio's SSL modes, which have no meaning to a server offering None, Sign and SignAndEncrypt.
+    | "securityMode"
+    | "serverCertificateThumbprint"
   )[];
   /**
    * The connection dialog's label for a field, where this engine names the field differently from
@@ -1170,6 +1176,63 @@ export const DB_UI_CONFIG: Record<DatabaseType, DatabaseUIConfig> = {
     // The dialog's own sentence says the mode can be turned off, which is false here.
     readOnlyHint:
       "RabbitMQ connections are read-only whether or not this is ticked: Studio sends the broker GET requests and stream reads only, never a publish or a take.",
+  },
+  opcua: {
+    // A mark drawn for Studio, never the OPC Foundation's logo: a root with two branches and a leaf.
+    icon: OpcuaIcon,
+    // A NEW hue, for the second time: every identity hue carried two engines by the time this one
+    // registered, and while it was being built Firestore took `lime` and RabbitMQ its `-alt` step,
+    // so the palette gains `slate` here (#1677). A steel grey is also the one colour a plant's
+    // address space can carry without borrowing the mark of an engine beside it.
+    color: "text-hue-slate",
+    label: "OPC UA",
+    // The IANA-registered port for opc.tcp, and the one every server measured listened on. NOTHING
+    // SHOWS IT TO A READER: `connectionFields` names no port, so the dialog draws no port box, and the
+    // address is the endpoint URL, which carries its own. It is here for a seeded connection to read.
+    defaultPort: "4840",
+    // No URI toggle, because the endpoint URL IS the address: host and port are read from it, so
+    // there is one place a reader can be wrong and one place to correct.
+    showConnectionStringToggle: false,
+    // AND NO SSL/TLS PANEL. OPC UA's transport security is its own: the security mode above and the
+    // certificate pin below, with the client's key pair in the installation's PKI directory. The
+    // shared panel's vocabulary - disable, require, verify-ca, verify-full - names nothing a server
+    // offers, and a reader who chose `require` there was refused with a word this engine does not
+    // know. The second engine to declare this, after BigQuery.
+    showSslPanel: false,
+    connectionFields: ["host", "user", "password", "securityMode", "serverCertificateThumbprint"],
+    fieldLabels: {
+      host: "Endpoint URL",
+      user: "Username",
+      password: "Password",
+      securityMode: "Security mode",
+      serverCertificateThumbprint: "Server certificate",
+    },
+    fieldPlaceholders: { host: "opc.tcp://plc.example.net:4840/", securityMode: "SignAndEncrypt" },
+    fieldHints: {
+      host:
+        "The endpoint exactly as you type it. This is the only address dialled: a server may advertise " +
+        "another, and OPC PLC advertises its own container name, which resolves nowhere.",
+      user: "A server username, if the server checks one; empty for an anonymous session.",
+      password:
+        "The password for that username. On a server whose UserName token declares its own policy the " +
+        "password is encrypted even in None mode; where it declares none, a password to a host that is " +
+        "not this machine is refused unless an SSH tunnel carries it.",
+      securityMode:
+        "None, Sign or SignAndEncrypt. None encrypts nothing and authenticates nobody, so a certificate " +
+        "cannot be pinned there and this connection refuses the pair rather than checking a thumbprint it " +
+        "read over a channel nobody authenticated. There is no fallback: a mode the server does not offer is refused rather " +
+        "than quietly weakened. A secured mode also needs TRUST both ways on the first connect: the " +
+        "server's certificate has to be moved into trusted/certs under the PKI directory, and the server " +
+        "has to accept this client's - until then a secured connect is refused, and the refusal names the " +
+        "directory.",
+      serverCertificateThumbprint:
+        "The SHA-256 thumbprint this server's certificate must present, as 64 hexadecimal characters; " +
+        "colons and spaces are ignored. Without it any certificate the trust list accepts is accepted.",
+    },
+    readOnlyHint:
+      "OPC UA connections are read-only whether or not this is ticked, and not by a setting: this " +
+      "provider's client exposes Browse, BrowseNext, Read, HistoryRead and the session calls, and has no " +
+      "code that can Write, Call a method, or subscribe.",
   },
   libredb: {
     icon: LibreDBIcon,

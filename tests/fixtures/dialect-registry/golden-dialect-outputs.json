@@ -407,6 +407,18 @@
   "selectQuery": "{\"vhost\": \"c0\", \"stream\": \"Order\\\"Items\", \"from\": \"first\", \"limit\": 50}",
   "countQuery": null
  },
+ "opcua": {
+  "queryLanguage": "json",
+  "queryDialect": "opcua",
+  "tabType": "opcua",
+  "monacoLanguage": "json",
+  "offersColumnProfiling": false,
+  "offersCodeGeneration": false,
+  "offersCountQuery": false,
+  "tableQuery": "// An OPC UA node's value is read from the node itself, not from a generated statement: click the key to open its value, or name the node id in a read request.",
+  "selectQuery": "// An OPC UA node's value is read from the node itself, not from a generated statement: click the key to open its value, or name the node id in a read request.",
+  "countQuery": null
+ },
  "libredb": {
   "queryLanguage": "json",
   "queryDialect": "libredb",

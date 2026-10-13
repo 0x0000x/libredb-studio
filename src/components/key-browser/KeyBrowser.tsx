@@ -320,6 +320,7 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
     nodeCursors,
     nodeLoading,
     nodeAdded,
+    nodeFailed,
     scanMore,
     scanAll,
     loadMoreUnder,
@@ -399,6 +400,35 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
   );
 
   const tree = useMemo(() => buildKeyTree(keys, shape, folders), [keys, shape, folders]);
+  /**
+   * Whether the level under a given folder says anything by its type column.
+   *
+   * A WORD EVERY ROW SHARES IS A WORD THAT COSTS WIDTH AND TELLS NOBODY ANYTHING. Measured in a
+   * browser on the OPC UA fixture at depth 6: thirteen rows, every one of them `variable`, while
+   * the indent and that 56px column left about 100px for the name and two siblings both drew
+   * `Exceptio…`. A level that MIXES types keeps the column, because there it is the only thing
+   * saying which row is readable; a level with a single row keeps it too, since one word is not a
+   * repetition. Only under `levels`, where a level is one the server listed.
+   */
+  const uniformTypes = useMemo(() => {
+    const byParent = new Map<string, boolean>();
+    if (!levels) return byParent;
+    const visit = (node: KeyTreeNode): void => {
+      const words = new Set<string>();
+      let keyRows = 0;
+      for (const child of node.children) {
+        if (!child.isKey) continue;
+        keyRows += 1;
+        words.add(types.get(keyName(child.path, shape)) ?? "");
+      }
+      byParent.set(pathKey(node.path), keyRows > 1 && words.size === 1 && !words.has(""));
+      for (const child of node.children) visit(child);
+    };
+    visit(tree);
+    // A MAP RATHER THAN A FUNCTION, which the React compiler asks for: a `useMemo` that returns a
+    // closure over a local cannot have its memoization preserved, and CI's ESLint says so.
+    return byParent;
+  }, [levels, tree, types, shape]);
   const filtering = term.trim() !== "";
   const visible = useMemo(() => filterKeyTree(tree, term, shape), [tree, term, shape]);
   /** The server folders' paths, by `pathKey`: a folder the server named pages its own level. */
@@ -731,7 +761,14 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
           <button
             type="button"
             onClick={() => void scanMore()}
-            disabled={busy || scanningAll || exhausted || heldFull}
+            /*
+             * A REFUSED LEVEL TAKES BOTH CONTROLS WITH IT. A level that answered an error has no
+             * cursor to continue from, so pressing either of these fires nothing: measured in a
+             * browser with the prefix `nosuch/`, where the panel showed its refusal and `List all of
+             * this level` still took the press and did nothing at all. `error` is the level's own
+             * refusal; the walk's end is `exhausted` beside it.
+             */
+            disabled={busy || scanningAll || exhausted || heldFull || error !== null}
             className="rounded px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
           >
             {levels ? "List more" : "Scan more"}
@@ -747,7 +784,7 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
              * other engine `exhausted` is true exactly when the cursor says the walk ended, which is when
              * `Scan all` has nothing left to ask for either.
              */
-            disabled={(busy && !scanningAll) || exhausted || heldFull}
+            disabled={(busy && !scanningAll) || exhausted || heldFull || error !== null}
             className="rounded px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
           >
             {scanningAll ? "Stop" : levels ? "List all of this level" : "Scan all"}
@@ -793,7 +830,14 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
           data-testid="key-browser-error"
         >
           <TriangleAlert strokeWidth={1.5} className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-          <p className="break-words text-[10px] leading-relaxed text-muted-foreground">{error}</p>
+          {/*
+            THE REFUSAL IS READ, so it takes the foreground token rather than the muted one. Measured
+            in a browser in the light theme: `rgb(115,115,115)` on `rgb(242,242,242)` at 10px is
+            4.25:1, under the 4.5:1 that small text needs, and in the picture the sentence sat faint
+            inside its own amber box. Dark was already 7.78:1 - a token that reads differently in the
+            two themes is exactly the MQTT lesson, where a sentence shipped at 1.09:1.
+          */}
+          <p className="break-words text-[10px] leading-relaxed text-foreground">{error}</p>
         </div>
       )}
 
@@ -808,7 +852,8 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
           data-testid="key-browser-databases-error"
         >
           <TriangleAlert strokeWidth={1.5} className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-          <p className="break-words text-[10px] leading-relaxed text-muted-foreground">
+          {/* The same reading as the walk's own refusal above, for the same measurement. */}
+          <p className="break-words text-[10px] leading-relaxed text-foreground">
             {`Reading the databases failed: ${databasesError}`}
           </p>
         </div>
@@ -1064,6 +1109,16 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
 
             const { node, depth, folder } = row;
             const key = pathKey(node.path);
+            /*
+             * A TYPE WORD EVERY ROW ON THE LEVEL SHARES SAYS NOTHING, and it was saying it in 56px
+             * the NAME needed. Measured in a browser on the OPC UA fixture at depth 6, where the
+             * indent and that column left about 100px for the name and two sibling rows both read
+             * `Exceptio...`: thirteen rows, every one of them a `variable`. Dropped only where it
+             * is uniform, so a level that mixes variables, objects and methods keeps the column
+             * that tells them apart - and only under `levels`, where a level is a level the SERVER
+             * listed rather than a prefix a glob walk inferred.
+             */
+            const uniformType = uniformTypes.get(pathKey(node.path.slice(0, -1))) ?? false;
             const isOpen = filtering || open.has(key);
             // The FULL name, the one join every reader uses, and the three names the row gives its node,
             // all in the declared separator (spec 4.6).
@@ -1151,14 +1206,23 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
                   // pads a row with no twisty.
                   <span className="h-3.5 w-3.5 shrink-0" />
                 )}
-                {folder ? (
+                {/*
+                  A ROW THAT IS BOTH TAKES THE KEY'S GLYPH, because the folder's is the one thing it
+                  shares with the rows around it. Under `levels` its label is its own segment with the
+                  separator, exactly like a pure folder's, so the glyph was the only difference left
+                  and it was the same glyph: measured in a browser, `Server/ServerStatus` - a Variable
+                  that bears children, the case this provider has a rule for - was drawn identically
+                  to the ten pure folders above it, with only a 10px badge saying it could be read.
+                  The twisty and the trailing separator still say it opens.
+                */}
+                {folder && !node.isKey ? (
                   <Folder strokeWidth={1.5} className="h-3.5 w-3.5 shrink-0 text-hue-yellow/70" />
                 ) : (
                   <KeyRound strokeWidth={1.5} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 )}
                 {/* A row that is a key says the KEY's name, because that is what activating it
                       addresses; a row that is only a prefix says the prefix it stands for. */}
-                <span className="truncate font-mono text-xs">{names.label}</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-xs">{names.label}</span>
                 {/*
                     A FOLDER COUNTS THE KEYS THE WALK HOLDS UNDER IT, and a leaf carries no number.
 
@@ -1181,9 +1245,34 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
                 {folder && node.isKey && (
                   <span
                     data-testid="key-browser-type"
-                    className="ml-auto shrink-0 pl-2 font-mono text-[10px] text-muted-foreground"
+                    /*
+                     * THE TYPE GIVES UP ITS WIDTH BEFORE THE NAME DOES. This cell was `shrink-0`, so
+                     * a 280px panel at depth 6 spent 56px on the word `variable` and left 72px for
+                     * the name: measured in a browser on the fixture's deepest branch, two adjacent
+                     * rows both drew `Exceptio…` - `ExceptionDeviation` and `ExceptionDeviationFormat`
+                     * - and eleven of thirteen rows clipped. The name is what a reader is looking for,
+                     * so it keeps the room and this truncates first (shrink factor 5 against the
+                     * name's 1).
+                     */
+                    className="ml-auto min-w-0 shrink-[5] truncate pl-2 font-mono text-[10px] text-muted-foreground"
                   >
                     {types.get(name) ?? ""}
+                  </span>
+                )}
+                {/*
+                  A FOLDER THAT WAS REFUSED SAYS SO ON ITS OWN ROW. The banner above is cleared by the
+                  next folder that lists, and without this mark the refused one was left drawn open
+                  and empty - which is how a folder that really holds nothing is drawn. Measured in a
+                  browser by opening a folder whose level answered an error and then another that did
+                  not.
+                */}
+                {folder && nodeFailed.has(key) && (
+                  <span
+                    data-testid="key-browser-folder-failed"
+                    title={nodeFailed.get(key)}
+                    className="ml-auto shrink-0 pl-2 text-[10px] font-medium text-warning"
+                  >
+                    refused
                   </span>
                 )}
                 {folder ? (
@@ -1213,7 +1302,21 @@ export function KeyBrowser({ connection, capability, databaseLevel, request, onO
                   */
                   <span
                     data-testid="key-browser-type"
-                    className="ml-auto shrink-0 pl-2 font-mono text-[10px] text-muted-foreground"
+                    /*
+                     * THE TYPE GIVES UP ITS WIDTH BEFORE THE NAME DOES. This cell was `shrink-0`, so
+                     * a 280px panel at depth 6 spent 56px on the word `variable` and left 72px for
+                     * the name: measured in a browser on the fixture's deepest branch, two adjacent
+                     * rows both drew `Exceptio…` - `ExceptionDeviation` and `ExceptionDeviationFormat`
+                     * - and eleven of thirteen rows clipped. The name is what a reader is looking for,
+                     * so it keeps the room and this truncates first (shrink factor 5 against the
+                     * name's 1), and where every row on the level carries the SAME word it leaves the
+                     * layout altogether - see `uniformType` above.
+                     */
+                    className={cn(
+                      "ml-auto min-w-0 shrink-[5] truncate pl-2 font-mono text-[10px] text-muted-foreground",
+                      // Still in the DOM, so a screen reader and a test still read the row's type.
+                      uniformType && "sr-only",
+                    )}
                   >
                     {types.get(name) ?? ""}
                   </span>

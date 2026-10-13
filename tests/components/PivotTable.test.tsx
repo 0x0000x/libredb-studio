@@ -207,6 +207,26 @@ describe("PivotTable", () => {
     expect(queryByText("Generate SQL")).toBeNull();
   });
 
+  /*
+   * AND NOT ON AN ENGINE THAT CANNOT RUN SQL. Measured in a browser on OPC UA, whose request shape
+   * is JSON: pressing it replaced the reader's own read request in the editor with a SELECT the
+   * engine cannot parse, and the only way back was the undo stack. `undefined` means nobody has
+   * said yet, and the control is drawn, which is what every engine did before this prop existed.
+   */
+  test("Generate SQL is withheld where the engine does not read SQL", () => {
+    const onLoadQuery = mock(() => {});
+    const json = render(<PivotTable result={result} onLoadQuery={onLoadQuery} offersGeneratedSql={false} />);
+    expect(json.queryByText("Generate SQL")).toBeNull();
+    json.unmount();
+
+    const sql = render(<PivotTable result={result} onLoadQuery={onLoadQuery} offersGeneratedSql={true} />);
+    expect(sql.queryByText("Generate SQL")).not.toBeNull();
+    sql.unmount();
+
+    const unknown = render(<PivotTable result={result} onLoadQuery={onLoadQuery} />);
+    expect(unknown.queryByText("Generate SQL")).not.toBeNull();
+  });
+
   test("clicking Generate SQL calls onLoadQuery with SQL", () => {
     const onLoadQuery = mock((sql: string) => {
       void sql;

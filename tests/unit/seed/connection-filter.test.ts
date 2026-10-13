@@ -167,6 +167,43 @@ describe("filterByRoles: engine-specific fields", () => {
     expect(managed.saslMechanism).toBe("SCRAM-SHA-512");
   });
 
+  /**
+   * THE OTHER HALF OF THE SEED ROUND TRIP, and for OPC UA it is the half that carries a safety
+   * property: a pin dropped here leaves a connection that is LISTED as pinned, opens to the right
+   * address, and trusts whatever certificate the server presents. The schema half is pinned in
+   * `tests/unit/seed/types.test.ts`; this is the hand-written field list, where a field can be
+   * validated above and silently not copied.
+   */
+  it("carries an OPC UA connection's mode, pin and deployment paths through (#1677)", () => {
+    const [managed] = filterByRoles(
+      [
+        {
+          ...baseConn,
+          type: "opcua",
+          host: "opc.tcp://plc.ornek.net:4840/UA/Server",
+          securityMode: "SignAndEncrypt",
+          serverCertificateThumbprint: "b9432ed131e30092d2a0619284763a403c33fc3929546728864b27b475c9529a",
+          securityPolicyUri: "http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256",
+          clientCertificatePath: "/run/secrets/opcua/client.der",
+          clientPrivateKeyPath: "/run/secrets/opcua/client.pem",
+        },
+      ],
+      ["user"],
+    );
+    const [none] = filterByRoles([{ ...baseConn, type: "opcua", host: "opc.tcp://plc:4840" }], ["user"]);
+
+    expect(managed.securityMode).toBe("SignAndEncrypt");
+    expect(managed.serverCertificateThumbprint).toBe(
+      "b9432ed131e30092d2a0619284763a403c33fc3929546728864b27b475c9529a",
+    );
+    expect(managed.securityPolicyUri).toBe("http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256");
+    expect(managed.clientCertificatePath).toBe("/run/secrets/opcua/client.der");
+    expect(managed.clientPrivateKeyPath).toBe("/run/secrets/opcua/client.pem");
+    // And absent stays absent, so the copy is of what the file said rather than of a default.
+    expect(none.securityMode).toBeUndefined();
+    expect(none.serverCertificateThumbprint).toBeUndefined();
+  });
+
   it("carries a Db2 connection's consent to a cleartext password through (#786)", () => {
     // Dropped here, the provider would refuse a seed whose file did set the consent.
     const [managed] = filterByRoles([{ ...baseConn, type: "db2", port: 50000, allowInsecureAuth: true }], ["user"]);

@@ -282,6 +282,14 @@ const NO_COLUMN_MODIFICATION: Partial<Record<DatabaseType, { label: string; reas
     label: "RabbitMQ",
     reason: "A stream holds messages, not rows with declared columns, so there is no column definition to change.",
   },
+  // Not a table store (#1677): a node has ATTRIBUTES defined by its type in the server's own model,
+  // and this provider has no code that can write one. The sentence is the one `NO_TABLE_DDL` below
+  // prints when it declines the whole diff.
+  opcua: {
+    label: "OPC UA",
+    reason:
+      "An OPC UA node has attributes defined by its type in the server's own model, not columns, and this provider has no code that can write to a server, so there is no column definition to change.",
+  },
 };
 
 /**
@@ -384,6 +392,7 @@ const NO_TRANSACTION_WRAPPER: ReadonlySet<DatabaseType> = new Set<DatabaseType>(
   "firestore",
   // No table DDL to wrap either (#1656): a broker keeps no schema.
   "rabbitmq",
+  "opcua",
 ]);
 
 // These engines cannot apply a relational table diff through SQL. In particular,
@@ -414,6 +423,7 @@ const NO_TABLE_DDL: ReadonlySet<DatabaseType> = new Set<DatabaseType>([
   "firestore",
   // No schema and no catalog (#1656), so no table DDL to decline.
   "rabbitmq",
+  "opcua",
 ]);
 
 // IndexDiff carries column names/uniqueness, not ClickHouse's index expression,

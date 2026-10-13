@@ -1,8 +1,8 @@
 apiVersion: v2
 name: libredb-studio
-description: Web-based SQL IDE for cloud-native teams supporting thirty-four engines - PostgreSQL, MySQL, SQLite, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Snowflake, Apache Cassandra, libSQL, Prometheus, Apache Kafka, MQTT, RabbitMQ, etcd, Neo4j, Milvus, Qdrant, InfluxDB, InfluxDB 3, Oxia, Databend, S3-compatible object storage and Kubernetes
+description: Web-based SQL IDE for cloud-native teams supporting thirty-five engines - PostgreSQL, MySQL, SQLite, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Snowflake, Apache Cassandra, libSQL, Prometheus, Apache Kafka, MQTT, RabbitMQ, etcd, Neo4j, Milvus, Qdrant, InfluxDB, InfluxDB 3, Oxia, Databend, S3-compatible object storage, Kubernetes and OPC UA
 type: application
-version: 0.1.90
+version: 0.1.91
 appVersion: "0.18.3"
 kubeVersion: ">=1.26.0-0"
 home: https://github.com/libredb/libredb-studio
@@ -105,6 +105,9 @@ keywords:
   # `amqp` the protocol an evaluator looking for a broker browser types.
   - rabbitmq
   - amqp
+  # One keyword, like mqtt above: `opcua` is the type-id and the protocol an evaluator looking for a
+  # plant browser types; no product name to catch, because every server speaks the same standard.
+  - opcua
   - web-ide
 maintainers:
   - name: cevheri
@@ -262,6 +265,8 @@ annotations:
   # README; no template, value or default moves.
   # False: 0.1.90 changes chart metadata only, naming Snowflake in the description, the keywords and the
   # README; no template, value or default moves.
+  # False: 0.1.91 changes chart metadata only, naming OPC UA in the description, the keywords and the
+  # README; no template, value or default moves.
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: libredb-studio
@@ -278,6 +283,7 @@ annotations:
       url: https://github.com/libredb/libredb-studio
   artifacthub.io/changes: |
     - "Name Snowflake, the SQL warehouse read over its SQL API v2, in the description and the keywords"
+    - "Name OPC UA, the industrial address space read over opc.tcp, in the description and the keywords"
 dependencies:
   - name: postgresql
     version: "16.x.x"

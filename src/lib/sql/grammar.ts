@@ -1124,6 +1124,8 @@ const NON_SQL_DIALECTS: ReadonlySet<DatabaseType> = new Set<DatabaseType>([
   "mqtt",
   "firestore",
   "rabbitmq",
+  // One JSON read request naming node ids, so no span of it is SQL (#1677).
+  "opcua",
 ]);
 
 /**

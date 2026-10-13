@@ -40,7 +40,8 @@ export function DatabaseShowcase({ variant }: DatabaseShowcaseProps) {
  * The gaps are the hero's vertical budget, which has none to spare at 1280x800 and 1366x768
  * (#541, #550, pinned by e2e/login.spec.ts). At a 20px column gap the nineteenth entry (#1088)
  * wrapped the list into a fourth row at both sizes and scrolled the page by 4 and 19px; at 14px
- * 1366x768 kept three rows, and the 6px row gap pays for the fourth row 1280x800 still takes.
+ * 1366x768 kept three rows, and the row gap - 6px then, 4px now - paid for the fourth row 1280x800
+ * still takes.
  * The twenty-second entry (#786) took the fourth row at 1366x768 too. The hero column's vertical
  * padding in login-form.tsx pays for that one, because an 8px column gap bought the third row back
  * with 38px left on it, which the next entry would have spent.
@@ -51,10 +52,21 @@ export function DatabaseShowcase({ variant }: DatabaseShowcaseProps) {
  * 1366x768 back on five rows and scrolled it by 13px at both the 12px and the 10px column gap;
  * at the 6px gap it holds four rows and the page measured 800, 768, 900 and 1080px of 800, 768,
  * 900 and 1080, needing 798, 759, 759 and 701px of them.
+ * Two engines landed at once, so the count changed again and the list now carries a thirty-sixth
+ * entry. Each of the two paragraphs below measured its own engine as the thirty-fifth, with
+ * thirty-five entries on the page, and both landed on the same 4px row gap, which stays until the
+ * page is swept at thirty-six.
  * The thirty-fifth entry (Snowflake) wrapped the list into a sixth row at 1280x800 and scrolled the
  * page to 804px; 1366x768 and 1440x900 stayed on five rows needing 765px, 1920x1080 on four needing
  * 707. No column gap down to 4px buys the row back, so the row gap pays: at 4px the four sizes need
  * 794, 757, 757 and 701px of 800, 768, 900 and 1080.
+ * The thirty-fifth entry (OPC UA) takes a sixth row at 1280x800 on its own and scrolled that size
+ * by 4px, the other three unchanged. THE COLUMN GAP CANNOT PAY FOR THIS ONE, measured in a browser:
+ * at 4px and at 2px the label still wraps, and 2px buys the fifth row back only by crowding every
+ * label on the page against the next one's icon. The ROW gap pays for it instead, at 4px, which
+ * leaves all four row counts as they are and measures 800, 768, 900 and 1080px of 800, 768, 900 and
+ * 1080. 1280x800 needs 794 of its 800, measured by sweeping the viewport height at that width, so
+ * the 4px gap leaves 6px rather than nothing and the entry after next is what spends the padding.
  */
 function DesktopDatabases() {
   return (

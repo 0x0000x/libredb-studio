@@ -207,14 +207,31 @@ export function StatsBar({
       ? `${result.fields.length - hiddenCount} of ${result.fields.length} columns`
       : `${result.fields.length} columns`;
   const warningDetail = warnings.map(describeWarning).join("\n");
+  /*
+   * ONE ROW PER WARNING, KEYED UNIQUELY, which neither of the two obvious keys is. The index alone
+   * re-labels a surviving row when an earlier warning is dropped. The sentence alone COLLIDES: a
+   * driver can emit the same notice twice (Postgres keeps every notice verbatim and nothing here
+   * de-duplicates them), and two identical keys make React reuse one row's DOM for the other. So the
+   * key is the sentence, and the repeats carry which repeat they are.
+   */
+  const warningRows = warnings
+    .map((warning) => describeWarning(warning))
+    .reduce<{ key: string; sentence: string }[]>((rows, sentence) => {
+      const seen = rows.filter((row) => row.sentence === sentence).length;
+      rows.push({ key: seen === 0 ? sentence : `${sentence} #${seen + 1}`, sentence });
+      return rows;
+    }, []);
+  /** Whether the warning sentences are drawn under the bar; the chip shuts them. */
+  const [warningsOpen, setWarningsOpen] = useState(true);
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 border-b border-hairline bg-surface text-xs text-fg-muted font-mono">
-      <div className="flex items-center gap-4">
-        <span className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-success-tint/50" />
-          {result.rows.length} rows
-          {/*
+    <div className="border-b border-hairline bg-surface text-xs text-fg-muted font-mono">
+      <div className="flex items-center justify-between px-4 py-2">
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-success-tint/50" />
+            {result.rows.length} rows
+            {/*
             THE LOAD MORE CONTROL (#816). It stands where the "(more available)" text
             stood: the same fact, now the thing you click, so the grid gains no chrome
             and keeps its height whether or not another page exists.
@@ -224,62 +241,62 @@ export function StatsBar({
             already carries, and re-reading it here would let the strip announce a page
             on a surface that cannot fetch it.
           */}
-          {pageOffer && (
-            <>
-              <span aria-hidden="true">&bull;</span>
-              <button
-                type="button"
-                onClick={pageOffer.onLoadMore}
-                disabled={isLoadingMore}
-                className="flex items-center gap-1 text-brand bg-brand-tint/10 px-2 py-0.5 rounded hover:bg-brand-tint/20 disabled:opacity-60 disabled:hover:bg-brand-tint/10 transition-colors"
-              >
-                {isLoadingMore ? (
-                  <>
-                    <LoaderCircle strokeWidth={1.5} className="w-3 h-3 animate-spin" />
-                    {LOADING_LABEL}
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown strokeWidth={1.5} className="w-3 h-3" />
-                    {loadMoreLabel(pageOffer.pageSize)}
-                  </>
-                )}
-              </button>
-            </>
-          )}
-        </span>
-        {/*
+            {pageOffer && (
+              <>
+                <span aria-hidden="true">&bull;</span>
+                <button
+                  type="button"
+                  onClick={pageOffer.onLoadMore}
+                  disabled={isLoadingMore}
+                  className="flex items-center gap-1 text-brand bg-brand-tint/10 px-2 py-0.5 rounded hover:bg-brand-tint/20 disabled:opacity-60 disabled:hover:bg-brand-tint/10 transition-colors"
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <LoaderCircle strokeWidth={1.5} className="w-3 h-3 animate-spin" />
+                      {LOADING_LABEL}
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown strokeWidth={1.5} className="w-3 h-3" />
+                      {loadMoreLabel(pageOffer.pageSize)}
+                    </>
+                  )}
+                </button>
+              </>
+            )}
+          </span>
+          {/*
           THE COLUMN VISIBILITY ENTRY POINT (#870). The count that was here stays the
           only thing on screen; it becomes the control rather than gaining one beside it.
           Inert where no writer was supplied, because a hydrated result owns no table.
         */}
-        {onToggleColumn === undefined ? (
-          <span className="hidden sm:inline">{columnLabel}</span>
-        ) : (
-          <span className="hidden sm:inline relative" ref={columnMenuRef}>
-            <button
-              type="button"
-              className="hover:text-fg-secondary transition-colors"
-              onClick={() => setColumnMenuOpen((open) => !open)}
-              /*
+          {onToggleColumn === undefined ? (
+            <span className="hidden sm:inline">{columnLabel}</span>
+          ) : (
+            <span className="hidden sm:inline relative" ref={columnMenuRef}>
+              <button
+                type="button"
+                className="hover:text-fg-secondary transition-colors"
+                onClick={() => setColumnMenuOpen((open) => !open)}
+                /*
                 Escape closes it, which is what the column filter popover in `ResultsGrid`
                 binds too. Bound on the TRIGGER and not on the wrapping span: the trigger
                 keeps focus while the menu is open so the key lands here anyway, and a
                 span carrying a handler is a `jsx-a11y(no-static-element-interactions)`
                 error, which is a hard lint gate in this repository.
               */
-              onKeyDown={(event) => {
-                if (event.key === "Escape") setColumnMenuOpen(false);
-              }}
-              title="Show or hide columns"
-              aria-expanded={columnMenuOpen}
-            >
-              {columnLabel}
-            </button>
-            {columnMenuOpen && (
-              <div
-                data-testid="column-visibility-menu"
-                /*
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setColumnMenuOpen(false);
+                }}
+                title="Show or hide columns"
+                aria-expanded={columnMenuOpen}
+              >
+                {columnLabel}
+              </button>
+              {columnMenuOpen && (
+                <div
+                  data-testid="column-visibility-menu"
+                  /*
                   DOWNWARD, into the results panel, and not `bottom-full` above the strip.
                   This strip is the TOP edge of the results panel and the Monaco editor
                   sits directly above it, so a menu opened upward renders inside the
@@ -288,40 +305,40 @@ export function StatsBar({
                   where nothing is mounted above this component. Same direction and the
                   same `z-30` as the column filter popover in `ResultsGrid`.
                 */
-                className="absolute top-full left-0 mt-1 z-30 bg-overlay border border-hairline-strong rounded-lg shadow-xl p-1 w-48 max-h-64 overflow-auto"
-              >
-                {result.fields.map((field) => {
-                  const isHidden = hiddenColumns?.has(field) === true;
-                  return (
-                    <button
-                      key={field}
-                      type="button"
-                      data-column={field}
-                      aria-pressed={!isHidden}
-                      className="flex items-center gap-2 w-full px-2 py-1 rounded text-left hover:bg-fill transition-colors"
-                      onClick={() => onToggleColumn(field)}
-                    >
-                      {isHidden ? (
-                        <EyeOff strokeWidth={1.5} className="w-3 h-3 shrink-0 text-fg-muted" />
-                      ) : (
-                        <Eye strokeWidth={1.5} className="w-3 h-3 shrink-0 text-brand" />
-                      )}
-                      <span className={cn("truncate", isHidden && "text-fg-muted")}>{field}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </span>
-        )}
-        {activeFilterCount > 0 && (
-          <button
-            className="flex items-center gap-1 text-brand text-xs bg-brand-tint/10 px-2 py-0.5 rounded hover:bg-brand-tint/20 transition-colors"
-            onClick={onClearFilters}
-            title={pageOffer ? `Clear all filters. ${FILTER_SCOPE_NOTICE}` : "Clear all filters"}
-          >
-            <Funnel strokeWidth={1.5} className="w-3 h-3" />
-            {/*
+                  className="absolute top-full left-0 mt-1 z-30 bg-overlay border border-hairline-strong rounded-lg shadow-xl p-1 w-48 max-h-64 overflow-auto"
+                >
+                  {result.fields.map((field) => {
+                    const isHidden = hiddenColumns?.has(field) === true;
+                    return (
+                      <button
+                        key={field}
+                        type="button"
+                        data-column={field}
+                        aria-pressed={!isHidden}
+                        className="flex items-center gap-2 w-full px-2 py-1 rounded text-left hover:bg-fill transition-colors"
+                        onClick={() => onToggleColumn(field)}
+                      >
+                        {isHidden ? (
+                          <EyeOff strokeWidth={1.5} className="w-3 h-3 shrink-0 text-fg-muted" />
+                        ) : (
+                          <Eye strokeWidth={1.5} className="w-3 h-3 shrink-0 text-brand" />
+                        )}
+                        <span className={cn("truncate", isHidden && "text-fg-muted")}>{field}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </span>
+          )}
+          {activeFilterCount > 0 && (
+            <button
+              className="flex items-center gap-1 text-brand text-xs bg-brand-tint/10 px-2 py-0.5 rounded hover:bg-brand-tint/20 transition-colors"
+              onClick={onClearFilters}
+              title={pageOffer ? `Clear all filters. ${FILTER_SCOPE_NOTICE}` : "Clear all filters"}
+            >
+              <Funnel strokeWidth={1.5} className="w-3 h-3" />
+              {/*
               THE COUNT, AND NOT "2 filters" BESIDE IT. Which columns carry a filter is
               already on screen: the funnel in each filtered header renders in `text-brand`
               while an unfiltered one is invisible until hover (`ResultsGrid`), so the
@@ -331,132 +348,158 @@ export function StatsBar({
 
               The filter count survives for a screen reader, which cannot see either funnel.
             */}
-            <span data-testid="filter-summary">
-              {pageOffer ? `${filteredRowCount} of ${result.rows.length}` : `${filteredRowCount} shown`}
-            </span>
-            <span className="sr-only">
-              , {activeFilterCount} column filter{activeFilterCount > 1 ? "s" : ""} active
-            </span>
-            <X strokeWidth={1.5} className="w-3 h-3" />
-          </button>
-        )}
-        {result.pagination?.wasLimited && (
-          <span className="text-brand text-xs bg-brand-tint/10 px-2 py-0.5 rounded" title={AUTO_LIMIT_NOTICE}>
-            {AUTO_LIMIT_BADGE}
-            <span className="sr-only">: {AUTO_LIMIT_NOTICE}</span>
-          </span>
-        )}
-        {orderAcrossPagesUnspecified && (
-          <span className="text-fg-muted text-xs bg-fill px-2 py-0.5 rounded" title={ORDER_NOTICE}>
-            {ORDER_BADGE}
-            <span className="sr-only">: {ORDER_NOTICE}</span>
-          </span>
-        )}
-        {warnings.length > 0 && (
-          <span className="text-warning text-xs bg-warning-tint/10 px-2 py-0.5 rounded" title={warningDetail}>
-            {warnings.length} warning{warnings.length > 1 ? "s" : ""}
-            <span className="sr-only">: {warningDetail}</span>
-          </span>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2">
-        {hasSensitive &&
-          (userCanToggle && onToggleMasking ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "h-6 px-2 text-xs font-medium gap-1",
-                effectiveMaskingEnabled ? "text-hue-purple bg-hue-purple-tint/10" : "text-fg-muted",
-              )}
-              onClick={onToggleMasking}
-              title={effectiveMaskingEnabled ? "Show sensitive data" : "Mask sensitive data"}
-            >
-              {effectiveMaskingEnabled ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-              {effectiveMaskingEnabled ? "MASKED" : "MASK"}
-            </Button>
-          ) : effectiveMaskingEnabled ? (
-            <span className="h-6 px-2 text-xs font-medium text-hue-purple bg-hue-purple-tint/10 rounded flex items-center gap-1">
-              <Lock strokeWidth={1.5} className="w-3 h-3" />
-              {MASKED_LABEL}
-            </span>
-          ) : null)}
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "h-6 px-2 text-xs font-medium gap-1",
-            wrapText ? "text-brand bg-brand-tint/10" : "text-fg-muted",
-          )}
-          onClick={onToggleWrapText}
-          title={wrapText ? "Disable text wrapping" : "Enable text wrapping"}
-        >
-          <WrapText className="w-3 h-3" />
-          {wrapText ? "WRAP ON" : "WRAP"}
-        </Button>
-
-        {editingEnabled && pendingChanges && pendingChanges.length > 0 && (
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-warning bg-warning-tint/10 px-1.5 py-0.5 rounded">
-              {pendingChanges.length} change{pendingChanges.length > 1 ? "s" : ""}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-1.5 text-xs text-success hover:bg-success-tint/10"
-              aria-label="Apply changes"
-              onClick={onApplyChanges}
-            >
-              <Save strokeWidth={1.5} className="w-3 h-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-1.5 text-xs text-danger hover:bg-danger-tint/10"
-              aria-label="Discard changes"
-              onClick={onDiscardChanges}
-            >
+              <span data-testid="filter-summary">
+                {pageOffer ? `${filteredRowCount} of ${result.rows.length}` : `${filteredRowCount} shown`}
+              </span>
+              <span className="sr-only">
+                , {activeFilterCount} column filter{activeFilterCount > 1 ? "s" : ""} active
+              </span>
               <X strokeWidth={1.5} className="w-3 h-3" />
-            </Button>
-          </div>
-        )}
+            </button>
+          )}
+          {result.pagination?.wasLimited && (
+            <span className="text-brand text-xs bg-brand-tint/10 px-2 py-0.5 rounded" title={AUTO_LIMIT_NOTICE}>
+              {AUTO_LIMIT_BADGE}
+              <span className="sr-only">: {AUTO_LIMIT_NOTICE}</span>
+            </span>
+          )}
+          {orderAcrossPagesUnspecified && (
+            <span className="text-fg-muted text-xs bg-fill px-2 py-0.5 rounded" title={ORDER_NOTICE}>
+              {ORDER_BADGE}
+              <span className="sr-only">: {ORDER_NOTICE}</span>
+            </span>
+          )}
+          {/*
+          A WARNING NOBODY CAN READ IS NOT A WARNING. This chip said "1 warning" and kept the sentence
+          in a `title` and a 1x1 screen-reader span, so a sighted reader had to guess that hovering a
+          count would explain it - measured in a browser on a capped history read, where the sentence
+          that says the read stopped short was on screen nowhere. It is the MQTT lesson in a second
+          shape: there the sentence shipped in an invisible colour, here it was never drawn.
 
-        {/*
+          Open by default, because that is what the no-rows panel below already does with the same
+          list, and shut by pressing the chip. The count stays the chip's own text, so nothing that
+          read it reads differently.
+        */}
+          {warnings.length > 0 && (
+            <button
+              type="button"
+              data-testid="stats-warnings-toggle"
+              aria-expanded={warningsOpen}
+              onClick={() => setWarningsOpen((open) => !open)}
+              className="text-warning text-xs bg-warning-tint/10 px-2 py-0.5 rounded hover:bg-warning-tint/20 transition-colors"
+              title={warningDetail}
+            >
+              {warnings.length} warning{warnings.length > 1 ? "s" : ""}
+              <span className="sr-only">: {warningDetail}</span>
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {hasSensitive &&
+            (userCanToggle && onToggleMasking ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-6 px-2 text-xs font-medium gap-1",
+                  effectiveMaskingEnabled ? "text-hue-purple bg-hue-purple-tint/10" : "text-fg-muted",
+                )}
+                onClick={onToggleMasking}
+                title={effectiveMaskingEnabled ? "Show sensitive data" : "Mask sensitive data"}
+              >
+                {effectiveMaskingEnabled ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                {effectiveMaskingEnabled ? "MASKED" : "MASK"}
+              </Button>
+            ) : effectiveMaskingEnabled ? (
+              <span className="h-6 px-2 text-xs font-medium text-hue-purple bg-hue-purple-tint/10 rounded flex items-center gap-1">
+                <Lock strokeWidth={1.5} className="w-3 h-3" />
+                {MASKED_LABEL}
+              </span>
+            ) : null)}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-6 px-2 text-xs font-medium gap-1",
+              wrapText ? "text-brand bg-brand-tint/10" : "text-fg-muted",
+            )}
+            onClick={onToggleWrapText}
+            title={wrapText ? "Disable text wrapping" : "Enable text wrapping"}
+          >
+            <WrapText className="w-3 h-3" />
+            {wrapText ? "WRAP ON" : "WRAP"}
+          </Button>
+
+          {editingEnabled && pendingChanges && pendingChanges.length > 0 && (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-warning bg-warning-tint/10 px-1.5 py-0.5 rounded">
+                {pendingChanges.length} change{pendingChanges.length > 1 ? "s" : ""}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-1.5 text-xs text-success hover:bg-success-tint/10"
+                aria-label="Apply changes"
+                onClick={onApplyChanges}
+              >
+                <Save strokeWidth={1.5} className="w-3 h-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-1.5 text-xs text-danger hover:bg-danger-tint/10"
+                aria-label="Discard changes"
+                onClick={onDiscardChanges}
+              >
+                <X strokeWidth={1.5} className="w-3 h-3" />
+              </Button>
+            </div>
+          )}
+
+          {/*
           THE DURATION, WITHOUT ITS LABEL. "EXEC TIME: " took 95px of a 960px strip to say
           what a duration beside a row count already reads as. It also lost its unit: the
           value is a number and `ms` sat only in the zero fallback, so a two millisecond
           query rendered "EXEC TIME: 2". The full words stay on the `title`.
         */}
-        <span className="hidden sm:flex px-2 py-0.5 rounded bg-fill border border-hairline" title={EXEC_TIME_NOTICE}>
-          {result.executionTime ?? 0}ms<span className="sr-only"> {EXEC_TIME_NOTICE}</span>
-        </span>
+          <span className="hidden sm:flex px-2 py-0.5 rounded bg-fill border border-hairline" title={EXEC_TIME_NOTICE}>
+            {result.executionTime ?? 0}ms<span className="sr-only"> {EXEC_TIME_NOTICE}</span>
+          </span>
 
-        <div className="flex md:hidden items-center bg-fill rounded-lg p-0.5">
-          <button
-            onClick={() => onSetViewMode("card")}
-            aria-label="Card view"
-            title="Card view"
-            className={cn(
-              "p-1.5 rounded transition-all",
-              viewMode === "card" ? "bg-brand-solid text-white" : "text-fg-muted",
-            )}
-          >
-            <LayoutGrid strokeWidth={1.5} className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => onSetViewMode("table")}
-            aria-label="Table view"
-            title="Table view"
-            className={cn(
-              "p-1.5 rounded transition-all",
-              viewMode === "table" ? "bg-brand-solid text-white" : "text-fg-muted",
-            )}
-          >
-            <Table2 strokeWidth={1.5} className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex md:hidden items-center bg-fill rounded-lg p-0.5">
+            <button
+              onClick={() => onSetViewMode("card")}
+              aria-label="Card view"
+              title="Card view"
+              className={cn(
+                "p-1.5 rounded transition-all",
+                viewMode === "card" ? "bg-brand-solid text-white" : "text-fg-muted",
+              )}
+            >
+              <LayoutGrid strokeWidth={1.5} className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => onSetViewMode("table")}
+              aria-label="Table view"
+              title="Table view"
+              className={cn(
+                "p-1.5 rounded transition-all",
+                viewMode === "table" ? "bg-brand-solid text-white" : "text-fg-muted",
+              )}
+            >
+              <Table2 strokeWidth={1.5} className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
+      {warnings.length > 0 && warningsOpen && (
+        <ul data-testid="stats-warnings" className="px-4 pb-2 space-y-1 text-warning leading-relaxed">
+          {warningRows.map((row) => (
+            <li key={row.key}>{row.sentence}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -81,6 +81,16 @@ export const CONNECTION_FIELDS: Record<keyof DatabaseConnection, FieldClass> = {
   tlsServerName: "public",
   // An AMQP port: an address, as `port` is. It grants nothing.
   amqpPort: "public",
+  securityMode: "public",
+  // A thumbprint is the PUBLIC fingerprint of a public certificate: it identifies a server, it does not
+  // authenticate anyone, and hiding it would stop an operator reading back what they pinned.
+  serverCertificateThumbprint: "public",
+  // A policy URI is published by the server, and the other two are PATHS and not keys: the private
+  // key stays in the file the path names and never enters a connection record, which is the reason
+  // this provider takes a path at all.
+  securityPolicyUri: "public",
+  clientCertificatePath: "public",
+  clientPrivateKeyPath: "public",
   managed: "public",
   seedId: "public",
   agentUser: "public",

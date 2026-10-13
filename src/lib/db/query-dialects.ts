@@ -164,6 +164,19 @@ export const QUERY_DIALECTS: Readonly<Record<QueryDialect, DialectSpec>> = Objec
       ]),
     }),
   }),
+
+  // OPC UA: one JSON read request, either current values or raw history. Its grids are the server's own
+  // DataValues, so no profile, model or count statement of its grammar applies. The SQL export formats
+  // ARE kept, as MQTT's are: a value read answers one row per node with the same six columns every
+  // time, so exporting those rows as INSERT statements is as meaningful as it is for any other
+  // tabular answer - the engine has no table to write them back to, and an export is not a write.
+  // A request names node ids and no credential, so there is nothing for history to mask.
+  opcua: Object.freeze({
+    tabType: "opcua",
+    offersColumnProfiling: false,
+    offersCodeGeneration: false,
+    offersCountQuery: false,
+  }),
 });
 
 /**

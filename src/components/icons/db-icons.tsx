@@ -855,3 +855,28 @@ export const SnowflakeIcon: React.FC<IconProps> = ({ className, ...props }) => (
     <path d="M20.29 9.46 L17.63 8.75 L18.34 6.09" />
   </svg>
 );
+
+/**
+ * A mark drawn for Studio, never the OPC Foundation's logo or any vendor's asset.
+ *
+ * An address space is a tree of nodes with values hanging off it, so the mark is a root with two
+ * branches and a leaf on each: what the Keys panel shows, rather than a protocol badge.
+ */
+export const OpcuaIcon: React.FC<IconProps> = ({ className, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <circle cx="5" cy="12" r="2" />
+    <circle cx="19" cy="6" r="2" />
+    <circle cx="19" cy="18" r="2" />
+    <path d="M7 12 H11 V6 H17" />
+    <path d="M11 12 V18 H17" />
+  </svg>
+);

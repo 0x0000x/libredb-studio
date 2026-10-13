@@ -109,6 +109,10 @@ export const DIALECT_EDITORS: Readonly<Record<QueryTab["type"], DialectEditor>> 
   // A kubectl statement renders in the `kubectl` language the console's lexer registers, and has no formatter: the
   // SQL formatter rewrites a command line, and the console formatter is the HTTP grammar's.
   kubectl: Object.freeze({ monacoId: "kubectl" }),
+  // An OPC UA read request is JSON, so the tab renders in `json` and takes the shared JSON formatter.
+  // `json` is Kafka's language too, and the gate holds every tab type rendering in one language to one
+  // formatter: a reader pressing Format in two json tabs must not get two different answers.
+  opcua: Object.freeze({ monacoId: "json", format: formatJson }),
 });
 
 /**

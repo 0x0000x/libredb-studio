@@ -1,0 +1,274 @@
+{
+  "nodeId": "ns=3;s=HistorianInt32",
+  "page": {
+    "nodeId": "ns=3;s=HistorianInt32",
+    "values": [
+      {
+        "value": 0,
+        "sourceTimestamp": "2026-10-12T12:42:09.130Z",
+        "serverTimestamp": "2026-10-12T12:42:09.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 1,
+        "sourceTimestamp": "2026-10-12T12:42:19.130Z",
+        "serverTimestamp": "2026-10-12T12:42:19.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 2,
+        "sourceTimestamp": "2026-10-12T12:42:29.130Z",
+        "serverTimestamp": "2026-10-12T12:42:29.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 3,
+        "sourceTimestamp": "2026-10-12T12:42:39.130Z",
+        "serverTimestamp": "2026-10-12T12:42:39.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 4,
+        "sourceTimestamp": "2026-10-12T12:42:49.130Z",
+        "serverTimestamp": "2026-10-12T12:42:49.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 5,
+        "sourceTimestamp": "2026-10-12T12:42:59.130Z",
+        "serverTimestamp": "2026-10-12T12:42:59.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 6,
+        "sourceTimestamp": "2026-10-12T12:43:09.130Z",
+        "serverTimestamp": "2026-10-12T12:43:09.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 7,
+        "sourceTimestamp": "2026-10-12T12:43:19.130Z",
+        "serverTimestamp": "2026-10-12T12:43:19.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 8,
+        "sourceTimestamp": "2026-10-12T12:43:29.130Z",
+        "serverTimestamp": "2026-10-12T12:43:29.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 9,
+        "sourceTimestamp": "2026-10-12T12:43:39.130Z",
+        "serverTimestamp": "2026-10-12T12:43:39.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 10,
+        "sourceTimestamp": "2026-10-12T12:43:49.130Z",
+        "serverTimestamp": "2026-10-12T12:43:49.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 11,
+        "sourceTimestamp": "2026-10-12T12:43:59.130Z",
+        "serverTimestamp": "2026-10-12T12:43:59.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 12,
+        "sourceTimestamp": "2026-10-12T12:44:09.130Z",
+        "serverTimestamp": "2026-10-12T12:44:09.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 13,
+        "sourceTimestamp": "2026-10-12T12:44:19.130Z",
+        "serverTimestamp": "2026-10-12T12:44:19.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 14,
+        "sourceTimestamp": "2026-10-12T12:44:29.130Z",
+        "serverTimestamp": "2026-10-12T12:44:29.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 15,
+        "sourceTimestamp": "2026-10-12T12:44:39.130Z",
+        "serverTimestamp": "2026-10-12T12:44:39.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 16,
+        "sourceTimestamp": "2026-10-12T12:44:49.130Z",
+        "serverTimestamp": "2026-10-12T12:44:49.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 17,
+        "sourceTimestamp": "2026-10-12T12:44:59.130Z",
+        "serverTimestamp": "2026-10-12T12:44:59.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 18,
+        "sourceTimestamp": "2026-10-12T12:45:09.130Z",
+        "serverTimestamp": "2026-10-12T12:45:09.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 19,
+        "sourceTimestamp": "2026-10-12T12:45:19.130Z",
+        "serverTimestamp": "2026-10-12T12:45:19.130Z",
+        "statusCode": "Good"
+      }
+    ],
+    "continuationPoint": {
+      "@bytes": "9L1Br8lD90ecpQ23FQocNg=="
+    },
+    "statusCode": "Good"
+  },
+  "next": {
+    "nodeId": "ns=3;s=HistorianInt32",
+    "values": [
+      {
+        "value": 20,
+        "sourceTimestamp": "2026-10-12T12:45:29.130Z",
+        "serverTimestamp": "2026-10-12T12:45:29.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 21,
+        "sourceTimestamp": "2026-10-12T12:45:39.130Z",
+        "serverTimestamp": "2026-10-12T12:45:39.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 22,
+        "sourceTimestamp": "2026-10-12T12:45:49.130Z",
+        "serverTimestamp": "2026-10-12T12:45:49.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 23,
+        "sourceTimestamp": "2026-10-12T12:45:59.130Z",
+        "serverTimestamp": "2026-10-12T12:45:59.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 24,
+        "sourceTimestamp": "2026-10-12T12:46:09.130Z",
+        "serverTimestamp": "2026-10-12T12:46:09.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 25,
+        "sourceTimestamp": "2026-10-12T12:46:19.130Z",
+        "serverTimestamp": "2026-10-12T12:46:19.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 26,
+        "sourceTimestamp": "2026-10-12T12:46:29.130Z",
+        "serverTimestamp": "2026-10-12T12:46:29.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 27,
+        "sourceTimestamp": "2026-10-12T12:46:39.130Z",
+        "serverTimestamp": "2026-10-12T12:46:39.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 28,
+        "sourceTimestamp": "2026-10-12T12:46:49.130Z",
+        "serverTimestamp": "2026-10-12T12:46:49.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 29,
+        "sourceTimestamp": "2026-10-12T12:46:59.130Z",
+        "serverTimestamp": "2026-10-12T12:46:59.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 30,
+        "sourceTimestamp": "2026-10-12T12:47:09.130Z",
+        "serverTimestamp": "2026-10-12T12:47:09.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 31,
+        "sourceTimestamp": "2026-10-12T12:47:19.130Z",
+        "serverTimestamp": "2026-10-12T12:47:19.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 32,
+        "sourceTimestamp": "2026-10-12T12:47:29.130Z",
+        "serverTimestamp": "2026-10-12T12:47:29.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 33,
+        "sourceTimestamp": "2026-10-12T12:47:39.130Z",
+        "serverTimestamp": "2026-10-12T12:47:39.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 34,
+        "sourceTimestamp": "2026-10-12T12:47:49.130Z",
+        "serverTimestamp": "2026-10-12T12:47:49.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 35,
+        "sourceTimestamp": "2026-10-12T12:47:59.130Z",
+        "serverTimestamp": "2026-10-12T12:47:59.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 36,
+        "sourceTimestamp": "2026-10-12T12:48:09.130Z",
+        "serverTimestamp": "2026-10-12T12:48:09.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 37,
+        "sourceTimestamp": "2026-10-12T12:48:19.130Z",
+        "serverTimestamp": "2026-10-12T12:48:19.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 38,
+        "sourceTimestamp": "2026-10-12T12:48:29.130Z",
+        "serverTimestamp": "2026-10-12T12:48:29.130Z",
+        "statusCode": "Good"
+      },
+      {
+        "value": 39,
+        "sourceTimestamp": "2026-10-12T12:48:39.130Z",
+        "serverTimestamp": "2026-10-12T12:48:39.130Z",
+        "statusCode": "Good"
+      }
+    ],
+    "continuationPoint": {
+      "@bytes": "9L1Br8lD90ecpQ23FQocNg=="
+    },
+    "statusCode": "Good"
+  },
+  "mismatchedWindow": {
+    "nodeId": "ns=3;s=HistorianInt32",
+    "values": [],
+    "statusCode": "BadContinuationPointInvalid"
+  },
+  "unhistorized": {
+    "nodeId": "ns=3;s=SlowUInt1",
+    "page": {
+      "nodeId": "ns=3;s=SlowUInt1",
+      "values": [],
+      "statusCode": "BadHistoryOperationUnsupported"
+    }
+  }
+}

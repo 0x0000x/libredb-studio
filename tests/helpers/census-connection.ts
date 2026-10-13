@@ -110,5 +110,6 @@ export const CENSUS_CONNECTION: Readonly<Record<DatabaseType, DatabaseConnection
   firestore: unconnected("firestore"),
   // The shared test connection: the constructor validates nothing and opens nothing.
   rabbitmq: rabbitmqConnection(),
+  opcua: unconnected("opcua"),
   libredb: unconnected("libredb"),
 });

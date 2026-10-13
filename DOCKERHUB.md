@@ -20,7 +20,7 @@
 
 > 📖 **Full documentation, source, and issues:** <https://github.com/libredb/libredb-studio>
 
-Query **PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Databend, Snowflake, Apache Cassandra, Prometheus, InfluxDB, Apache Kafka, MQTT, RabbitMQ, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage and Kubernetes** from your browser, with AI query assistance, RBAC and OIDC SSO.
+Query **PostgreSQL, MySQL, SQLite, libSQL, DuckDB, Oracle, Db2 LUW, SQL Server, MongoDB, Redis, Couchbase, Firestore, ClickHouse, Apache Druid, Elasticsearch, OpenSearch, Trino, BigQuery, Databend, Snowflake, Apache Cassandra, Prometheus, InfluxDB, Apache Kafka, MQTT, RabbitMQ, OPC UA, etcd, Neo4j, Milvus, Qdrant, Oxia, S3-compatible object storage and Kubernetes** from your browser, with AI query assistance, RBAC and OIDC SSO.
 
 ---
 
@@ -109,8 +109,8 @@ Every one of those tags is published on three bases, and the suffix is appended 
 
 ## Supported databases
 
-Thirty-four external engines share one interface.
-The thirty-fifth row is the embedded LibreDB store: it ships inside the image.
+Thirty-five external engines share one interface.
+The thirty-sixth row is the embedded LibreDB store: it ships inside the image.
 
 | Database | Driver | Highlights |
 | :--- | :--- | :--- |
@@ -148,14 +148,15 @@ The thirty-fifth row is the embedded LibreDB store: it ships inside the image.
 | **Kubernetes** | none, HTTP | Read-only kubectl subset |
 | **MQTT** | `mqtt-packet` | Read-only topic tree browser |
 | **RabbitMQ** | none | Read-only stream reader |
+| **OPC UA** | `node-opcua-client` | Read-only address-space browser; node values and raw history |
 | **LibreDB** | `@libredb/libredb` | The embedded key-value store, for a database with nothing to install |
 
 **Read-only where the engine is.** Druid, Elasticsearch and OpenSearch have no `UPDATE` and no `CREATE TABLE` anywhere in their grammar, so inline editing and DDL are reported as unsupported instead of failing when used.
-Firestore, Prometheus, InfluxDB, Apache Kafka, MQTT, RabbitMQ, Oxia, S3-compatible object storage and Kubernetes are read-only too: Studio calls only read APIs.
+Firestore, Prometheus, InfluxDB, Apache Kafka, MQTT, RabbitMQ, OPC UA, Oxia, S3-compatible object storage and Kubernetes are read-only too: Studio calls only read APIs.
 
 ### Engines with no provider of their own
 
-Twenty-seven further engines speak the wire protocol of one of the thirty-four drivers above: pick that driver in the connection dialog. Each was measured against a real instance, and how much worked is recorded per engine.
+Twenty-seven further engines speak the wire protocol of one of the thirty-five drivers above: pick that driver in the connection dialog. Each was measured against a real instance, and how much worked is recorded per engine.
 
 | Engine | Connect as | Support |
 | :--- | :--- | :--- |

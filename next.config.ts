@@ -250,6 +250,19 @@ const nextConfig: NextConfig = {
   // and the second an unresolvable module, the two failures above. External,
   // file tracing still follows those static literals to all eight addons, and
   // the Dockerfiles and payload scripts prune them to the platform.
+  // `node-opcua-client` and `node-opcua-certificate-manager` are pure JavaScript, but two modules
+  // under them cannot be bundled. Both failures are measured, and re-measured against the installed
+  // `node-opcua-crypto` 6.2.0 after a review found this comment describing an older version of it:
+  // removing the two names below and building answers three errors, no more and no fewer.
+  //   `node-opcua-crypto/dist/source_nodejs/read.js:288` computes its certificate store as
+  //   `fileURLToPath(new URL("../../certificates/", import.meta.url))`. Turbopack reads that URL as
+  //   a module request and answers `Module not found: Can't resolve '../../certificates/'` - and
+  //   the directory really is absent from the installed package, so no bundler could resolve it.
+  //   `@ster5/global-mutex`, which the certificate manager loads to lock its PKI directory,
+  //   requires `proper-lockfile`, an optional dependency this tree does not install: two errors.
+  // External, neither is resolved at build time. At run time the URL above is arithmetic on a
+  // string and touches no file - it is read only by the store functions, which this provider never
+  // calls - and the mutex falls back to its own implementation without proper-lockfile.
   serverExternalPackages: [
     "pg",
     "mysql2",
@@ -262,6 +275,8 @@ const nextConfig: NextConfig = {
     "@duckdb/node-bindings",
     "@platformatic/kafka",
     "db2-node",
+    "node-opcua-client",
+    "node-opcua-certificate-manager",
   ],
 
   // One rule over every path, not just the skipped ones: both values are constants and byte

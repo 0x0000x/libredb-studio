@@ -262,9 +262,12 @@ QueryEditor                      /api/db/query
 
 ## Supported Databases
 
-Thirty-five type-ids are supported by thirty-three provider modules: two pairs share one, `elasticsearch` and `opensearch` in `providers/sql/search/`, and `influxdb` and `influxdb3` in `providers/timeseries/influxdb/`.
+Thirty-six type-ids are supported by thirty-four provider modules: two pairs share one, `elasticsearch` and `opensearch` in `providers/sql/search/`, and `influxdb` and `influxdb3` in `providers/timeseries/influxdb/`.
 The count is derived from the exhaustive `SHIPPED` record in
-[`src/lib/db/compatibility.ts`](../src/lib/db/compatibility.ts) rather than written here twice. For
+[`src/lib/db/compatibility.ts`](../src/lib/db/compatibility.ts) rather than written here twice - and
+the TABLE under it has to be checked by hand, which is the lesson a review left here: the numeral was
+swept to thirty-three while the table stayed thirty rows, missing BigQuery, MQTT and OPC UA, so a
+reader following this page was never told two shipped engines existed. For
 the per-provider reference (driver, pooling, query format,
 monitoring, limitations, …) see the prime docs in **[`docs/providers/`](./providers/README.md)**:
 
@@ -281,11 +284,13 @@ monitoring, limitations, …) see the prime docs in **[`docs/providers/`](./prov
 | Redis | `redis` | Key-Value | [providers/redis.md](./providers/redis.md) |
 | MongoDB | `mongodb` | Document | [providers/mongodb.md](./providers/mongodb.md) |
 | Couchbase | `couchbase` | Document (SQL++) | [providers/couchbase.md](./providers/couchbase.md) |
+| Google Cloud Firestore | `firestore` | Document (the Admin SDK query chain, read-only) | [providers/firestore.md](./providers/firestore.md) |
 | ClickHouse | `clickhouse` | SQL | [providers/clickhouse.md](./providers/clickhouse.md) |
 | Apache Druid | `druid` | SQL (read-only) | [providers/druid.md](./providers/druid.md) |
 | Elasticsearch | `elasticsearch` | Search (SQL, read-only) | [providers/elasticsearch.md](./providers/elasticsearch.md) |
 | OpenSearch | `opensearch` | Search (SQL, read-only) | [providers/opensearch.md](./providers/opensearch.md) |
 | Trino | `trino` | SQL (federated query engine) | [providers/trino.md](./providers/trino.md) |
+| Snowflake | `snowflake` | SQL (analytics, the SQL API v2 over HTTP) | [providers/snowflake.md](./providers/snowflake.md) |
 | Apache Cassandra | `cassandra` | SQL-shaped (CQL, wide-column) | [providers/cassandra.md](./providers/cassandra.md) |
 | Databend | `databend` | SQL (analytics, over HTTP) | [providers/databend.md](./providers/databend.md) |
 | Prometheus | `prometheus` | Time series (PromQL over HTTP, read-only) | [providers/prometheus.md](./providers/prometheus.md) |
@@ -300,6 +305,9 @@ monitoring, limitations, …) see the prime docs in **[`docs/providers/`](./prov
 | Oxia | `oxia` | Key-Value (oxia client read commands over gRPC, read-only) | [providers/oxia.md](./providers/oxia.md) |
 | S3-compatible object storage | `s3` | Object storage (AWS CLI read commands over the S3 REST API, read-only) | [providers/s3.md](./providers/s3.md) |
 | Kubernetes | `kubernetes` | Platform (kubectl read commands over the API server's REST API, read-only) | [providers/kubernetes.md](./providers/kubernetes.md) |
+| BigQuery | `bigquery` | SQL (analytics, GoogleSQL over REST) | [providers/bigquery.md](./providers/bigquery.md) |
+| MQTT | `mqtt` | Key-Value (broker topics over MQTT, read-only) | [providers/mqtt.md](./providers/mqtt.md) |
+| OPC UA | `opcua` | Industrial (an address space over `opc.tcp`, read-only) | [providers/opcua.md](./providers/opcua.md) |
 | LibreDB | `libredb` | Embedded (key-value) | [providers/libredb.md](./providers/libredb.md) |
 
 ## Core Interface
