@@ -116,6 +116,7 @@ describe("overview", () => {
 
   test.each<[string, string]>([
     ["a start later than Studio's clock", String(NOW.getTime() + 60_000)],
+    ["a start 1 ms later than Studio's clock", String(NOW.getTime() + 1)],
     ["a start past the Date range", "99999999999999999999"],
   ])("%s claims no start time and no uptime", async (_, startTime) => {
     setSystemTime(NOW);
