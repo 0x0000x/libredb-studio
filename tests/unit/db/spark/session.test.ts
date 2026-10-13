@@ -1,14 +1,14 @@
 /**
- * The session registry of D4 (spec 4.5) over the fake Spark Connect server: one session per scope and a new one per
- * statement without a scope; the setup in its order, the catalog as a string literal and the namespace through USE
- * NAMESPACE; the metadata session's extra settings, and nothing on it but its setup; observed server-side ids; a failed
- * setup failing only the statement that needed it, never the setup that replaced it; releases that never throw; the
- * registry closed after releaseAll, so nothing is set up again; the metadata session repeated once after the server
- * closed it, for each of the three INVALID_HANDLE classes (spec 10.8), and discarded once when two reads meet it
- * together; a metadata setup discarded in flight released once it settles; the repeat only for a failure the read
- * mapped to a SparkError, never for the channel's own error; a setup in flight when releaseAll begins sending no
- * further step, and a metadata read whose setup answers then sending nothing; close doing the same at once, sending
- * nothing itself and leaving the releases to releaseAll; the wait and the read told whether they serve the repeat.
+ * The session registry over the fake Spark Connect server: one session per scope and a new one per statement without a
+ * scope; the setup in its order, the catalog as a string literal and the namespace through USE NAMESPACE; the metadata
+ * session's extra settings, and nothing on it but its setup; observed server-side ids; a failed setup failing only the
+ * statement that needed it, never the setup that replaced it; releases that never throw; the registry closed after
+ * releaseAll, so nothing is set up again; the metadata session repeated once after the server closed it, for each of
+ * the three INVALID_HANDLE classes, and discarded once when two reads meet it together; a metadata setup discarded in
+ * flight released once it settles; the repeat only for a failure the read mapped to a SparkError, never for the
+ * channel's own error; a setup in flight when releaseAll begins sending no further step, and a metadata read whose
+ * setup answers then sending nothing; close doing the same at once, sending nothing itself and leaving the releases to
+ * releaseAll; the wait and the read told whether they serve the repeat.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
@@ -94,7 +94,7 @@ const received = () =>
     if (entry.rpc !== "Config") return [entry.sessionId, entry.rpc];
     return [entry.sessionId, operation?.set === null || operation?.set === undefined ? "Config read" : "Config set"];
   });
-/** A failure mapped as the provider maps a control call's (spec 4.10). */
+/** A failure mapped as the provider maps a control call's. */
 const sparkErrorOf = (error: unknown) =>
   toSparkError(error, { connection: { host: "h", port: 1, secretForms: [] }, phase: "control" });
 /** A metadata read over the fake: one Config get_option on the session it is given. */
@@ -128,7 +128,7 @@ beforeEach(() => {
   statements["SHOW NAMESPACES"] = OK;
 });
 
-describe("sessions by scope (D4)", () => {
+describe("sessions by scope", () => {
   test("one handle per scope, another per other scope, and a new statement session for each unscoped call", async () => {
     const sessions = new SparkSessions(deps(), {});
     const a = await sessions.forScope("a");
@@ -337,7 +337,7 @@ describe("a failed setup fails only the statement that needed it", () => {
   });
 });
 
-describe("server-side ids (spec 4.5)", () => {
+describe("server-side ids", () => {
   test("observe records the first id, accepts it again, ignores an empty one and refuses another", async () => {
     const sessions = new SparkSessions(deps(), {});
     const handle = await sessions.forScope("o");
@@ -399,7 +399,7 @@ describe("server-side ids (spec 4.5)", () => {
   });
 });
 
-describe("releases (spec 4.5)", () => {
+describe("releases", () => {
   test("endScope releases the scope's session once; an unknown scope is nothing; a failing release never throws", async () => {
     const sessions = new SparkSessions(deps(), {});
     const handle = await sessions.forScope("e");
@@ -698,7 +698,7 @@ describe("a release that begins while a setup is in flight", () => {
   );
 });
 
-describe("the metadata session after the server closed it (spec 4.5)", () => {
+describe("the metadata session after the server closed it", () => {
   test("the read that met the closed session is repeated once on a new one", async () => {
     const sessions = new SparkSessions(deps(), {});
     const first = await sessions.metadata();

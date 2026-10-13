@@ -1,8 +1,8 @@
 /**
- * Every category of spec 4.10 from its trigger to its class and sentence, over hand-built gRPC statuses and the
- * captured answers of tests/fixtures/spark/; the Cause line; the TIME, maxResultSize and empty-UNKNOWN sentences;
- * FetchErrorDetails read for one root and at most five causes; every sentence in the spec's words; and Review Focus
- * R5: a token in any server text never reaches a sentence.
+ * Every error category from its trigger to its class and sentence, over hand-built gRPC statuses and the captured
+ * answers of tests/fixtures/spark/; the Cause line; the TIME, maxResultSize and empty-UNKNOWN sentences;
+ * FetchErrorDetails read for one root and at most five causes; every sentence word for word; and a token in any server
+ * text never reaching a sentence.
  */
 import { describe, expect, test } from "bun:test";
 import {
@@ -91,7 +91,7 @@ function expectCategory(error: SparkError, category: SparkErrorCategory, message
   if (message !== undefined) expect(error.message).toBe(message);
 }
 
-describe("the connect and transport rows (spec 3.3)", () => {
+describe("the connect and transport rows", () => {
   test("nothing listening: UNAVAILABLE without a TLS cause, and a refused socket", () => {
     expectCategory(
       toSparkError(
@@ -274,7 +274,7 @@ describe("the connect and transport rows (spec 3.3)", () => {
   });
 });
 
-describe("the run rows (spec 4.10)", () => {
+describe("the run rows", () => {
   test("the keepalive drop, the ping GOAWAY and the receive cap by phase", () => {
     for (const phase of ["command", "relation"] as const) {
       expectCategory(
@@ -322,7 +322,7 @@ describe("the run rows (spec 4.10)", () => {
     );
   });
 
-  test("a proxy's cut, measured by D03, is stream-failed and is tested before the spark row", () => {
+  test("a proxy's cut is stream-failed and is tested before the spark row", () => {
     const text = "Received RST_STREAM with code 2 (Internal server error)";
     expectCategory(
       toSparkError(statusOf(13, text), context("relation")),
@@ -500,10 +500,10 @@ describe("the run rows (spec 4.10)", () => {
   });
 });
 
-describe("Spark's own errors (spec 4.10 steps 1 to 4)", () => {
+describe("Spark's own errors", () => {
   test("a syntax error keeps Spark's text, trimmed", () => {
     const status = capturedStatus("error-syntax");
-    // Spark's text starts with a newline (D02-C36).
+    // Spark's text starts with a newline.
     expect(status.details.startsWith("\n")).toBe(true);
     expectCategory(toSparkError(status, context("command")), "spark", status.details.trim());
   });
@@ -657,7 +657,7 @@ describe("Spark's own errors (spec 4.10 steps 1 to 4)", () => {
   });
 });
 
-describe("errorDetailsFromResponse (spec 4.10 step 2)", () => {
+describe("errorDetailsFromResponse", () => {
   test("the root's class and the innermost cause, never a stack frame", () => {
     expect(
       errorDetailsFromResponse({
@@ -769,7 +769,7 @@ describe("toDatabaseError (the provider boundary)", () => {
   });
 });
 
-describe("R5: a token in any server text never reaches a sentence", () => {
+describe("a token in any server text never reaches a sentence", () => {
   const holders = [TOKEN, Buffer.from(TOKEN).toString("base64"), encodeURIComponent(TOKEN)];
   const carries = (message: string) => FORMS.some((form) => message.includes(form));
 
@@ -834,7 +834,7 @@ describe("R5: a token in any server text never reaches a sentence", () => {
   });
 });
 
-describe("every sentence in the spec's words (3.3, 4.5, 4.7, 4.10, 5.2, 5.4, 5.5)", () => {
+describe("every sentence, word for word", () => {
   const words: readonly (readonly [keyof typeof SPARK_ERROR_SENTENCES, string, string])[] = [
     [
       "notConnected",

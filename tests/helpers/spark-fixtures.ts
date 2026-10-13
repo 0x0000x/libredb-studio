@@ -38,7 +38,7 @@ function codec(rpc: string): Codec {
   return (sparkDefinition()[SERVICE] as unknown as Record<string, Codec>)[rpc];
 }
 
-/** A request as the provider's codec reads it back: the form T4.2 writes every captured request in. */
+/** A request as the provider's codec reads it back, as tests/live/spark-evidence.ts stores every captured request. */
 function roundTrip(rpc: string, request: object): object {
   return codec(rpc).requestDeserialize(codec(rpc).requestSerialize(request));
 }

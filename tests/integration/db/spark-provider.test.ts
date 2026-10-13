@@ -27,7 +27,7 @@
  *   server; every case shares this step;
  * - the version refusal: the 4.2.0 version answer rewritten to "3.5.9" and "4.0.4", since no capture is of a server
  *   below the floor;
- * - the nested namespace walk: the session catalog's `SHOW NAMESPACES` answer rewritten to multi-part spellings,
+ * - the nested namespace listing: the session catalog's `SHOW NAMESPACES` answer rewritten to multi-part spellings,
  *   because no catalog of the open-source fixture nests.
  */
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
@@ -315,7 +315,7 @@ for (const version of ["4.2.0", "4.1.3"] as const) {
         // The Interrupt each refusal sends: a masked Interrupt by tag reads as the one cancel-interrupt captured.
         "cancel-interrupt",
       ]);
-      // The SET's own inline answer arrives as LargeUtf8 (large-var-types-set, both versions; D03-C19).
+      // The SET's own inline answer arrives as LargeUtf8 (large-var-types-set, both versions).
       await expect(provider.query(LARGE_TYPES_SET, undefined, undefined, "s-large")).rejects.toThrow(
         SPARK_ERROR_SENTENCES.largeVarTypes,
       );
@@ -521,7 +521,7 @@ describe("replay on 4.2.0 only", () => {
     await provider.disconnect();
   });
 
-  test("substitution off: SELECT '${x}' after SET x=1 returns the text as written (D7)", async () => {
+  test("substitution off: SELECT '${x}' after SET x=1 returns the text as written", async () => {
     const { provider } = await connected("4.2.0", ["substitution-set", "substitution-off-command", "substitution-off"]);
     await provider.query(SUBSTITUTION_SET, undefined, undefined, "scope-subst");
     const result = await provider.query(SUBSTITUTION_SELECT, undefined, undefined, "scope-subst");
@@ -529,7 +529,7 @@ describe("replay on 4.2.0 only", () => {
     await provider.disconnect();
   });
 
-  test("a session SET of the codec to zstd, then the next result refused naming the codec (5.4)", async () => {
+  test("a session SET of the codec to zstd, then the next result refused naming the codec", async () => {
     const { provider } = await connected("4.2.0", [
       "compressed-zstd-set",
       "compressed-zstd-command",
