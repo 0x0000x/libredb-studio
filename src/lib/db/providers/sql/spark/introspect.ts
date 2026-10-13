@@ -316,8 +316,9 @@ export async function describeObjects(
   ...[container, kind, limit]: Parameters<DatabaseProvider["describeObjects"]>
 ): ReturnType<DatabaseProvider["describeObjects"]> {
   // Refused rather than clamped: a 0 would describe nothing yet report a truncation, and a negative limit would slice
-  // from the listing's end, past SPARK_DESCRIBE_OBJECTS_MAX.
-  if (limit !== undefined && !(Number.isSafeInteger(limit) && limit > 0)) {
+  // from the listing's end, past SPARK_DESCRIBE_OBJECTS_MAX. Any whole number above 0 is a bound, however large: no
+  // statement carries it and nothing adds to it, so one past the safe integers is held to the cap like any other.
+  if (limit !== undefined && !(Number.isInteger(limit) && limit > 0)) {
     throw new SparkError("refused", SPARK_INTROSPECT_SENTENCES.badLimit(limit));
   }
   if (kind === "function") return { details: [] };

@@ -309,6 +309,29 @@ describe("namespaces", () => {
     ]);
   });
 
+  test("a failed later batch ends the walk too: no child an earlier batch of its level found is asked", async () => {
+    const last = `n${SPARK_INTROSPECT_IN_FLIGHT_MAX}`;
+    const failure = spark(`[SCHEMA_NOT_FOUND] The schema \`lake\`.\`${last}\` cannot be found.`);
+    const answers: Record<string, Answer> = {
+      ...CURRENT,
+      "SHOW NAMESPACES IN `lake`": Array.from({ length: SPARK_INTROSPECT_IN_FLIGHT_MAX + 1 }, (_, i) => ({
+        namespace: `n${i}`,
+      })),
+      "SHOW NAMESPACES IN `lake`.n0": [{ namespace: "n0.x" }],
+      [`SHOW NAMESPACES IN \`lake\`.${last}`]: failure,
+      "SHOW NAMESPACES IN `lake`.n0.x": [],
+    };
+    for (let i = 1; i < SPARK_INTROSPECT_IN_FLIGHT_MAX; i++) answers[`SHOW NAMESPACES IN \`lake\`.n${i}`] = [];
+    const { deps, sent } = stub(answers);
+    // The first batch answers whole, n0 with a child; the second batch fails, so n0.x is never asked.
+    await expect(listNamespaces(deps, "lake")).rejects.toBe(failure);
+    expect(sent).toStrictEqual([
+      "SHOW CURRENT NAMESPACE",
+      "SHOW NAMESPACES IN `lake`",
+      ...Array.from({ length: SPARK_INTROSPECT_IN_FLIGHT_MAX + 1 }, (_, i) => `SHOW NAMESPACES IN \`lake\`.n${i}`),
+    ]);
+  });
+
   test("more than 1,000 namespaces is refused with the walk's sentence, never a shorter list", async () => {
     const many = Array.from({ length: 1_001 }, (_, i) => ({ namespace: `n${i}` }));
     const { deps } = stub({ ...CURRENT, "SHOW NAMESPACES IN `lake`": many });
@@ -752,6 +775,17 @@ describe("columns and definitions", () => {
       });
     }
     expect(sent).toStrictEqual([]);
+  });
+
+  test.each<[string, number]>([
+    ["2 ** 53", 2 ** 53],
+    ["1e21", 1e21],
+  ])("a limit of %s, whole but past the safe integers, is held to 1,000 like any other", async (_shown, limit) => {
+    const many = tables(1_001);
+    const batch = await describeObjects(many.deps, ["spark_catalog", "studio"], "table", limit);
+    expect(batch.details).toHaveLength(1_000);
+    expect(batch.truncated).toStrictEqual({ limit: 1_000, reason: SPARK_INTROSPECT_SENTENCES.describeBound });
+    expect(many.described()).toBe(1_000);
   });
 
   const NOT_FOUND =
