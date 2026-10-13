@@ -1,6 +1,6 @@
 /**
- * Real handshakes and a real cancel through the shared gRPC transport, each status mapped by toSparkError (spec 3.3,
- * 4.10), under Bun and in a Node child, the production runtime, so a change of grpc-js's or a runtime's text fails
+ * Real handshakes and a real cancel through the shared gRPC transport, each status mapped by toSparkError,
+ * under Bun and in a Node child, the production runtime, so a change of grpc-js's or a runtime's text fails
  * here. The certificates are tests/fixtures/tls. `openssl s_server` stands in for a TLS proxy that requires a client
  * certificate trusted through the unrelated CA, and refuses a missing or an untrusted one with a TLS alert; a grpc-js
  * server only closes the connection on an untrusted one. Under Bun no alert reaches the status text, which says

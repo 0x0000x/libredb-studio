@@ -516,7 +516,7 @@ describe("db-ui-config", () => {
      * authentication is refused, and its provider refuses a non-empty `config.user` naming the field. RabbitMQ has no
      * database: virtual hosts are discovered, and its provider refuses a non-empty `config.database` naming the field.
      * Apache Spark has no user name either: every request uses one fixed Spark Connect user id, and its provider
-     * refuses a non-empty `config.user` naming the field (Spark spec 3.1).
+     * refuses a non-empty `config.user` naming the field (Apache Spark).
      * Listed by name, so the read stays visible.
      */
     const READ_ONLY_TO_REFUSE: Readonly<Record<"user" | "database", readonly DatabaseType[]>> = {
@@ -1181,7 +1181,7 @@ describe("declared field rules (Databend design 6.3)", () => {
     // The field the provider's sentences call Host, not the dialog's "Host & Instance".
     expect(connectionFieldLabel(config, "host", "Host & Instance")).toBe("Host");
     // The shared Host row draws a port label only where one is declared, so no other engine's dialog gains one.
-    // Apache Spark declares a plain Port beside its relabelled Host, Token, Catalog and Namespace (Spark spec 3.1).
+    // Apache Spark declares a plain Port beside its relabelled Host, Token, Catalog and Namespace.
     expect(
       (Object.keys(DB_UI_CONFIG) as DatabaseType[]).filter(
         (type) => DB_UI_CONFIG[type].fieldLabels?.port !== undefined,
@@ -1832,10 +1832,10 @@ describe("the Apache Spark entry", () => {
       defaultPort: "15002",
       showConnectionStringToggle: false,
     });
-    // No `showSshTunnel` and no `showSslPanel` key: the SSH tunnel and the SSL / TLS panel are both offered (D5c).
+    // No `showSshTunnel` and no `showSslPanel` key: the SSH tunnel and the SSL / TLS panel are both offered.
     expect(spark.showSshTunnel).toBeUndefined();
     expect(spark.showSslPanel).toBeUndefined();
-    // No User box: every request uses one fixed Spark Connect user id, and Token is the credential (D5e).
+    // No User box: every request uses one fixed Spark Connect user id, and Token is the credential.
     expect(spark.connectionFields).toEqual(["host", "port", "password", "database", "schema"]);
     expect(connectionFieldLabel(spark, "host", "Host & Instance")).toBe("Host");
     expect(connectionFieldLabel(spark, "port", "fallback")).toBe("Port");

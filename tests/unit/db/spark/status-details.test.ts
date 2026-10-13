@@ -1,5 +1,5 @@
 /**
- * The bounded hand decoder of grpc-status-details-bin (spec 4.10 step 1, 10.1 row 7). Reference bytes are encoded with
+ * The bounded hand decoder of grpc-status-details-bin. Reference bytes are encoded with
  * protobufjs here, independently of the decoder, and the captured answers of tests/fixtures/spark/ are decoded both
  * ways and must agree. Every bound and malformed input answers undefined and never throws, except a map value over
  * 8 KiB, which drops its own key only. An exception that is not the decoder's own malformed signal is a defect and
@@ -230,7 +230,7 @@ describe("well-formed details", () => {
   });
 });
 
-describe("bounds (spec 4.10 step 1)", () => {
+describe("bounds", () => {
   test("16 details are read, 17 are refused", () => {
     const filler = { type_url: "type.googleapis.com/google.rpc.DebugInfo", value: new Uint8Array(0) };
     const sixteen = status([...Array.from({ length: 15 }, () => filler), sparkInfo({ errorClass: "X" })]);

@@ -1,5 +1,5 @@
 /**
- * The 15 s unary heartbeat of D17 (spec 4.7, 10.1 row 11): over injected timers, one timer per held session, shared by
+ * The 15 s unary heartbeat: over injected timers, one timer per held session, shared by
  * a second hold and stopped by the last release; over the fake server, a Config get_option of spark.sql.ansi.enabled
  * on the run's own session at each interval while a silent call is open, and nothing after the release; a failing beat
  * ends nothing. The interval is 50 ms here, so no test waits on a real timer for more than one second.
@@ -161,7 +161,7 @@ describe("timers", () => {
   });
 });
 
-describe("over the fake server (10.1 row 11)", () => {
+describe("over the fake server", () => {
   let fake: SparkFakeServer;
   let channel: SparkWireChannel;
   beforeAll(async () => {

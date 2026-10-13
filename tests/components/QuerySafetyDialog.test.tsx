@@ -2519,7 +2519,7 @@ describe("a confirmConfigKeys key set or reset", () => {
 });
 
 // Spark's row: the forms that replace or overwrite data, load code, start a process, call a Java method, run text the
-// gate cannot read, drop partitions, rebind a catalog or switch variable substitution back on (spec 7.3).
+// gate cannot read, drop partitions, rebind a catalog or switch variable substitution back on.
 describe("Apache Spark's confirmation forms", () => {
   test.each([
     "CREATE OR REPLACE TABLE t AS SELECT 1",

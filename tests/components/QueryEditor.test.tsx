@@ -2594,7 +2594,7 @@ describe("QueryEditor", () => {
     );
   });
 
-  test("no Format button, Format SQL action or shortcut under supportsSqlFormat: false (Apache Spark, D14)", () => {
+  test("no Format button, Format SQL action or shortcut under supportsSqlFormat: false (Apache Spark)", () => {
     // Both sql-formatter modes rewrite valid Spark text (raw strings, backticks, nested comments), so the provider
     // withholds Format for its tabs and the editor offers none.
     mockSqlFormat.mockClear();

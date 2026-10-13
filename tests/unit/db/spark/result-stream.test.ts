@@ -1,8 +1,8 @@
 /**
- * Reading one ExecutePlan stream (spec 4.6 steps 5 to 8, 5.6) over a stub stream whose responses have the shape the
+ * Reading one ExecutePlan stream over a stub stream whose responses have the shape the
  * Spark descriptor decodes them to (SPARK_LOADER_OPTIONS: an unset message field outside the response_type oneof is
  * null, an int64 is a decimal string): response kinds, chunk reassembly and its refusals, the row and byte budgets with
- * a result that ends exactly on one, stream.truncated read after every undefined, the batch check of step 7 and
+ * a result that ends exactly on one, stream.truncated read after every undefined, the 32 MiB batch check and
  * batch-too-large, and the cost rule at 8 bytes a value plus the fixed overhead each kept batch pays.
  *
  * The reader holds a batch's declared row count twice: against the stream before apache-arrow reads it, and against
@@ -320,7 +320,7 @@ describe("readRelationAnswer: kinds and reassembly", () => {
   });
 });
 
-describe("readRelationAnswer: budgets (spec 5.6)", () => {
+describe("readRelationAnswer: budgets", () => {
   test("the row budget cuts inside a batch and cancels the stream; ending exactly on it is whole", async () => {
     const three = [
       SCHEMA,
@@ -346,7 +346,7 @@ describe("readRelationAnswer: budgets (spec 5.6)", () => {
   });
 
   test("the byte budget cuts before the row that would pass it and cancels the stream", async () => {
-    // stringBatch writes exactly `width` ASCII characters a value, so a row costs 8 + 100 (spec 5.6), and the batch
+    // stringBatch writes exactly `width` ASCII characters a value, so a row costs 8 + 100, and the batch
     // pays its overhead once.
     const stream = stub([SCHEMA, batch(stringBatch(10, 100), 10), METRICS]);
     const answer = await readRelationAnswer(stream, {
@@ -448,7 +448,7 @@ describe("readRelationAnswer: budgets (spec 5.6)", () => {
   });
 });
 
-describe("readRelationAnswer: the 32 MiB bound (spec 4.6 steps 7 and 8)", () => {
+describe("readRelationAnswer: the 32 MiB bound", () => {
   const [P0, P1] = chunks(stringBatch(50, 100), 50, 3) as [object, object, object];
 
   test("truncated after complete batches is the cut stream, the incomplete sequence dropped", async () => {
@@ -581,7 +581,7 @@ describe("readRelationAnswer: the 32 MiB bound (spec 4.6 steps 7 and 8)", () => 
   });
 });
 
-test("the three cut warnings are the sentences of spec 3.6, and their numbers are the budgets'", () => {
+test("the three cut warnings are fixed sentences, and their numbers are the budgets'", () => {
   expect(SPARK_CUT_WARNINGS).toStrictEqual({
     rows: "The result reached Studio's statement budget of 100,000 rows, so only the rows before it are shown.",
     bytes: "The result reached Studio's statement budget of 16 MiB, so only the rows before it are shown.",

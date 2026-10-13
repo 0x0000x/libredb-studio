@@ -1,4 +1,4 @@
-/** The version floor of D3 (spec 4.9): AnalyzePlan's spark_version text read, then held to 4.1.0. */
+/** The version floor: AnalyzePlan's spark_version text read, then held to 4.1.0. */
 import { describe, expect, test } from "bun:test";
 import { meetsSparkFloor, parseSparkVersion } from "@/lib/db/providers/sql/spark/version";
 

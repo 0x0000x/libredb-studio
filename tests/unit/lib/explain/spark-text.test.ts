@@ -7,7 +7,7 @@ import { captureBytes, readSparkCapture, type SparkCaptureVersion } from "../../
 
 const MODES: readonly ExplainMode[] = ["estimate", "analyze"];
 
-// Spark's answer to EXPLAIN FORMATTED for a grouped, sorted read of one parquet table, as measured during the design.
+// Spark's answer to EXPLAIN FORMATTED for a grouped, sorted read of one parquet table, as measured.
 const MEASURED = [
   "== Physical Plan ==",
   "AdaptiveSparkPlan (9)",

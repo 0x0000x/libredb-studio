@@ -1,5 +1,5 @@
 /**
- * The Apache Spark provider's seam guard (spec 4.1, 4.3, 4.4, 8.10, 10.2), on the Milvus and Oxia guards' shape.
+ * The Apache Spark provider's seam guard, on the Milvus and Oxia guards' shape.
  *
  * Among the files this guard holds (GRPC_SEAM_HOLDINGS.spark.held: the provider directory, its generator, its unit
  * tests, helpers and live harnesses, which tests/unit/db/etcd/seam-guard.test.ts hands over), each import list below is
@@ -12,10 +12,10 @@
  * Every rule is proven both ways: the real sources pass it and a planted file fails it by name.
  *
  * The pure modules (PURE_MODULES) import no I/O, no logger and no transport, and write nothing to the console
- * (spec 4.1); that rule is proven both ways too, and so is the allowlist rule: grpc-client.ts names no
- * SparkConnectService RPC off SPARK_ALLOWLISTED_RPCS (spec 4.4).
+ * at all; that rule is proven both ways too, and so is the allowlist rule: grpc-client.ts names no
+ * SparkConnectService RPC off SPARK_ALLOWLISTED_RPCS.
  *
- * The guard is syntactic: a module name built at run time is stated, not chased. Each list grows in the task that adds
+ * The guard is syntactic: a module name built at run time is stated, not chased. Each list grows with
  * its files.
  */
 import { describe, expect, test } from "bun:test";
@@ -39,7 +39,7 @@ const CLIENT_TEST = "tests/unit/db/spark/grpc-client.test.ts";
 const TLS_HANDSHAKE_TEST = "tests/unit/db/spark/tls-handshake.test.ts";
 const SOURCE_FILE = /\.(c|m)?(t|j)sx?$/;
 
-// The named lists. Each grows in the task that adds its files (T4.2, T5.1, T5.5, T5.7, T9.1, T12.2).
+// The named lists. Each grows in the change that adds its files.
 const GRPC_IMPORTERS: readonly string[] = [HARNESS, FAKE, CLIENT_TEST, TLS_HANDSHAKE_TEST];
 const PROTO_LOADER_IMPORTERS: readonly string[] = [ADAPTER, DESCRIPTOR, GENERATOR, DESCRIPTOR_TEST, HARNESS];
 const DESCRIPTOR_IMPORTERS: readonly string[] = [ADAPTER];
@@ -47,11 +47,11 @@ const DESCRIPTOR_READERS: readonly string[] = [GENERATOR, DESCRIPTOR_TEST, THIS_
 const GENERATOR_IMPORTERS: readonly string[] = [DESCRIPTOR_TEST, HARNESS];
 /** The provider files that import src/lib/db/grpc/, type-only imports included, as the shared guard's G5 counts them. */
 const TRANSPORT_IMPORTERS: readonly string[] = [`${SPARK}/connection-options.ts`, ADAPTER];
-/** The only files under src/ outside the provider directory that may import a Spark module (spec 8.10). */
+/** The only files under src/ outside the provider directory that may import a Spark module. */
 const OUTSIDE_IMPORTERS_ALLOWED: readonly string[] = ["src/lib/db/factory.ts", "src/lib/connection-string-parser.ts"];
-/** The one module under src/lib/db/providers/ outside the directory a Spark file may import (spec 8.10). */
+/** The one module under src/lib/db/providers/ outside the directory a Spark file may import. */
 const SQL_BASE = "src/lib/db/providers/sql/sql-base";
-/** The pure modules: no I/O, no logger, no transport and no console (spec 4.1, 10.2). */
+/** The pure modules: no I/O, no logger, no transport and no console. */
 const PURE_MODULES: readonly string[] = [
   `${SPARK}/constants.ts`,
   `${SPARK}/namespace.ts`,
@@ -254,7 +254,7 @@ const replaced = (files: readonly RepositoryFile[], path: string, text: string) 
   { path, sf: parse(path, text) },
 ];
 
-describe("the import lists hold, among the files this guard holds (spec 10.2)", () => {
+describe("the import lists hold, among the files this guard holds", () => {
   test.each(RULES.map((rule) => [rule.name, rule] as const))("%s: the real sources pass", (_name, rule) => {
     expect(findings(rule, HELD)).toEqual([]);
   });
@@ -292,7 +292,7 @@ describe("the import lists hold, among the files this guard holds (spec 10.2)", 
   });
 });
 
-describe("isolation (spec 8.10)", () => {
+describe("isolation", () => {
   test("no Spark file imports a provider module outside its directory but ../sql-base", () => {
     expect(providerImportFindings(HELD)).toEqual([]);
   });
@@ -328,7 +328,7 @@ describe("isolation (spec 8.10)", () => {
   });
 });
 
-describe("pure modules import no I/O, no logger and no transport (spec 4.1)", () => {
+describe("pure modules import no I/O, no logger and no transport", () => {
   test("the real sources pass", () => {
     expect(pureFindings(HELD)).toEqual([]);
   });
@@ -364,7 +364,7 @@ function offAllowlist(sf: ts.SourceFile, rpcs: readonly string[]): string[] {
   return strings.filter((text) => rpcs.includes(text) && !allowed.includes(text));
 }
 
-describe("the allowlist (spec 4.4)", () => {
+describe("the allowlist", () => {
   const proto = readFileSync(join(ROOT, SPARK, "proto", "spark", "connect", "base.proto"), "utf8");
   const block = proto.slice(proto.indexOf("service SparkConnectService {"));
   const rpcs = [...block.matchAll(/^\s*rpc (\w+)\(/gm)].map((match) => match[1] as string);

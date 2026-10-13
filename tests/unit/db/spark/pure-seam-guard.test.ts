@@ -3,11 +3,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 /**
- * Lane C's guard over the Spark provider's pure modules (spec 4.1 and 10.2; PLAN-00 gap f). The sc:// reader is
+ * The guard over the Spark provider's pure modules. The sc:// reader is
  * imported by the connection-string parser, which the browser bundle carries, so it imports types only; every pure
  * module imports no I/O, no logger and no transport, and a sibling it imports, by a relative path or through the `@/`
- * alias, is only another pure module, the directory's constants, its errors or its name spelling. T6.1, T6.2 and T6.7
- * extend the lists as the decoder modules land, and T6.1 adds the apache-arrow importer rule.
+ * alias, is only another pure module, the directory's constants, its errors or its name spelling. The lists name
+ * the decoder modules, and only the listed files import apache-arrow.
  */
 const ROOT = join(import.meta.dir, "..", "..", "..", "..");
 const SPARK = "src/lib/db/providers/sql/spark";
@@ -99,7 +99,7 @@ function filesUnder(dir: string): string[] {
     .map((path) => `${dir}/${path.split("\\").join("/")}`);
 }
 
-describe("lane C's Spark seam guard", () => {
+describe("the Spark pure-module seam guard", () => {
   test("the reader finds imports, so an empty answer below is not a reader that reads nothing", () => {
     const parser = importLines("src/lib/connection-string-parser.ts").map((line) => line.specifier);
     expect(parser).toContain("@/lib/db/providers/sql/spark/sc-uri");
@@ -135,7 +135,7 @@ describe("lane C's Spark seam guard", () => {
     ]);
   });
 
-  test("only the listed files import apache-arrow (spec 4.1, 8.7 row 7.2)", () => {
+  test("only the listed files import apache-arrow", () => {
     const found = ["src", "tests", "scripts", "e2e"]
       .flatMap(filesUnder)
       .filter((file) =>

@@ -50,7 +50,7 @@ const QUOTED_FIELDS: Omit<SparkColumn, "name"> = {
   },
 };
 
-describe("columnsFromDataType: spellings and kinds of spec 5.2", () => {
+describe("columnsFromDataType: spellings and kinds", () => {
   test("every scalar type", () => {
     const columns = columnsFromDataType(
       struct([
@@ -639,7 +639,7 @@ describe("the two schemas of the relation path", () => {
     test(`the captured every-type schema of ${version} is spelled as Spark's own DESCRIBE spells it`, () => {
       const { fromDataType } = relationCapture(version, "every-type-relation");
       // DESCRIBE spells the 32 stored columns from the table, where a char or varchar column keeps its length; a
-      // result schema reports such a column as string (spec 5.2), and the two computed columns are not stored. Every
+      // result schema reports such a column as string, and the two computed columns are not stored. Every
       // struct field name in the table is bare, so DESCRIBE, which writes a field name unquoted, and this module, which
       // backticks a name Spark would quote, spell it alike.
       expect(Object.fromEntries(fromDataType.map((column) => [column.name, column.spelling]))).toStrictEqual({

@@ -1,5 +1,5 @@
 /**
- * The Apache Spark gRPC adapter over the fake server of tests/helpers/spark-connect-server.ts (spec 4.3, 4.4, 10.1):
+ * The Apache Spark gRPC adapter over the fake server of tests/helpers/spark-connect-server.ts:
  * the loader options, the six allowlisted RPCs and the six the stub cannot call, the authorization metadata, a deadline
  * per call, the call's own signal, the 16 MiB receive cap, no retry after a reset, the unsent error, the TLS modes, the
  * cached definition, and every request builder sent through the real descriptor and decoded by the fake.
@@ -117,7 +117,7 @@ afterAll(() => {
   for (const fake of [plain, secured, tokened]) fake.close();
 });
 
-describe("the stub (spec 4.4)", () => {
+describe("the stub", () => {
   test("the loader options and the six allowlisted RPCs, and the six the stub cannot call", () => {
     expect(SPARK_LOADER_OPTIONS).toStrictEqual({
       keepCase: true,
@@ -249,7 +249,7 @@ describe("every request builder, sent through the descriptor and decoded by the 
   });
 });
 
-describe("the transport's rules (spec 4.3)", () => {
+describe("the transport's rules", () => {
   test("the channel opens with the 16 MiB receive cap and grpc-js's retries off, so no call is ever sent twice", async () => {
     const inner = credentials.createInsecure();
     const connectors = spyOn(inner, "_createSecureConnector");
@@ -329,7 +329,7 @@ describe("the transport's rules (spec 4.3)", () => {
   });
 });
 
-describe("tokens (spec 4.3, 10.1 row 13)", () => {
+describe("tokens", () => {
   test("no token, a wrong one and a lower-case prefix are refused; the exact Bearer prefix is accepted", async () => {
     const channel = open(optionsFor(tokened));
     expect((await failure(channel.unary("AnalyzePlan", versionRequest(fresh()), call()))).details).toBe(
@@ -349,7 +349,7 @@ describe("tokens (spec 4.3, 10.1 row 13)", () => {
   });
 });
 
-describe("TLS (spec 3.3, 10.1 row 15)", () => {
+describe("TLS", () => {
   const context = (fake: SparkFakeServer) => ({
     connection: { host: "127.0.0.1", port: portOf(fake), secretForms: [] },
     phase: "connect" as const,

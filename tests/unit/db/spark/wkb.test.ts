@@ -1,4 +1,4 @@
-/** Geometry and geography values (spec 5.2, 6.5): the copied WKB reader, its bounds, and the EWKT text. */
+/** Geometry and geography values: the copied WKB reader, its bounds, and the EWKT text. */
 import { describe, expect, spyOn, test } from "bun:test";
 import { geoText, wkbToWkt } from "@/lib/db/providers/sql/spark/wkb";
 

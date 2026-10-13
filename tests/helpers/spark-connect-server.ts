@@ -1,5 +1,5 @@
 /**
- * A fake Spark Connect server for the Apache Spark provider's tests (spec 10.1), built from the provider's own
+ * A fake Spark Connect server for the Apache Spark provider's tests, built from the provider's own
  * descriptor so the allowlist is proven from the client's side. It answers statements by their exact text and models
  * the measured behaviours the provider depends on: sessions and their server-side ids, the two steps, chunked results,
  * the reattach window, progress, Interrupt by tag, ErrorInfo errors with one FetchErrorDetails, oversized messages,
@@ -101,8 +101,8 @@ const EMPTY_SCHEMA = { struct: { fields: [] } };
 const TLS_HANDSHAKE_RECORD = 0x16;
 /**
  * What the TLS fake answers a client whose first byte does not open a TLS handshake: an HTTP/1.1 400, bytes that are
- * not HTTP/2, which grpc-js reports as "Protocol error", the text the TLS proxy of D02-C7 gives a plaintext client
- * (spec 3.3). Against grpc-js's own TLS server such a client fails with "Failed to connect" instead, under Bun and under
+ * not HTTP/2, which grpc-js reports as "Protocol error", the text the measured TLS proxy gives a plaintext client
+ * too. Against grpc-js's own TLS server such a client fails with "Failed to connect" instead, under Bun and under
  * Node (measured with grpc-js 1.14.5 on Bun 1.4.2 and Node 24.14.0).
  */
 const PLAINTEXT_ON_TLS_ANSWER = "HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";

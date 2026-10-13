@@ -7,7 +7,7 @@ const HOST_253 = `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".re
 /** One character longer, so the length check alone refuses it. */
 const HOST_254 = `${HOST_253}d`;
 
-/** The sc:// reader of spec 3.2: Spark's documented grammar sc://host[:port][/][;key=value]*, pure and type-only. */
+/** The sc:// reader: Spark's documented grammar sc://host[:port][/][;key=value]*, pure and type-only. */
 describe("parseSparkConnectUri", () => {
   test("reads the host and the port, 15002 when absent, a bare / after the host accepted", () => {
     expect(parseSparkConnectUri("sc://Spark.Example.Internal:15003")).toEqual({

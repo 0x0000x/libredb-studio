@@ -1,6 +1,6 @@
 /**
  * The one refusal of readIpcColumns that no test stream reaches: a stream the pre-check passes and apache-arrow still
- * cannot read. Spec 5.5 holds the pre-check to the streams apache-arrow 21.2.0 reads, so arrow.test.ts has no bytes for
+ * cannot read. Studio holds the pre-check to the streams apache-arrow 21.2.0 reads, so arrow.test.ts has no bytes for
  * this case; here the reader is replaced by one that throws, for this file alone (the runner gives each file its own
  * process). Its failure is refused in Studio's own words, and its message never reaches the sentence; the error itself is kept
  * as the refusal's cause.

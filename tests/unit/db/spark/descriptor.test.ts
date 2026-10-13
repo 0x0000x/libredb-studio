@@ -1,5 +1,5 @@
 /**
- * The committed Spark Connect descriptor is exactly what the generator makes of the vendored v4.2.0 protos (spec 4.4).
+ * The committed Spark Connect descriptor is exactly what the generator makes of the vendored v4.2.0 protos.
  *
  * `src/lib/db/providers/sql/spark/proto/descriptor.ts` is a generated artifact: the gRPC adapter hands it to
  * `@grpc/proto-loader`'s `fromJSON`, so the client reads no `.proto` file at run time. This file regenerates it in
@@ -29,7 +29,7 @@ const ROOT = path.resolve(import.meta.dir, "../../../..");
 const GENERATOR = path.join(ROOT, "scripts", "generate-spark-descriptor.mjs");
 const PROTO_DIR = path.join(ROOT, "src", "lib", "db", "providers", "sql", "spark", "proto");
 
-/** The commit apache/spark's tag v4.2.0 points at (spec 4.4). */
+/** The commit apache/spark's tag v4.2.0 points at. */
 const V4_2_0_COMMIT = "32f7299601108917fb01920a54e084595b7b3bf8";
 const UPSTREAM_PROTO_DIR = "sql/connect/common/src/main/protobuf";
 

@@ -62,7 +62,7 @@ describe("the Spark grammar", () => {
   test("a backslash right before a line feed continues a `--` comment, and one before CR LF does not", () => {
     expect(grammar.lineCommentBackslashContinues).toBe(true);
     // Spark reads the line after the backslash as comment text, so a `;` there cuts no unit and a WHERE there is no
-    // clause; the leading and operative keywords are the first code words after the comment (L08-C4, C66).
+    // clause; the leading and operative keywords are the first code words after the comment.
     expect(units("SELECT 1 -- note \\\n; DROP TABLE t")).toHaveLength(1);
     expect(units("SELECT 1 -- note \\\r\n; DROP TABLE t")).toHaveLength(2);
     expect(limited("SELECT * FROM t -- note \\\nWHERE x = 1")).toBe(
@@ -130,7 +130,7 @@ describe("the Spark grammar", () => {
     expect(limited("SELECT * FROM t LIMIT ALL")).toBe("SELECT * FROM t LIMIT ALL LIMIT 500");
   });
 
-  test("declares the confirmation forms and session keys of spec 7.3", () => {
+  test("declares the confirmation forms and session keys", () => {
     expect(grammar.confirmForms).toEqual([
       ["CREATE", "OR", "REPLACE"],
       ["REPLACE", "TABLE"],

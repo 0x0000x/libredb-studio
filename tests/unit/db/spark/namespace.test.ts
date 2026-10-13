@@ -1,6 +1,6 @@
 /**
- * Spark's spelling of names and namespaces (spec 4.1, 7.4; L08-C17, C21), and the provider's fixed values, whose
- * contract PLAN-00 states and which every other module reads from constants.ts.
+ * Spark's spelling of names and namespaces, and the provider's fixed values, which every other module reads from
+ * constants.ts.
  */
 import { describe, expect, test } from "bun:test";
 import {
@@ -48,7 +48,7 @@ import {
   spellSparkName,
 } from "@/lib/db/providers/sql/spark/namespace";
 
-describe("the fixed values (PLAN-00 Global Constraints)", () => {
+describe("the fixed values", () => {
   test("ports, names, identity and the floor", () => {
     expect(SPARK_DEFAULT_PORT).toBe(15002);
     expect(SPARK_IP_SERVER_NAME).toBe("spark.invalid");
@@ -223,7 +223,7 @@ describe("the field patterns the dialog copies", () => {
       expect(SPARK_TOKEN_PATTERN.test(refused)).toBe(false);
   });
 
-  test("each pattern is spelled exactly as PLAN-00 gives it", () => {
+  test("each pattern is spelled exactly", () => {
     expect(SPARK_CATALOG_PATTERN.source).toBe("^[^.\\p{Cc}]{1,255}$");
     expect(SPARK_CATALOG_PATTERN.flags).toBe("u");
     expect(SPARK_NAMESPACE_PATTERN.source).toBe(

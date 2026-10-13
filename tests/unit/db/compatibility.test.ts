@@ -514,7 +514,7 @@ describe("wire-compatibility registry", () => {
   test("the Apache Spark row of each record (#1736)", () => {
     expect(SHIPPED_DATABASE_TYPES).toContain("spark");
     expect(EXTERNAL_DATABASE_TYPES).toContain("spark");
-    // No engine read-only mode and no file-access posture to read (Spark spec 6.1).
+    // No engine read-only mode and no file-access posture to read (Apache Spark).
     expect(READ_ONLY_ENFORCED.spark).toBe(false);
     expect(READS_FILE_ACCESS_POSTURE.spark).toBe(false);
     // list_connections and inspect_schema; run_read_query refuses it, since the provider has no queryReadOnly.

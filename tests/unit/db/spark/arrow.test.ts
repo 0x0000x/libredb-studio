@@ -453,7 +453,7 @@ describe("withoutSlot: the test helper that leaves one field out", () => {
   });
 });
 
-describe("rowCost: the cost rule of spec 5.6, from offsets, before any value is built", () => {
+describe("rowCost: the decoded cost of a row, from offsets, before any value is built", () => {
   test("8 bytes a value plus the UTF-8 length of a string and the byte length of a binary value", () => {
     const columns = readIpcColumns(
       columnsStream([
@@ -509,7 +509,7 @@ describe("rowCost: the cost rule of spec 5.6, from offsets, before any value is 
     expect([rowCost(columns, 0), rowCost(columns, 1)]).toStrictEqual([8, 8]);
   });
 
-  test("a wide string batch costs its characters, which the budgets of 5.6 read", () => {
+  test("a wide string batch costs its characters, which the result budgets read", () => {
     expect(rowCost(readIpcColumns(stringBatch(2, 100)), 1)).toBe(108);
     expect(rowCost(readIpcColumns(int64Batch(0, 2)), 0)).toBe(8);
   });

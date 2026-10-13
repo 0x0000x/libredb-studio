@@ -1,5 +1,5 @@
 /**
- * The request messages the Apache Spark provider sends (spec 4.5 to 4.9): the fixed identity on every message (D5e),
+ * The request messages the Apache Spark provider sends: the fixed identity on every message,
  * the observed server-side session id once known, SqlCommand.input (field 6), the 4 MiB chunking option and no
  * reattach option on every ExecutePlan, Interrupt by tag, and a release that tombstones the id.
  */

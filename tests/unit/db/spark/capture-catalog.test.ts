@@ -1,6 +1,6 @@
 /**
- * The Spark capture catalog (spec 10.3, D16c): every capture the catalog names exists for every version it lists, in
- * the D16c shape, from its service's pinned image and the server version of its directory; every captured request is
+ * The Spark capture catalog: every capture the catalog names exists for every version it lists, in
+ * the capture shape, from its service's pinned image and the server version of its directory; every captured request is
  * stored as the provider's codec reads it back; no capture holds the token, a client-chosen id or a configured
  * catalog's value, inside its bytes values included; each stays under 2 MB; every statement an entry runs before its
  * capture is captured too, and a FetchErrorDetails capture asks for the errorId of its own failure capture; the session
@@ -94,7 +94,7 @@ function serviceBlock(text: string, name: string): string {
 }
 
 describe("the catalog", () => {
-  test("the session settings are the provider's, in its order (PLAN-00 Global Constraints)", () => {
+  test("the session settings are the provider's, in its order", () => {
     expect(SPARK_CAPTURE_SESSION_CONF).toEqual([
       ["spark.sql.variable.substitute", "false"],
       ["spark.sql.execution.arrow.compression.codec", "none"],
@@ -110,7 +110,7 @@ describe("the catalog", () => {
     ]);
   });
 
-  test("requests are read back with the provider's loader options (PLAN-00 Interfaces, SPARK_LOADER_OPTIONS)", () => {
+  test("requests are read back with the provider's loader options (SPARK_LOADER_OPTIONS)", () => {
     expect(SPARK_CAPTURE_LOADER_OPTIONS).toEqual({
       keepCase: true,
       longs: String,
@@ -188,7 +188,7 @@ describe.each([...VERSIONS])("the captures of %s", (version) => {
     expect(files).toEqual([...names.keys()].map((name) => `${name}.json`).sort());
   });
 
-  test.each([...names.keys()])("%s is a D16c capture from its pinned image", (name) => {
+  test.each([...names.keys()])("%s is a capture from its pinned image", (name) => {
     const { entry, role, sql } = names.get(name) as Written;
     const capture = readSparkCapture(version, name);
     const service = version === "4.1.3" ? "spark-4-1" : entry.service;

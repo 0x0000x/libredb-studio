@@ -102,7 +102,7 @@ describe("variantJson: primitives", () => {
     expect(json(primitive(6, le(BigInt("9007199254740993"), 8)))).toBe("9007199254740993");
     expect(json(primitive(6, le(BigInt("-9223372036854775808"), 8)))).toBe("-9223372036854775808");
     expect(json(primitive(7, float64Bytes(1.5)))).toBe("1.5");
-    // A double is written as JavaScript writes it (spec 5.2), where Java would write 1.0 and 1.0E21.
+    // A double is written as JavaScript writes it, where Java would write 1.0 and 1.0E21.
     expect(json(primitive(7, float64Bytes(1)))).toBe("1");
     expect(json(primitive(7, float64Bytes(1e21)))).toBe("1e+21");
     expect(json(primitive(7, float64Bytes(Number.NaN)))).toBe('"NaN"');
@@ -243,7 +243,7 @@ describe("variantJson: the text bound", () => {
     expect(variantJson(binary, NO_NAMES, 10)).toBe('"AQIDBA=="');
     expect(variantJson(binary, NO_NAMES, 9)).toBeUndefined();
     expect(variantJson(primitive(0), NO_NAMES, 1)).toBeUndefined();
-    // A budget spent to exactly 0 has room for no text: the caller cuts before the row (T6.7, T7.3).
+    // A budget spent to exactly 0 has room for no text: the caller cuts before the row.
     expect(variantJson(primitive(0), NO_NAMES, 0)).toBeUndefined();
   });
 });

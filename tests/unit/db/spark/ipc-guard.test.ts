@@ -169,7 +169,7 @@ describe("checkIpcStream: well-formed streams", () => {
     expect(checkIpcStream(columnsStream([]))).toStrictEqual({ fields: 0, depth: 0, batches: 1 });
   });
 
-  test("reads every type spec 5.2 maps, nested ones included", () => {
+  test("reads every type the value mapper reads, nested ones included", () => {
     const stream = columnsStream([
       { name: "n", kind: "null", length: 2 },
       { name: "b", kind: "bool", values: [true, null] },
@@ -254,7 +254,7 @@ describe("checkIpcStream: refusals before apache-arrow reads a byte", () => {
     refusedWith(() => checkIpcStream(join(handMessage(4, BigInt(0)), END)), unreadable("messageType"));
   });
 
-  test("schema: a dictionary-encoded field, 65 levels, 10,001 fields, and every Arrow type 5.5 does not list", () => {
+  test("schema: a dictionary-encoded field, 65 levels, 10,001 fields, and every Arrow type left unread", () => {
     refusedWith(() => checkIpcStream(dictionaryColumnStream()), unreadable("dictionary"));
     refusedWith(() => checkIpcStream(nestedSchemaStream(65)), unreadable("depth"));
     refusedWith(() => checkIpcStream(wideSchemaStream(10_001)), unreadable("fields"));
@@ -288,12 +288,12 @@ describe("checkIpcStream: refusals before apache-arrow reads a byte", () => {
     }
   });
 
-  test("large string and binary types get their own sentence (spec 5.5)", () => {
+  test("large string and binary types get their own sentence", () => {
     refusedWith(() => checkIpcStream(largeUtf8Stream()), SPARK_ERROR_SENTENCES.largeVarTypes);
     refusedWith(() => checkIpcStream(largeBinaryStream()), SPARK_ERROR_SENTENCES.largeVarTypes);
   });
 
-  test("the captured zstd and lz4 batches are refused naming their codec (spec 5.4)", () => {
+  test("the captured zstd and lz4 batches are refused naming their codec", () => {
     for (const [name, codec] of [
       ["compressed-zstd", "zstd"],
       ["compressed-lz4", "lz4"],

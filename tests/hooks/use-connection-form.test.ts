@@ -1882,7 +1882,7 @@ describe("useConnectionForm", () => {
     expect(result.current.testResult!.message).toContain("Could not parse");
     // The list of formats it names includes every scheme the parser reads, `db2://` among them (#786).
     expect(result.current.testResult!.message).toContain("db2://");
-    // Apache Spark's sc:// address is read by the parser's sc:// branch (spec 3.2), so the sentence names it too.
+    // Apache Spark's sc:// address is read by the parser's sc:// branch, so the sentence names it too.
     expect(result.current.testResult!.message).toContain("sc://");
   });
 

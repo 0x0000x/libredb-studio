@@ -8,7 +8,7 @@ import { CENSUS_CONNECTION } from "../../helpers/census-connection";
  *
  * The opt-out withholds the editor's Format action from an engine whose valid text the shared SQL formatter rewrites.
  * Apache Spark declares it, because both sql-formatter modes corrupt raw strings, backtick names and nested comments
- * (spec 7.7); declared anywhere else it would take Format from an engine where it works. So the declaring set is held
+ * alike; declared anywhere else it would take Format from an engine where it works. So the declaring set is held
  * to `["spark"]`, read from the census connection, and every other provider leaves the field absent.
  */
 describe("supportsSqlFormat across the shipped providers", () => {

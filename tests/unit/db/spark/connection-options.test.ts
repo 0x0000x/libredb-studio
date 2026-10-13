@@ -1,5 +1,5 @@
 /**
- * The Apache Spark connection's fields to the options its channel opens with (spec 3.1, 6.3): every refusal is a
+ * The Apache Spark connection's fields to the options its channel opens with: every refusal is a
  * DatabaseConfigError raised before any socket, none repeats the value it refuses, the token is never sent without
  * TLS to a host that is neither loopback nor tunnelled, an IP identity is checked through spark.invalid, and the
  * tunnel's far end is the identity and the plaintext rule's host.
@@ -84,7 +84,7 @@ describe("defaults and the target", () => {
   });
 });
 
-describe("the token (D5b)", () => {
+describe("the token", () => {
   test("to a remote host without TLS it is refused with the shared sentence naming the token, and no opt-out", () => {
     const error = refusal({ password: TOKEN });
     expect(error.message).toContain("send its token without TLS");
@@ -133,7 +133,7 @@ describe("the token (D5b)", () => {
 });
 
 describe("SPARK_FIELD_SENTENCES", () => {
-  test("holds the seven refusals of spec 3.1 word for word, frozen", () => {
+  test("holds the seven field refusals word for word, frozen", () => {
     expect(Object.isFrozen(SPARK_FIELD_SENTENCES)).toBe(true);
     expect(SPARK_FIELD_SENTENCES).toStrictEqual({
       hostEmpty:
@@ -197,7 +197,7 @@ describe("the SSH tunnel", () => {
   });
 });
 
-describe("every refusal of 3.1, before any socket", () => {
+describe("every field refusal, before any socket", () => {
   test.each([
     ["no host", { host: undefined }, SPARK_FIELD_SENTENCES.hostEmpty],
     ["a null host", { host: null }, SPARK_FIELD_SENTENCES.hostEmpty],

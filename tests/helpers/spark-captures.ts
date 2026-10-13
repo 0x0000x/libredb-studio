@@ -1,6 +1,6 @@
 /**
- * Reads the Spark captures of tests/fixtures/spark/ (spec 10.3, D16c) by version and name, so the unit tests of
- * groups 5, 6 and 8 read them before group 12 writes the replay transport. A capture is decoded JSON: a `$captured`
+ * Reads the Spark captures of tests/fixtures/spark/ by version and name, so the unit tests of
+ * the decoder, session and error modules read them without a replay transport. A capture is decoded JSON: a `$captured`
  * header, an outcome, and the answer with every bytes field as {"$bytes": "<base64>"}. No bun:test and no Bun global.
  */
 import { existsSync, readFileSync } from "node:fs";

@@ -53,7 +53,7 @@ const variantColumn = (name: string, count = 1): SparkIpcColumn => ({
   ],
 });
 
-describe("cellValue: every scalar row of spec 5.2", () => {
+describe("cellValue: every scalar type", () => {
   test("booleans, integers, the int64 safe range and its edges, floats and doubles", () => {
     const rows = mapped([
       { name: "b", kind: "bool", values: [true, false, null] },
@@ -482,7 +482,7 @@ describe("cellValue: refusals and the VARIANT budget", () => {
     const error = refusal(() => cellValue(timeColumn, time.columns[0], 0));
     expect(error.category).toBe("unreadable");
     expect(error.message).toBe(SPARK_ERROR_SENTENCES.cellUnreadable("time", "tm"));
-    // A reversed range never leaves columnsFromDataType (T6.6 refuses it at schema time), so the column is built by hand.
+    // A reversed range never leaves columnsFromDataType (it is refused at schema time), so the column is built by hand.
     const span = readIpcColumns(columnsStream([{ name: "d", kind: "duration-us", values: [BigInt(1)] }]));
     const reversed = {
       name: "span",

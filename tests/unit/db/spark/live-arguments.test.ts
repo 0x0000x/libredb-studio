@@ -1,7 +1,7 @@
 /**
- * The hand-run Spark live tools' inputs (spec 10.5): the variables tests/helpers/spark-live.ts reads, each refused with
+ * The hand-run Spark live tools' inputs: the variables tests/helpers/spark-live.ts reads, each refused with
  * exit code 2 before any socket, naming the variable and never its value; the mask every printed line passes; the
- * compose fixture's four services as 10.5 pins them; and docker/spark/make-certs.sh, which writes the proxy's throwaway
+ * compose fixture's four services as pinned; and docker/spark/make-certs.sh, which writes the proxy's throwaway
  * certificates outside the repository.
  */
 import { afterEach, describe, expect, test } from "bun:test";
@@ -158,7 +158,7 @@ function serviceBlock(text: string, name: string): string {
   return lines.slice(start, end === -1 ? undefined : end).join("\n");
 }
 
-describe("the compose fixture (spec 10.5)", () => {
+describe("the compose fixture", () => {
   const compose = readFileSync(path.join(ROOT, "database-compose.yml"), "utf8");
   const SPARK_42 = "apache/spark:4.2.0@sha256:fc64959c04bd87b0ac686be9aaa9008b69cdb1afc695400528279c8b01f43d89";
   const SPARK_413 = "apache/spark:4.1.3@sha256:bf9d035a7c32a8ca46aa58d6348182ffd7d2dff6409206ecfbb3915ff1fef211";

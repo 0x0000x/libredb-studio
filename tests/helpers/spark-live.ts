@@ -1,6 +1,6 @@
 /**
- * What the hand-run Spark tools share (tests/live/spark-evidence.ts and tests/live/spark-live-check.ts, spec 10.3 and
- * 10.5): the reading of their environment, refused with exit code 2 before any socket, and the mask every line they
+ * What the hand-run Spark tools share (tests/live/spark-evidence.ts and tests/live/spark-live-check.ts): the reading
+ * of their environment, refused with exit code 2 before any socket, and the mask every line they
  * print passes. Every input comes from the environment, never from a file of this repository. A refusal names the
  * variable and never its value, since the value may be a secret. Every target and driver UI must be a loopback
  * address: the tools reach only the compose fixture started on this machine.

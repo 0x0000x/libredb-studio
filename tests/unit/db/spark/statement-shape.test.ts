@@ -1,5 +1,5 @@
 /**
- * The refusals the Spark provider makes before any call (spec 3.5, 4.6 steps 1 and 2, 10.2 row `statement-shape.ts`),
+ * The refusals the Spark provider makes before any call,
  * each read under the Spark grammar row.
  */
 import { describe, expect, test } from "bun:test";
@@ -10,7 +10,7 @@ import {
   uriFormRefusal,
 } from "@/lib/db/providers/sql/spark/statement-shape";
 
-describe("scriptBlockRefusal (D8a)", () => {
+describe("scriptBlockRefusal", () => {
   test("a statement led by BEGIN under the Spark grammar is refused, in any case and after comments", () => {
     for (const sql of [
       "BEGIN SELECT 1; END",
@@ -48,7 +48,7 @@ describe("scriptBlockRefusal (D8a)", () => {
   });
 });
 
-describe("unicodeSpaceRefusal (L08-C75)", () => {
+describe("unicodeSpaceRefusal", () => {
   const SPACES = [
     "\u00A0",
     "\u1680",
@@ -244,13 +244,13 @@ describe("unicodeSpaceRefusal and uriFormRefusal at a bracket", () => {
 });
 
 describe("SPARK_STATEMENT_SENTENCES", () => {
-  test("the bound-parameter sentence is Snowflake's, worded for Spark (spec 3.5)", () => {
+  test("the bound-parameter sentence is Snowflake's, worded for Spark", () => {
     expect(SPARK_STATEMENT_SENTENCES.boundParameters).toBe(
       "Studio sends no bound parameters to Spark; write the value in the statement.",
     );
   });
 
-  test("the record holds the four sentences of spec 3.5 and is frozen", () => {
+  test("the record holds the four pre-call sentences and is frozen", () => {
     expect(SPARK_STATEMENT_SENTENCES).toStrictEqual({
       scriptBlock:
         "Spark SQL scripting blocks (BEGIN ... END) do not run in this version of Studio. Run the statements one at a time; temp views and SET values carry from one to the next within one run.",
