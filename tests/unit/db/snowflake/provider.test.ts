@@ -274,6 +274,21 @@ describe("connect() sends the connect statement, then the role check", () => {
     expect(entry.provider.isConnected()).toBe(false);
   });
 
+  test("a connect() displaced by a second one on the same instance closes its session, and the second connects", async () => {
+    const entry = build();
+    const first = deferredAnswer();
+    entry.transports.answer(SUBMIT, first.answer, RUNNING, ROLE_OK, ROLE_OK);
+    const outcome = outcomeOf(entry.provider.connect());
+    await entry.transports.received(1);
+    await entry.provider.connect();
+    expect(entry.transports.lanesBuilt()).toBe(2);
+    first.resolve(RUNNING);
+    expect(await outcome).toBeInstanceOf(QueryCancelledError);
+    expect(entry.transports.closedLanes).toEqual([0]);
+    expect(entry.provider.isConnected()).toBe(true);
+    expect(entry.provider.hasRunsInFlight()).toBe(false);
+  });
+
   test("a programmatic access token is its own bearer", async () => {
     const entry = build({ authMethod: "pat", password: "pat-value", privateKey: undefined });
     entry.transports.answer(SUBMIT, RUNNING, ROLE_OK);
