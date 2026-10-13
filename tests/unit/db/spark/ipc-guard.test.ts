@@ -9,6 +9,7 @@ import {
   malformedStream,
   nestedSchemaStream,
   patchRecordBatch,
+  type SparkIpcColumn,
   stringBatch,
   wideSchemaStream,
 } from "../../../helpers/spark-ipc";
@@ -93,6 +94,54 @@ function retyped(stream: Uint8Array, index: number, id: number): Uint8Array {
   return out;
 }
 
+/** One map<utf8, utf8> column of one row: a list of structs of a key and a value, as Arrow defines a map. */
+function mapStream(): Uint8Array {
+  return columnsStream([
+    {
+      name: "m",
+      kind: "map",
+      offsets: [0, 1],
+      keys: { name: "key", kind: "utf8", values: ["k"] },
+      items: { name: "value", kind: "utf8", values: ["v"] },
+    },
+  ]);
+}
+
+/**
+ * A schema of no fields, then a hand-built record batch of no rows, nodes or buffers whose variadicBufferCounts holds
+ * `counts`, or which has no such field when `counts` is undefined, as apache-arrow writes a batch without view columns.
+ */
+function variadicStream(counts: readonly bigint[] | undefined): Uint8Array {
+  const size = 96 + 8 * (counts?.length ?? 0);
+  const meta = new DataView(new ArrayBuffer(size));
+  meta.setUint32(0, 16, true); // root table at 16
+  // The message's vtable at 4: version at +16, header_type at +18, header at +4, bodyLength (0) at +8.
+  [12, 24, 16, 18, 4, 8].forEach((value, index) => meta.setUint16(4 + 2 * index, value, true));
+  meta.setInt32(16, 12, true);
+  meta.setUint32(20, 36, true); // the header: the record batch table at 56
+  meta.setInt16(32, 4, true); // metadata version V5
+  meta.setUint8(34, 3); // RecordBatch
+  // The batch's vtable at 40: length (0) at +8, nodes at +4, buffers at +16, no compression, and variadicBufferCounts
+  // at +20 when `counts` is given.
+  [14, 24, 8, 4, 16, 0, counts === undefined ? 0 : 20].forEach((value, index) =>
+    meta.setUint16(40 + 2 * index, value, true),
+  );
+  meta.setInt32(56, 16, true);
+  meta.setUint32(60, 20, true); // nodes: an empty vector at 80
+  meta.setUint32(72, 16, true); // buffers: an empty vector at 88
+  if (counts !== undefined) {
+    meta.setUint32(76, 16, true); // variadicBufferCounts at 92, its values from 96
+    meta.setUint32(92, counts.length, true);
+    counts.forEach((count, index) => meta.setBigInt64(96 + 8 * index, count, true));
+  }
+  const message = new Uint8Array(8 + size);
+  new DataView(message.buffer).setUint32(0, 0xffffffff, true);
+  new DataView(message.buffer).setInt32(4, size, true);
+  message.set(new Uint8Array(meta.buffer), 8);
+  const schema = columnsStream([]);
+  return join(schema.slice(0, tablesOf(schema).batchStart), message, END);
+}
+
 /** Every Arrow IPC stream an ExecutePlan capture holds: relation batches and inline command answers. */
 function capturedStreams(name: "compressed-zstd" | "compressed-lz4"): Uint8Array[] {
   const capture = readSparkCapture("4.2.0", name);
@@ -157,6 +206,16 @@ describe("checkIpcStream: well-formed streams", () => {
     expect(checkIpcStream(nestedSchemaStream(64)).depth).toBe(64);
     expect(checkIpcStream(wideSchemaStream(10_000)).fields).toBe(10_000);
   });
+
+  test("counts the batches: a schema with none, and two whose rows sum to the declared count and to no other", () => {
+    const first = int64Batch(0, 4);
+    const schemaOnly = join(first.slice(0, tablesOf(first).batchStart), END);
+    expect(checkIpcStream(schemaOnly, 0)).toStrictEqual({ fields: 1, depth: 1, batches: 0 });
+    const second = int64Batch(4, 3);
+    const two = join(first.slice(0, -8), second.slice(tablesOf(second).batchStart, -8), END);
+    expect(checkIpcStream(two, 7)).toStrictEqual({ fields: 1, depth: 1, batches: 2 });
+    for (const declared of [0, 3, 4, 6, 8]) refusedWith(() => checkIpcStream(two, declared), unreadable("rowCount"));
+  });
 });
 
 describe("checkIpcStream: refusals before apache-arrow reads a byte", () => {
@@ -182,8 +241,14 @@ describe("checkIpcStream: refusals before apache-arrow reads a byte", () => {
     refusedWith(() => checkIpcStream(join(handMessage(1, BigInt(0)), END)), unreadable("header"));
   });
 
-  test("order and message types: a batch before the schema, a dictionary batch, a tensor, a stream with no schema", () => {
+  test("order and message types: a batch before the schema, a second schema, a dictionary batch, a tensor, no schema", () => {
     refusedWith(() => checkIpcStream(join(handMessage(3, BigInt(0)), END)), unreadable("order"));
+    const ints = int64Batch(0, 4);
+    const { batchStart } = tablesOf(ints);
+    refusedWith(
+      () => checkIpcStream(join(ints.slice(0, batchStart), ints.slice(0, batchStart), ints.slice(batchStart))),
+      unreadable("order"),
+    );
     refusedWith(() => checkIpcStream(END), unreadable("order"));
     refusedWith(() => checkIpcStream(malformedStream("dictionary-batch")), unreadable("messageType"));
     refusedWith(() => checkIpcStream(join(handMessage(4, BigInt(0)), END)), unreadable("messageType"));
@@ -195,6 +260,31 @@ describe("checkIpcStream: refusals before apache-arrow reads a byte", () => {
     refusedWith(() => checkIpcStream(wideSchemaStream(10_001)), unreadable("fields"));
     for (const kind of ["uint8", "float16", "date64", "timestamp-ms"] as const) {
       refusedWith(() => checkIpcStream(columnsStream([{ name: "c", kind, values: [1] }])), unreadable("type"));
+    }
+    // A run-end encoded array and the view types (Schema.fbs: RunEndEncoded 22, BinaryView 23, Utf8View 24, ListView
+    // 25, LargeListView 26), retyped from a string column.
+    for (const id of [22, 23, 24, 25, 26]) {
+      refusedWith(() => checkIpcStream(retyped(stringBatch(1, 2), 0, id)), unreadable("type"));
+    }
+  });
+
+  test("a decimal outside Spark's DecimalType, precision 1 to 38 and a scale up to it, or scaled below -38", () => {
+    const decimal = (precision: number, scale: number) =>
+      columnsStream([{ name: "d", kind: "decimal", precision, scale, values: [BigInt(1)] }]);
+    for (const [precision, scale] of [
+      [0, 0],
+      [39, 0],
+      [38, 39],
+      [10, -39],
+    ]) {
+      refusedWith(() => checkIpcStream(decimal(precision, scale)), unreadable("type"));
+    }
+    for (const [precision, scale] of [
+      [38, 38],
+      [10, -38],
+      [10, 2],
+    ]) {
+      expect(checkIpcStream(decimal(precision, scale))).toStrictEqual({ fields: 1, depth: 1, batches: 1 });
     }
   });
 
@@ -340,6 +430,50 @@ describe("checkIpcStream: the stream apache-arrow 21.2.0 walks is the stream che
       { name: "y", kind: "int32", values: [1] },
     ]);
     refusedWith(() => checkIpcStream(splice(retyped(single, 0, 5), stringThenInt)), unreadable("type"));
+  });
+
+  test("a map whose child is not one struct of a key and a value, which apache-arrow reads but Studio cannot", () => {
+    const entries = (count: number): SparkIpcColumn => ({
+      name: "entries",
+      kind: "struct",
+      length: 1,
+      children: Array.from({ length: count }, (_, index) => ({ name: `f${index}`, kind: "utf8", values: ["k"] })),
+    });
+    const listOf = (child: SparkIpcColumn) => columnsStream([{ name: "m", kind: "list", offsets: [0, 1], child }]);
+    // Lists retyped to maps (Schema.fbs: Map 17): of a string, then of structs of one field and of three.
+    refusedWith(
+      () => checkIpcStream(retyped(listOf({ name: "e", kind: "utf8", values: ["a"] }), 0, 17)),
+      unreadable("type"),
+    );
+    refusedWith(() => checkIpcStream(retyped(listOf(entries(1)), 0, 17)), unreadable("type"));
+    refusedWith(() => checkIpcStream(retyped(listOf(entries(3)), 0, 17)), unreadable("type"));
+    // A struct of two key-value structs retyped to a map: a map keeps one child.
+    const pair = columnsStream([{ name: "m", kind: "struct", length: 1, children: [entries(2), entries(2)] }]);
+    refusedWith(() => checkIpcStream(retyped(pair, 0, 17)), unreadable("type"));
+    expect(checkIpcStream(mapStream())).toStrictEqual({ fields: 4, depth: 3, batches: 1 });
+  });
+
+  test("a map's type table, whose keysSorted apache-arrow reads: absent, or past the end of the header", () => {
+    const mapWith = (patch: (view: DataView, field: number) => void) => {
+      const stream = mapStream();
+      const { view, field } = tablesOf(stream);
+      patch(view, field(0));
+      return stream;
+    };
+    // Field slot 3, the type, cleared in the field's vtable: apache-arrow then calls keysSorted on null.
+    const absent = mapWith((view, field) => view.setUint16(field - view.getInt32(field, true) + 4 + 2 * 3, 0, true));
+    refusedWith(() => checkIpcStream(absent), unreadable("header"));
+    // The type pointed 64 KiB on, past the end of the header and of the stream.
+    const outside = mapWith((view, field) => view.setUint32(slotAt(view, field, 3), 0x10000, true));
+    refusedWith(() => checkIpcStream(outside), unreadable("header"));
+  });
+
+  test("variadic buffer counts, which only a view column has: one apache-arrow cannot convert, and any other", () => {
+    expect(checkIpcStream(variadicStream(undefined))).toStrictEqual({ fields: 0, depth: 0, batches: 1 });
+    expect(checkIpcStream(variadicStream([]))).toStrictEqual({ fields: 0, depth: 0, batches: 1 });
+    // 2^60 is past 2^53: apache-arrow throws converting it to a number.
+    refusedWith(() => checkIpcStream(variadicStream([BigInt(2 ** 60)])), unreadable("nodes"));
+    refusedWith(() => checkIpcStream(variadicStream([BigInt(1)])), unreadable("nodes"));
   });
 
   test("a batch row count below 0 or past 2^31 - 1, even with no columns", () => {

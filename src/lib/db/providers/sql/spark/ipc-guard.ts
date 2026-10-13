@@ -4,11 +4,16 @@
  * decodes a schema recursively with no depth limit and was never fed a malformed stream, so Studio reads the
  * structure first and refuses the result as unreadable when anything is out of bounds. Pure: no I/O, no logger.
  *
- * The check reads each field where apache-arrow 21.2.0 and its flatbuffers reader read it, and holds the stream to the
- * shape apache-arrow walks: no body after a schema message; the children each type keeps (one for a list or map, none
- * for a type without children); buffers where metadata version V4 and later place them, at the 8-byte alignment Arrow
- * gives them; and every string and list apache-arrow decodes (names, time zones, custom metadata) inside the header
- * and stored in it once. The stream apache-arrow reads is then the stream checked here.
+ * The check reads each field where apache-arrow 21.2.0 and its flatbuffers reader read it, a map's type table among
+ * them, and holds the stream to the shape apache-arrow walks: no body after a schema message; the children each type
+ * keeps (one for a list or map, none for a type without children); buffers where metadata version V4 and later place
+ * them, at the 8-byte alignment Arrow gives them, and no variadic buffer counts, which only a view column has; and
+ * every string and list apache-arrow decodes (names, time zones, custom metadata) inside the header and stored in it
+ * once. The stream apache-arrow reads is then the stream checked here.
+ *
+ * Two types are also held to what Studio reads: a map's child to the struct of a key and a value Arrow defines it as,
+ * and a decimal to Spark's DecimalType (precision 1 to 38, a scale no larger than the precision) with a scale no lower
+ * than -38, Studio's own floor where Spark has none, so the text of one value stays within about 80 characters.
  */
 import { SPARK_IPC_METADATA_MAX_BYTES, SPARK_SCHEMA_MAX_DEPTH, SPARK_SCHEMA_MAX_FIELDS } from "./constants";
 import { SPARK_ERROR_SENTENCES, SparkError } from "./errors";
@@ -42,7 +47,7 @@ export const SPARK_IPC_FAILURES = Object.freeze({
 });
 
 type Failure = keyof typeof SPARK_IPC_FAILURES;
-type Layout = "null" | "fixed" | "bool" | "var" | "list" | "struct";
+type Layout = "null" | "fixed" | "bool" | "var" | "list" | "map" | "struct";
 
 interface Column {
   readonly layout: Layout;
@@ -58,7 +63,11 @@ const MESSAGE_RECORD_BATCH = 3;
 /** MetadataVersion V4: apache-arrow reads the buffers of an older batch at other positions (they held a page id). */
 const METADATA_V4 = 3;
 /** Buffers per layout in a record batch (Arrow's buffer listing): Null none, a struct its validity only. */
-const BUFFERS: Readonly<Record<Layout, number>> = { null: 0, fixed: 2, bool: 2, var: 3, list: 2, struct: 1 };
+const BUFFERS: Readonly<Record<Layout, number>> = { null: 0, fixed: 2, bool: 2, var: 3, list: 2, map: 2, struct: 1 };
+/** Spark's DecimalType.MAX_PRECISION. */
+const DECIMAL_MAX_PRECISION = 38;
+/** Studio's floor for a negative decimal scale, which Spark leaves unbounded: the text of a value stays short. */
+const DECIMAL_MIN_SCALE = -38;
 
 function refuse(what: Failure): never {
   throw new SparkError("unreadable", SPARK_ERROR_SENTENCES.unreadable(SPARK_IPC_FAILURES[what]));
@@ -171,7 +180,7 @@ class Header {
   }
 }
 
-/** A field's layout and value width, or a refusal for a type spec 5.5 does not list. */
+/** A field's layout and value width, or a refusal for a type Studio does not read (spec 5.5 lists those it does). */
 function layoutOf(header: Header, field: number): { readonly layout: Layout; readonly width: number } {
   const id = header.scalar(field, 2, 1, 0);
   const type = header.target(field, 3);
@@ -185,8 +194,13 @@ function layoutOf(header: Header, field: number): { readonly layout: Layout; rea
   } else if (id === 3) found = unit(0) === 1 ? fixed(4) : unit(0) === 2 ? fixed(8) : undefined;
   else if (id === 4 || id === 5) found = { layout: "var", width: 0 };
   else if (id === 6) found = { layout: "bool", width: 0 };
-  else if (id === 7) found = header.scalar(type, 2, 4, 128) === 128 ? fixed(16) : undefined;
-  else if (id === 8)
+  else if (id === 7) {
+    const precision = header.scalar(type, 0, 4, 0);
+    const scale = header.scalar(type, 1, 4, 0);
+    const spark =
+      precision >= 1 && precision <= DECIMAL_MAX_PRECISION && scale >= DECIMAL_MIN_SCALE && scale <= precision;
+    found = spark && header.scalar(type, 2, 4, 128) === 128 ? fixed(16) : undefined; // Decimal128
+  } else if (id === 8)
     found = unit(1) === 0 ? fixed(4) : undefined; // Date: DAY only
   else if (id === 9)
     found = unit(1) === 3 && header.scalar(type, 1, 4, 32) === 64 ? fixed(8) : undefined; // Time64 ns
@@ -195,10 +209,12 @@ function layoutOf(header: Header, field: number): { readonly layout: Layout; rea
     found = unit(0) === 2 ? fixed(8) : undefined; // Timestamp us
   } else if (id === 11)
     found = unit(0) === 0 ? fixed(4) : unit(0) === 2 ? fixed(16) : undefined; // YEAR_MONTH, MONTH_DAY_NANO
-  else if (id === 12 || id === 17)
-    found = { layout: "list", width: 0 }; // List, Map
+  else if (id === 12) found = { layout: "list", width: 0 };
   else if (id === 13) found = { layout: "struct", width: 0 };
-  else if (id === 18)
+  else if (id === 17) {
+    header.scalar(type, 0, 1, 0); // keysSorted, which apache-arrow reads, so the map's type table must be in the header
+    found = { layout: "map", width: 0 };
+  } else if (id === 18)
     found = unit(1) === 2 ? fixed(8) : undefined; // Duration us
   else if (id === 19 || id === 20) throw new SparkError("unreadable", SPARK_ERROR_SENTENCES.largeVarTypes);
   if (found === undefined) refuse("type");
@@ -229,8 +245,13 @@ function readSchema(header: Header, message: number): { readonly columns: Column
     const shape = layoutOf(header, field);
     // apache-arrow keeps the first child of a list or map and none of a type without children, so any other count
     // would give every later column nodes and buffers other than the ones checked here.
-    const kept = shape.layout === "list" ? 1 : shape.layout === "struct" ? children.length : 0;
+    const kept =
+      shape.layout === "list" || shape.layout === "map" ? 1 : shape.layout === "struct" ? children.length : 0;
     if (children.length !== kept) refuse("type");
+    // Arrow defines a map's child as a struct of a key and a value, and Studio reads the two from that struct's two
+    // children. apache-arrow reads a map of any child, but a value read from another shape throws or comes out wrong.
+    if (parent !== -1 && columns[parent].layout === "map" && (shape.layout !== "struct" || children.length !== 2))
+      refuse("type");
     const index = columns.length;
     columns.push({ ...shape, parent, children: [] });
     if (parent !== -1) columns[parent].children.push(index);
@@ -279,9 +300,11 @@ function checkBatch(
   if (rows < 0 || rows > INT32_MAX) refuse("length");
   const nodes = header.vector(batch, 1, 16);
   const buffers = header.vector(batch, 2, 16);
-  header.vector(batch, 4, 8); // variadicBufferCounts, which apache-arrow decodes
+  // variadicBufferCounts, which apache-arrow decodes: only a view column has variadic buffers, and Studio reads no view
+  // type, so any count names buffers no column of the schema has.
+  const variadic = header.vector(batch, 4, 8);
   const expected = columns.reduce((sum, column) => sum + BUFFERS[column.layout], 0);
-  if (nodes.length !== columns.length || buffers.length !== expected) refuse("nodes");
+  if (nodes.length !== columns.length || buffers.length !== expected || variadic.length !== 0) refuse("nodes");
   const lengths: number[] = [];
   const nulls: number[] = [];
   for (let index = 0; index < nodes.length; index += 1) {
