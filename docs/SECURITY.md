@@ -732,9 +732,10 @@ These are real, current, and not oversights. Each is a decision with a reason.
   and nothing fires on its own, but an agent run sends the objective you typed, the schema
   inventory, the relations graph and the rows of every read it performs to the model provider you
   configured — and the three remaining AI routes send your statement and a schema context. The
-  agent fences everything database-derived before it reaches a prompt, and one path is **not**
-  fenced: an identifier the model quotes back into its own tool arguments
-  ([`docs/BACKLOG.md`](./BACKLOG.md) B29, open). What each surface sends, and what comes back, with
+  agent fences everything database-derived before it reaches a prompt, assistant messages included:
+  an identifier the model quotes back into its own tool arguments is defanged on the way into the
+  transcript, while reasoning parts pass through because signed thinking blocks cannot be rewritten.
+  What each surface sends, and what comes back, with
   the call site for every claim, is [`docs/AGENT_DATA_FLOW.md`](./AGENT_DATA_FLOW.md). **A key is not
   what decides whether any of this happens — a model configuration that validates is.**
   `validateConfig()` ([`config.ts`](../src/lib/llm/utils/config.ts)) requires `LLM_API_KEY` for the

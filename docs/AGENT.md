@@ -1640,17 +1640,16 @@ against the deciding function in `tests/unit/agent-policy-gates.test.ts`, which 
 policy gates by name — the planning model is handed no tool in any workflow, nothing above risk class 1 can
 execute, a settled step is never executed twice, and every final finding carries a citation.
 
-**One open risk, found by these fixtures and recorded as B29.** An identifier the model quotes back
-into its own tool arguments reaches the transcript **unfenced**, because an assistant message is the
-model's words rather than the server's — and an attacker who can name a table controls the whole
-identifier, so they control the marker *and* arbitrary text after it. This is an open injection path,
-not a bounded one; the surrounding JSON does not make that suffix safe.
+**One risk these fixtures found, now closed.** An identifier the model quotes back into its own tool
+arguments used to reach the transcript unfenced, because an assistant message is the model's words
+rather than the server's. The assistant-message neutraliser defangs it on the way into the transcript
+now, so an attacker who can name a table no longer controls the marker and the text after it.
 
 What is true, and is a different claim: **the server never hands the model the raw marker.** Every
 server-authored path neutralises it first, so a model reading a hostile inventory sees the defanged
-spelling and has nothing to copy. For the raw marker to reach an assistant message the model has to
-reconstruct it. Both halves are asserted — that the fenced inventory carries no raw marker, and that
-the transport does not prevent one if the model produces it anyway.
+spelling and has nothing to copy. The assistant-message neutraliser then defangs string content,
+text parts and tool-call inputs on the way into the transcript, with `toolCallId` and `toolName`
+left byte-identical, so a marker the model reconstructs is defanged there as well.
 
 **Database content is untrusted input.** A table name, a column comment, a row value and an engine
 error message all come from whoever can write to the database, so everything crossing into a prompt
@@ -2634,8 +2633,6 @@ the role's own grants are the whole boundary (A3).
   backend, and only once its claim has gone stale.
 - **B16** — the opt-in `@workflow/world-postgres` backend is not present in the standalone payload,
   so it cannot load in the container image or the npx payload.
-- **B29** — an identifier the model quotes back into its own tool arguments reaches the transcript
-  unfenced; an open injection path, bounded only by the server never handing it the raw marker.
 - **B31** — the Postgres durable backend is reported available without being contacted, so an
   unreachable `WORKFLOW_POSTGRES_URL` still renders a rail whose first Start fails. Reported as a
   carve-out (`ledgerVerified: false`) rather than fixed; a real check is a connection attempt per page

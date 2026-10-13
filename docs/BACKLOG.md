@@ -41,7 +41,7 @@ None of it is a GitHub issue.
 - [Security Phase 3 deferrals](#security-phase-3-deferrals) — K4-K8 · 5
 - [Security scanner triage](#security-scanner-triage) — SCAN1-SCAN2 · 2
 - [Agent M1 deferrals (#328)](#agent-m1-deferrals-328) — A2–A8 · 5
-- [Agent M2 deferrals (#329)](#agent-m2-deferrals-329) — B2-B110 · 46
+- [Agent M2 deferrals (#329)](#agent-m2-deferrals-329) — B2-B110 · 45
 - [Passkey deferrals (#785)](#passkey-deferrals-785) — PK1-PK9 · 8
 - [MCP server deferrals (#246)](#mcp-server-deferrals-246) — MCP1-MCP3 · 3
 
@@ -6646,41 +6646,6 @@ to say which figures were measured and which were estimated.
 
 **Done when:** that distinction is carried in `AgentTableProfile` and the fallback is composed per
 dialect.
-
-### B29. An attacker-supplied identifier the model quotes back reaches a transcript unfenced
-
-Found by the injection fixtures in `tests/evals/injection.test.ts` (#330 T4), which is what those
-fixtures are for.
-
-Every block the SERVER writes is fenced and its markers neutralised, and the suite asserts that by
-counting: a transcript holds exactly as many closing markers as the server opened.
-
-The path this does not cover is the model's own message. An attacker who can name a table can put the
-closing marker in that name. The model reads it correctly fenced, then copies the identifier into its
-own tool ARGUMENTS — which are the model's words, not the server's. The transcript sent back on the next
-turn therefore carries an unfenced marker.
-
-**This is an open injection path, not a bounded residual.** The first version of this entry said
-otherwise, claiming "the text following the marker is the model's own JSON, not attacker content". That
-is false: an attacker who can name a table controls the WHOLE identifier, so they control the marker
-and arbitrary text after it, and JSON quoting does not make that suffix the model's.
-
-What is true is narrower, and it is what makes this hard to reach rather than harmless: **the server
-never hands the model the raw marker.** Every server-authored path neutralises it first, so a model
-reading a hostile inventory sees the defanged spelling. For the raw marker to appear in an assistant
-message the model has to reconstruct it. The fixtures assert both halves — that the fenced inventory
-contains no raw marker, and that the transport does not prevent one if the model produces it anyway
-(the scripted model supplies it directly, which is stronger than what the fenced paths give a real one).
-
-The server's own blocks do stay balanced, which bounds what can be re-attributed to the SERVER, and
-nothing more.
-
-Fixing it means rewriting the messages the provider itself returned (`response.messages`), which is the
-transcript that provider will accept back — the same reason `investigation.ts` filters those messages to
-the assistant turn rather than rebuilding them.
-
-**Done when:** a tool call's arguments are neutralised on the way into the transcript without
-desynchronising the `tool_call_id` pairing the endpoint validates.
 
 ### B31. The Postgres durable backend is reported available without being contacted
 

@@ -54,12 +54,34 @@ const INSTRUCTION =
  * metacharacters, so they are interpolated as they are — and being pure literal
  * alternation, the pattern cannot backtrack.
  */
-function neutralise(text: string): string {
+export function neutraliseUntrustedMarkers(text: string): string {
   const pattern = new RegExp(`${UNTRUSTED_CONTENT_BEGIN}|${UNTRUSTED_CONTENT_END}`, "gi");
   // The inner words are kept in their original spelling so the reader still sees
   // what was there; stripping the three angle brackets at each end is what stops
   // it being a marker.
   return text.replace(pattern, (match) => `(neutralised marker: ${match.slice(3, -3)})`);
+}
+
+/**
+ * A defanged value, structure preserved.
+ *
+ * Tool call arguments are JSON values: string, number, boolean, `null`, array or
+ * object. This walks a value so a marker hidden inside a nested object or an array
+ * element is defanged too, not only one sitting at the top of a string. It is a
+ * structure-preserving recursive copy, not a `JSON.stringify` + `parse` round trip,
+ * because that path loses number types, reorders keys and drops `undefined` values.
+ * `toolCallId` and `toolName` never pass through here; keeping those byte-identical
+ * is the call site's invariant, not this function's.
+ */
+export function neutraliseToolInput(value: unknown): unknown {
+  if (typeof value === "string") return neutraliseUntrustedMarkers(value);
+  if (Array.isArray(value)) return value.map(neutraliseToolInput);
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) out[key] = neutraliseToolInput(entry);
+    return out;
+  }
+  return value;
 }
 
 /**
@@ -117,8 +139,8 @@ function escapeInIdentifier(character: string): string {
  * header would break the envelope just as effectively as one in the body.
  */
 export function fenceUntrustedContent(content: string, source: UntrustedContentSource): string {
-  const header = neutralise(
+  const header = neutraliseUntrustedMarkers(
     `[UNTRUSTED DATABASE CONTENT — ${source.label}; operation ${source.operationId}; reference ${source.reference}]`,
   );
-  return `${header}\n${INSTRUCTION}\n${UNTRUSTED_CONTENT_BEGIN}\n${neutralise(content)}\n${UNTRUSTED_CONTENT_END}`;
+  return `${header}\n${INSTRUCTION}\n${UNTRUSTED_CONTENT_BEGIN}\n${neutraliseUntrustedMarkers(content)}\n${UNTRUSTED_CONTENT_END}`;
 }

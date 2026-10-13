@@ -46,7 +46,7 @@
 import { createHash } from "node:crypto";
 import { logger } from "@/lib/logger";
 import { isRetryableError, isToolCallParseError } from "@/lib/llm/types";
-import { type ModelMessage, Output, type ToolSet, streamText, tool } from "ai";
+import { type AssistantModelMessage, type ModelMessage, Output, type ToolSet, streamText, tool } from "ai";
 import { z } from "zod";
 import {
   type AgentContextCapture,
@@ -142,7 +142,13 @@ import {
   type AgentRunTerminalStatus,
   type AgentRunWorkflowType,
 } from "./types";
-import { UNTRUSTED_CONTENT_BEGIN, UNTRUSTED_CONTENT_END, fenceUntrustedContent } from "./untrusted-content";
+import {
+  UNTRUSTED_CONTENT_BEGIN,
+  UNTRUSTED_CONTENT_END,
+  fenceUntrustedContent,
+  neutraliseToolInput,
+  neutraliseUntrustedMarkers,
+} from "./untrusted-content";
 import type { ProviderCapabilities } from "@/lib/db/types";
 import { editorLanguageForTabType, resolveTabType } from "@/lib/editor/tab-language";
 import type { DatabaseType } from "@/lib/types";
@@ -2567,8 +2573,47 @@ async function takeTurn(
     text,
     toolCalls,
     aborted: false,
-    assistantMessages: response.messages.filter((message) => message.role === "assistant"),
+    assistantMessages: neutraliseAssistantMessages(
+      response.messages.filter((message): message is AssistantModelMessage => message.role === "assistant"),
+    ),
   };
+}
+
+/**
+ * The assistant messages as they enter the transcript, with every marker defanged (B29).
+ *
+ * The SDK's own assistant messages carry the model's tool-call arguments verbatim, and
+ * those arguments are the model's words, not the server's. An attacker who can name a
+ * table controls the whole identifier, so a hostile name the model quotes back into its
+ * own arguments would enter the transcript unfenced. Text parts are defanged for the
+ * same reason: a model can quote a hostile identifier in prose as well as in tool
+ * arguments, and leaving the text untouched would leave the same injection vector open
+ * through a different part type. This copy is what gets pushed to the transcript;
+ * `toolCallId` and `toolName` are deliberately NOT touched, because the endpoint pairs a
+ * `tool` result with the assistant turn's `tool_call_id` and a mismatch would wedge every
+ * later turn of the run.
+ *
+ * Immutable: every branch returns a new object, so the SDK's own `response.messages`
+ * objects are never mutated. Reasoning parts pass through untouched, because signed
+ * thinking blocks cannot be rewritten.
+ */
+export function neutraliseAssistantMessages(messages: readonly AssistantModelMessage[]): AssistantModelMessage[] {
+  return messages.map((message) => {
+    if (typeof message.content === "string") {
+      return { ...message, content: neutraliseUntrustedMarkers(message.content) };
+    }
+    const content = (message.content ?? []).map((part) => {
+      if (part.type === "text") {
+        // Copy-on-write is the point here: the SDK's own part object is never mutated.
+        return Object.assign({}, part, { text: neutraliseUntrustedMarkers(part.text) });
+      }
+      if (part.type === "tool-call") {
+        return Object.assign({}, part, { input: neutraliseToolInput(part.input) });
+      }
+      return part;
+    });
+    return { ...message, content };
+  });
 }
 
 function toolResultMessage(call: { toolCallId: string; toolName: string }, value: string): ModelMessage {

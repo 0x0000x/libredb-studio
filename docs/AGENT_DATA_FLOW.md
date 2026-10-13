@@ -23,19 +23,30 @@ if it only lists the good news.
 
 ## Contents
 
-- [The short version](#the-short-version)
-- [Where a request goes](#where-a-request-goes)
-- [When nothing leaves at all](#when-nothing-leaves-at-all)
-- [The classification, before any run](#the-classification-before-any-run)
-- [One agent run, message by message](#one-agent-run-message-by-message)
-- [What comes back, and what is done with it](#what-comes-back-and-what-is-done-with-it)
-- [What #352 added to the boundary](#what-352-added-to-the-boundary)
-- [The fence, and what it does not do](#the-fence-and-what-it-does-not-do)
-- [B29: the open unfenced path](#b29-the-open-unfenced-path)
-- [How much can leave](#how-much-can-leave)
-- [What never leaves](#what-never-leaves)
-- [The other AI surfaces](#the-other-ai-surfaces)
-- [Where prompts do not go](#where-prompts-do-not-go)
+- [What leaves the machine](#what-leaves-the-machine)
+  - [Contents](#contents)
+  - [The short version](#the-short-version)
+  - [Where a request goes](#where-a-request-goes)
+  - [When nothing leaves at all](#when-nothing-leaves-at-all)
+  - [The classification, before any run](#the-classification-before-any-run)
+  - [One agent run, message by message](#one-agent-run-message-by-message)
+    - [1. The system instructions — server text only](#1-the-system-instructions--server-text-only)
+    - [2. Your objective, verbatim](#2-your-objective-verbatim)
+    - [2a. The conversation, when a run continues one — fenced](#2a-the-conversation-when-a-run-continues-one--fenced)
+    - [3. The schema inventory — identifiers and types, fenced](#3-the-schema-inventory--identifiers-and-types-fenced)
+    - [4. The relations block — identifiers only, quoted and escaped](#4-the-relations-block--identifiers-only-quoted-and-escaped)
+    - [5. Each tool result](#5-each-tool-result)
+    - [5a. The operations workflow: what a curated reading sends](#5a-the-operations-workflow-what-a-curated-reading-sends)
+    - [6. On a resumed run, what the ledger already holds](#6-on-a-resumed-run-what-the-ledger-already-holds)
+  - [What comes back, and what is done with it](#what-comes-back-and-what-is-done-with-it)
+  - [What #352 added to the boundary](#what-352-added-to-the-boundary)
+  - [The fence, and what it does not do](#the-fence-and-what-it-does-not-do)
+  - [B29: the closed path, assistant messages are defanged on the way into the transcript](#b29-the-closed-path-assistant-messages-are-defanged-on-the-way-into-the-transcript)
+  - [How much can leave](#how-much-can-leave)
+  - [What never leaves](#what-never-leaves)
+  - [Where prompts do not go](#where-prompts-do-not-go)
+  - [The other AI surfaces](#the-other-ai-surfaces)
+  - [Verifying this page yourself](#verifying-this-page-yourself)
 
 ---
 
@@ -422,7 +433,7 @@ own assistant messages (`investigation.ts:625-631`).
 
 | What the model returns | What is done to it first | Where it is displayed |
 | --- | --- | --- |
-| **Its assistant messages** — its prose and the tool calls it made, together | **Nothing.** They are appended to the transcript verbatim (`investigation.ts:792`), because rewriting an assistant turn would desynchronise `tool_call_id`, so they are **not fenced** and are resent on every later turn. This is the mechanism of B29 below | Not displayed as such. Only the parts below reach the rail |
+| **Its assistant messages** — its prose and the tool calls it made, together | `neutraliseAssistantMessages` rewrites a copy on the way into the transcript: string content, text parts and tool-call inputs are defanged, `toolCallId` and `toolName` stay byte-identical, and reasoning parts pass through because signed thinking blocks cannot be rewritten | Not displayed as such. Only the parts below reach the rail |
 | **A tool call's arguments** | Parsed against that tool's own schema first (`parseToolInput`, `tools.ts:987`). A shape the schema rejects is answered with server text and reaches no database | — |
 | **The SQL of a read** (`run_read_query`) | After the schema, it goes to the database through the agent's own audited pipeline, under the read-only execution profile (`runReadQueryTool`, `tools.ts:1051-1058` → `executeAgentOperation`, `tools.ts:809`). It is recorded verbatim as a `statement-drafted` entry with the model's `rationale` (`investigation.ts:859`) | The rail: the SQL as a quoted block, the rationale as the entry's detail (`timeline.ts:378-385`, rendered at `AgentRail.tsx:693,699-703`). **Apply to editor** puts the text in your editor and runs nothing (`AgentRail.tsx:176-186`) |
 | **A recommended statement and rationale** (`recommend_change`) | The statement is checked against the change it claims to be, and every citation against this run's own ledger; either failing refuses it (`tools.ts:1402-1407`). **Nothing executes it** — the tool reaches no database | The rail: statement quoted, rationale as detail, with the application's own *"Not applied: nothing here runs this statement."* appended to it (`timeline.ts:421-430`) |
@@ -512,32 +523,32 @@ Two limits stated as plainly as the property:
 
 ---
 
-## B29: the open unfenced path
+## B29: the closed path, assistant messages are defanged on the way into the transcript
 
-**An identifier the model quotes back into its own tool arguments reaches the transcript unfenced.**
-This is open, not closed, and it is not a bounded residual.
+**An identifier the model quotes back into its own tool arguments no longer reaches the transcript
+unfenced.** `neutraliseAssistantMessages` in `src/lib/agent/investigation.ts` defangs every marker in
+an assistant message's text and tool-call arguments before the message is pushed to the transcript,
+while leaving `tool_call_id` and `toolName` byte-identical.
 
-The mechanism: after each turn the loop appends the SDK's own assistant messages verbatim
-(`investigation.ts:625-631`) — the model's words, including the arguments of the tool calls it made.
-Those arguments are not passed through the fence, because an assistant message is the model's turn
-rather than the server's, and rewriting it would desynchronise `tool_call_id`. An attacker who can
-name a table controls the whole identifier, so they control the marker *and* arbitrary text after
-it; the surrounding JSON does not make that suffix safe.
+The mechanism that used to be open: after each turn the loop appended the SDK's own assistant
+messages verbatim — the model's words, including the arguments of the tool calls it made. An
+attacker who can name a table controls the whole identifier, so they controlled the marker *and*
+arbitrary text after it; the surrounding JSON did not make that suffix safe.
 
-What **is** true, and is a different claim: **the server never hands the model the raw marker.**
-Every server-authored path neutralises it first, so a model reading a hostile inventory sees the
-defanged spelling and has nothing to copy — to get the raw marker into an assistant message the
-model has to reconstruct it. Both halves are asserted in `tests/evals/injection.test.ts`: that the
-fenced inventory carries no raw marker, and that the transport does not prevent one if the model
-produces it anyway.
+Two halves are still asserted separately, as they always were. **The server never hands the model
+the raw marker**: every server-authored path neutralises it first, so a model reading a hostile
+inventory sees the defanged spelling and has nothing to copy. And now the transport half holds too:
+even a model that reconstructs the marker is defanged when its assistant message enters the
+transcript — asserted in `tests/evals/injection.test.ts` with a scripted model that supplies the raw
+identifier directly, which is stronger than what the fenced paths give a real one.
 
-The other half of the boundary is what stops that mattering more than it does: obeying injected text
-changes nothing about what the run may **do**. A write is refused by the statement guard before the
-database, a tool the run was never offered does not exist for it, and a claim citing something the
-run never read cannot be composed — each asserted against the deciding function in
+The other half of the boundary is unchanged: obeying injected text changes nothing about what the
+run may **do**. A write is refused by the statement guard before the database, a tool the run was
+never offered does not exist for it, and a claim citing something the run never read cannot be
+composed — each asserted against the deciding function in
 `tests/unit/agent-policy-gates.test.ts`.
 
-Full entry: `docs/BACKLOG.md` B29.
+The entry was deleted from `docs/BACKLOG.md` when the fix landed.
 
 ---
 
