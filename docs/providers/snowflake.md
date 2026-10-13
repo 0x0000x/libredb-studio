@@ -214,30 +214,30 @@ The role is the boundary, not Studio: grant it no MODIFY, OPERATE, MANAGE WAREHO
 Every name below is a placeholder:
 
 ```sql
--- As an administrator. Placeholders: studio_ro, studio_wh, analytics, studio_svc.
+-- As an administrator. Placeholders: STUDIO_RO, STUDIO_WH, ANALYTICS, STUDIO_SVC.
 -- CREDIT_QUOTA, the trigger percentages and STATEMENT_TIMEOUT_IN_SECONDS are starting values.
-CREATE WAREHOUSE studio_wh WAREHOUSE_SIZE = XSMALL GENERATION = '1' ENABLE_QUERY_ACCELERATION = FALSE
+CREATE WAREHOUSE STUDIO_WH WAREHOUSE_SIZE = XSMALL GENERATION = '1' ENABLE_QUERY_ACCELERATION = FALSE
   AUTO_SUSPEND = 60 AUTO_RESUME = TRUE INITIALLY_SUSPENDED = TRUE STATEMENT_TIMEOUT_IN_SECONDS = 600;
-CREATE RESOURCE MONITOR studio_rm WITH CREDIT_QUOTA = 10
+CREATE RESOURCE MONITOR STUDIO_RM WITH CREDIT_QUOTA = 10
   TRIGGERS ON 80 PERCENT DO NOTIFY ON 100 PERCENT DO SUSPEND_IMMEDIATE;
-ALTER WAREHOUSE studio_wh SET RESOURCE_MONITOR = studio_rm;
-CREATE ROLE studio_ro;
-GRANT USAGE ON WAREHOUSE studio_wh TO ROLE studio_ro;
-GRANT USAGE ON DATABASE analytics TO ROLE studio_ro;
-GRANT USAGE ON ALL SCHEMAS IN DATABASE analytics TO ROLE studio_ro;
-GRANT USAGE ON FUTURE SCHEMAS IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON ALL TABLES IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON FUTURE TABLES IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON ALL VIEWS IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON FUTURE VIEWS IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON ALL MATERIALIZED VIEWS IN DATABASE analytics TO ROLE studio_ro;
-GRANT SELECT ON FUTURE MATERIALIZED VIEWS IN DATABASE analytics TO ROLE studio_ro;
--- Optional, for the monitoring panels: GRANT MONITOR ON WAREHOUSE studio_wh TO ROLE studio_ro;
-CREATE USER studio_svc TYPE = SERVICE DEFAULT_ROLE = studio_ro DEFAULT_WAREHOUSE = studio_wh
+ALTER WAREHOUSE STUDIO_WH SET RESOURCE_MONITOR = STUDIO_RM;
+CREATE ROLE STUDIO_RO;
+GRANT USAGE ON WAREHOUSE STUDIO_WH TO ROLE STUDIO_RO;
+GRANT USAGE ON DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT USAGE ON ALL SCHEMAS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT USAGE ON FUTURE SCHEMAS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON ALL TABLES IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON FUTURE TABLES IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON ALL VIEWS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON FUTURE VIEWS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON ALL MATERIALIZED VIEWS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+GRANT SELECT ON FUTURE MATERIALIZED VIEWS IN DATABASE ANALYTICS TO ROLE STUDIO_RO;
+-- Optional, for the monitoring panels: GRANT MONITOR ON WAREHOUSE STUDIO_WH TO ROLE STUDIO_RO;
+CREATE USER STUDIO_SVC TYPE = SERVICE DEFAULT_ROLE = STUDIO_RO DEFAULT_WAREHOUSE = STUDIO_WH
   DEFAULT_SECONDARY_ROLES = ();
-GRANT ROLE studio_ro TO USER studio_svc;
+GRANT ROLE STUDIO_RO TO USER STUDIO_SVC;
 -- The key Studio's key-pair refusal names; <fp8> is the first 8 hex characters of the key's SHA-256 (section 2.3):
-ALTER USER studio_svc ADD KEY PAIR libredb_studio_<fp8> PUBLIC_KEY = '<public key body>';
+ALTER USER STUDIO_SVC ADD KEY PAIR libredb_studio_<fp8> PUBLIC_KEY = '<public key body>';
 ```
 
 - Assigning a key needs MODIFY PROGRAMMATIC AUTHENTICATION METHODS on the user, or OWNERSHIP, usually an administrator; a user's own self-service form was refused with 003001 by a message naming that privilege on the user.
@@ -249,7 +249,9 @@ ALTER USER studio_svc ADD KEY PAIR libredb_studio_<fp8> PUBLIC_KEY = '<public ke
 
 ## 4. Sessions, transactions and blocks
 
-Every request is its own Snowflake session context: Studio sends Database, Schema, Warehouse and Role on every request exactly as configured, and leaves a field out only when the connection leaves it empty, so Snowflake falls back to the user's default.
+Every request is its own Snowflake session context: Studio sends Database, Schema, Warehouse and Role on every request, and leaves a field out only when the connection leaves it empty, so Snowflake falls back to the user's default.
+Each of the four is read as a name in Snowflake SQL: an unquoted name is upper-cased, and double quotes keep its case, so `studio_ro` is sent as `STUDIO_RO` and `"Mixed Case"` as `Mixed Case`.
+The SQL API reads the four fields as exact names: a role it cannot resolve is refused, while a database, schema or warehouse name Snowflake cannot resolve leaves that context unset without an error: `CURRENT_DATABASE()`, `CURRENT_SCHEMA()` or `CURRENT_WAREHOUSE()` then answers NULL.
 The SQL API does not run `USE` (it answers code 391911, `Command not supported by SQL API: USE`), so a statement whose operative keyword is `USE` is refused before anything is sent:
 
 `Snowflake's SQL API does not run USE. Set Database, Schema, Warehouse or Role on the connection instead, or use fully qualified names such as database.schema.table. Nothing was sent.`

@@ -106,7 +106,8 @@ describe("the effective role", () => {
       const harness = setup({ context: { ...CONTEXT, role: configured } });
       harness.transports.answer(SUBMIT, roleAnswer(answered));
       expect(await harness.statements.checkRole()).toEqual([]);
-      expect(bodyOf(submits(harness)[0]).role).toBe(configured);
+      // The body carries the role as Snowflake resolves it, the same fold the check compares with.
+      expect(bodyOf(submits(harness)[0]).role).toBe(answered);
     });
   }
 

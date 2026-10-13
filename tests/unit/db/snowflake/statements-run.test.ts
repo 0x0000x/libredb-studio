@@ -98,7 +98,7 @@ describe("constants", () => {
 });
 
 describe("the request body", () => {
-  test("every body carries the parameters, the tag and the context byte for byte, and never nullable", async () => {
+  test("every body carries the parameters, the tag and the context as Snowflake resolves each name, never nullable", async () => {
     const context = { database: "Sales", schema: "public", warehouse: '"Studio WH"', role: '"Mixed Role"' };
     const harness = setup({ context });
     harness.transports.answer(SUBMIT, one(), one());
@@ -109,10 +109,10 @@ describe("the request body", () => {
     expect(bodyOf(sent[0])).toEqual({
       statement: "SHOW TABLES",
       timeout: 60,
-      database: "Sales",
-      schema: "public",
-      warehouse: '"Studio WH"',
-      role: '"Mixed Role"',
+      database: "SALES",
+      schema: "PUBLIC",
+      warehouse: "Studio WH",
+      role: "Mixed Role",
       parameters: {
         multi_statement_count: "1",
         query_tag: "libredb-studio:editor",
@@ -121,7 +121,7 @@ describe("the request body", () => {
         timezone: "UTC",
       },
     });
-    expect(sent[0].body).toContain('"role":"\\"Mixed Role\\""');
+    expect(sent[0].body).toContain('"role":"Mixed Role"');
     expect(bodyOf(sent[1])).toMatchObject({
       statement: "SHOW DATABASES",
       timeout: 30,
@@ -133,6 +133,18 @@ describe("the request body", () => {
     }
     expect(new URL(sent[0].url).searchParams.get("async")).toBe("true");
     expect(sent[0].maxResponseBytes).toBe(SNOWFLAKE_CONTROL_ANSWER_MAX_BYTES);
+  });
+
+  test("a bare role is sent upper-cased, since the SQL API reads the body's names exactly", async () => {
+    const harness = setup({ context: { database: "sales", schema: "public", warehouse: "studio_wh", role: "studio_ro" } });
+    harness.transports.answer(SUBMIT, one());
+    await harness.statements.runSurface("SHOW SCHEMAS", SNOWFLAKE_QUERY_TAGS.tree);
+    expect(bodyOf(submits(harness)[0])).toMatchObject({
+      database: "SALES",
+      schema: "PUBLIC",
+      warehouse: "STUDIO_WH",
+      role: "STUDIO_RO",
+    });
   });
 
   test("an empty context field is left out, and so is an absent one", async () => {

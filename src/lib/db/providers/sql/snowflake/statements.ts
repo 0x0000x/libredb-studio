@@ -359,16 +359,20 @@ export function createSnowflakeStatements(options: SnowflakeStatementsOptions): 
     submitAccepted,
   });
 
+  /**
+   * The SQL API reads the body's four names exactly (measured on the trial: a lower-case role is refused, a lower-case
+   * database, schema or warehouse leaves that context unset), so each is sent as Snowflake SQL resolves it.
+   */
   function requestBody(run: Run): string {
     const { database, schema, warehouse, role } = context;
     const present = (value: string | undefined): value is string => value !== undefined && value !== "";
     return JSON.stringify({
       statement: run.sql,
       timeout: run.timeoutS,
-      ...(present(database) ? { database } : {}),
-      ...(present(schema) ? { schema } : {}),
-      ...(present(warehouse) ? { warehouse } : {}),
-      role,
+      ...(present(database) ? { database: foldIdentifier(database) } : {}),
+      ...(present(schema) ? { schema: foldIdentifier(schema) } : {}),
+      ...(present(warehouse) ? { warehouse: foldIdentifier(warehouse) } : {}),
+      role: foldIdentifier(role),
       parameters: {
         multi_statement_count: "1",
         query_tag: run.tag,
