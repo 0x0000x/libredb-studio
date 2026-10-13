@@ -5213,7 +5213,7 @@ Found 2026-10-12 while designing the Snowflake provider.
 
 ### U129. Plan mode's walk enumerates containers without regard to scope
 
-Plan mode grounds through the provider walk scoped to the session-default container, and a connection with no default walks the first container only, inside the walk's 10 s timer (`src/lib/agent/tools.ts`).
+Plan mode grounds through the provider walk scoped to the session-default container; on Snowflake a connection with a Database and no Schema walks that database's schemas instead, INFORMATION_SCHEMA left out, and one with neither walks nothing, all inside the walk's 10 s timer (`src/lib/agent/tools.ts`).
 
 Found 2026-10-12 while designing the Snowflake provider.
 
