@@ -3,18 +3,18 @@
  * connection's metadata and the 32 MiB stream bound, with every response's server-side id observed on the run's
  * session; the inline answer, an empty one included, and every column under a unique name as an own property; the
  * deadline as a QueryError after an Interrupt that reaches the fake after the deadline passed, one that passes while
- * the session is in setup ending the run as not sent, or with the sentence its caller gave, and one that passes
- * between the steps sending the second step nothing; Stop before and after the first ExecutePlan, which aborts the run's stream without waiting for the
- * Interrupt's answer while the Interrupt still leaves first on the shared connection under Node, and answers within
- * one control window of the Stop; Stop on a run already refused at its deadline, which answers from that outcome;
- * cancelAll, which stops every run as Stop does and refuses, before it asks for its session, every run that starts
- * once it began, a provider's metadata read that waited through a disconnect for a new metadata session's setup among
- * them; a Spark error with one FetchErrorDetails before the statement
- * session's release, and a fetch that fails leaving the ErrorInfo message as it is; every exit before Spark ended
- * the stream, each refusal of a result and a server-side id that changed on an open stream among them, sending one
- * Interrupt by the run's tag, none when Spark ended it (a Spark error, a closed or changed session, a session
- * released under the run), and an Interrupt that fails changing nothing; the heartbeat; no reattach option; a SET
- * that changes only its own scope; and concurrent scopes that share no session, heartbeat hold, tag or Interrupt.
+ * the session is in setup ending the run as not sent, or with the sentence its caller gave, and one that passes between
+ * the steps sending the second step nothing; Stop before and after the first ExecutePlan, which aborts the run's stream
+ * without waiting for the Interrupt's answer while the Interrupt still leaves first on the shared connection under
+ * Node, and answers within one control window of the Stop; Stop on a run already refused at its deadline, which answers
+ * from that outcome; cancelAll, which stops every run as Stop does and refuses, before it asks for its session, every
+ * run that starts once it began; through the provider, a metadata read that waited through a disconnect for a new
+ * metadata session's setup, refused as cancelled with no statement sent; a Spark error with one FetchErrorDetails
+ * before the statement session's release, and a fetch that fails leaving the ErrorInfo message as it is; every exit
+ * before Spark ended the stream, each refusal of a result and a server-side id that changed on an open stream among
+ * them, sending one Interrupt by the run's tag, none when Spark ended it (a Spark error, a closed or changed session, a
+ * session released under the run), and an Interrupt that fails changing nothing; the heartbeat; no reattach option; a
+ * SET that changes only its own scope; and concurrent scopes that share no session, heartbeat hold, tag or Interrupt.
  * A run stays in flight, and Stop reaches it, until it settled and its Interrupt, if it sent one, answered or failed,
  * in either order.
  */
