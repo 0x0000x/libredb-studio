@@ -39,7 +39,7 @@ const CLIENT_TEST = "tests/unit/db/spark/grpc-client.test.ts";
 const TLS_HANDSHAKE_TEST = "tests/unit/db/spark/tls-handshake.test.ts";
 const SOURCE_FILE = /\.(c|m)?(t|j)sx?$/;
 
-// The named lists. Each grows in the task that adds its files (T4.2, T5.1, T5.5, T5.7, T12.2).
+// The named lists. Each grows in the task that adds its files (T4.2, T5.1, T5.5, T5.7, T9.1, T12.2).
 const GRPC_IMPORTERS: readonly string[] = [HARNESS, FAKE, CLIENT_TEST, TLS_HANDSHAKE_TEST];
 const PROTO_LOADER_IMPORTERS: readonly string[] = [ADAPTER, DESCRIPTOR, GENERATOR, DESCRIPTOR_TEST, HARNESS];
 const DESCRIPTOR_IMPORTERS: readonly string[] = [ADAPTER];
@@ -51,7 +51,7 @@ const TRANSPORT_IMPORTERS: readonly string[] = [`${SPARK}/connection-options.ts`
 const OUTSIDE_IMPORTERS_ALLOWED: readonly string[] = ["src/lib/db/factory.ts", "src/lib/connection-string-parser.ts"];
 /** The one module under src/lib/db/providers/ outside the directory a Spark file may import (spec 8.10). */
 const SQL_BASE = "src/lib/db/providers/sql/sql-base";
-/** Lane B's pure modules: no I/O, no logger, no transport and no console (spec 4.1). */
+/** The pure modules: no I/O, no logger, no transport and no console (spec 4.1, 10.2). */
 const PURE_MODULES: readonly string[] = [
   `${SPARK}/constants.ts`,
   `${SPARK}/namespace.ts`,
@@ -59,6 +59,7 @@ const PURE_MODULES: readonly string[] = [
   `${SPARK}/errors.ts`,
   `${SPARK}/version.ts`,
   `${SPARK}/requests.ts`,
+  `${SPARK}/statement-shape.ts`,
 ];
 const IO_MODULE =
   /^(?:node:)?(?:fs|fs\/promises|net|tls|http|http2|https|dns|dgram|child_process|worker_threads)$|^@grpc\/|^@\/lib\/logger(?:\/|$)/;

@@ -165,6 +165,9 @@ describe("uriFormRefusal (the URI form of IDENTIFIER, SqlBaseLexer.g4 v4.2.0:655
       "ADD JAR hdfs://x/y-z.jar",
       "SELECT a://b/c*2",
       "SELECT a://b/c'x'",
+      // Spark reads the address hdfs://x/y, then `:`, `/`, `/`, `z` and the comment `--w`, which Studio reads as a
+      // comment too. The walk steps over the whole address, so it tries none that starts inside it, such as y://z--w.
+      "SELECT hdfs://x/y://z--w",
     ]) {
       expect(uriFormRefusal(sql)).toBeUndefined();
     }
@@ -204,6 +207,38 @@ describe("uriFormRefusal (the URI form of IDENTIFIER, SqlBaseLexer.g4 v4.2.0:655
       const elapsed = performance.now() - started;
       expect(refusal).toBeUndefined();
       expect(elapsed, `${label} took ${elapsed.toFixed(1)}ms`).toBeLessThan(BOUND_MS);
+    }
+  });
+});
+
+describe("unicodeSpaceRefusal and uriFormRefusal at a bracket", () => {
+  /**
+   * A bounded-time guard for both walks, on the shape of the one above: a walk that asked the span reader about each
+   * `[` had it scan to the matching `]`, or to the end of the text when none closes it, then stepped one character into
+   * the subscript, so each nested or unclosed `[` read the rest of the text again. That was quadratic in the number of
+   * them, about 1.2 s on the first input here, 1.8 s on the second and 0.65 s on the third in each walk (bun 1.4.2,
+   * measured while writing this guard), where a walk that reads `[` as code answers each in a few milliseconds. The
+   * bound is the one above, loose so it cannot flake on a slow runner.
+   */
+  test("nested or unclosed brackets are read in bounded time by both walks", () => {
+    const BOUND_MS = 200;
+    const walks: [string, (sql: string) => string | undefined][] = [
+      ["unicodeSpaceRefusal", unicodeSpaceRefusal],
+      ["uriFormRefusal", uriFormRefusal],
+    ];
+    const long: [string, string][] = [
+      ["50k unclosed brackets", `SELECT ${"[".repeat(50_000)}`],
+      ["20k letter and unclosed bracket pairs", `SELECT ${"a[".repeat(20_000)}`],
+      ["a 25k-deep nested pair", `SELECT ${"[".repeat(25_000)}${"]".repeat(25_000)}`],
+    ];
+    for (const [name, walk] of walks) {
+      for (const [label, sql] of long) {
+        const started = performance.now();
+        const refusal = walk(sql);
+        const elapsed = performance.now() - started;
+        expect(refusal).toBeUndefined();
+        expect(elapsed, `${name} on ${label} took ${elapsed.toFixed(1)}ms`).toBeLessThan(BOUND_MS);
+      }
     }
   });
 });
