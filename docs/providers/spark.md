@@ -462,7 +462,8 @@ The 60 s connection pulse sends one AnalyzePlan on the metadata session, which a
 
 Plan mode works: the model is told to write Spark SQL, and the grounding walk reads only the session's current namespace, or, when the current catalog holds no such namespace, that catalog's namespaces.
 The walk still lists the namespaces of every other catalog, to count what it did not read.
-A catalog whose listing fails there, one that cannot load or one past the bounds of [section 7.1](#71-catalogs-and-namespaces), is named to the model as not read, with the text of its failure, and the walk goes on.
+A catalog whose listing fails there, one that cannot load or one past the bounds of [section 7.1](#71-catalogs-and-namespaces), is named to the model as not read, with the text of its failure on one line, each run of whitespace and control characters read as one space and the text cut at 200 code points, and the walk goes on.
+The walk names at most five such catalogs, the first it meets, and counts the rest in one sentence, `<n> more Catalogs were not read: listing their Namespaces failed as well, and they are not named here.`, or `1 more Catalog was not read: listing its Namespaces failed as well, and it is not named here.` for one; every catalog is still asked for its namespaces.
 A catalog that cannot load is named with Spark's own text: the test services' `studio_unloaded` catalog, which nothing loads, answers `requirement failed: Option 'url' is required.`
 A failed listing of the current catalog ends the walk, and the run's inventory is then unavailable whole.
 Agent execute mode and the editor hand-over are refused at the start, because Spark has no engine-side read-only mode, so the provider has no read-only query path.

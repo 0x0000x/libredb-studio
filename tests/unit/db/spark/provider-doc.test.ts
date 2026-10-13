@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { packOperationsInventory } from "@/lib/agent/context-snapshot";
 import { MCP_EXPOSABLE } from "@/lib/db/compatibility";
 import { readIpcColumns } from "@/lib/db/providers/sql/spark/arrow";
 import { SPARK_FIELD_SENTENCES } from "@/lib/db/providers/sql/spark/connection-options";
@@ -211,6 +212,33 @@ describe("docs/providers/spark.md", () => {
     const exportText = flat(sectionOf(DOC, "### 8.5 Export"));
     expect(exportText).toContain("`MAP('mode', 'FAILFAST')`");
     expect(exportText).toContain("A nested `bigint` past 2^53 fails its INSERT, a known limit.");
+  });
+
+  test("quotes the plan walk's count of the catalogs it does not name as the packing writes it, in Spark's level words", () => {
+    const levels = capabilities.containerLevels;
+    if (levels === undefined || levels.length !== 2) throw new Error("Spark declares a catalog and a namespace level");
+    const [catalog, namespace] = levels;
+    // The note past the catalogs the walk names, written for <n> of them and for one.
+    const note = (count: number): string => {
+      const packed = packOperationsInventory({
+        objects: [],
+        connectionId: "spark",
+        fingerprint: "doc",
+        capturedAtMs: 0,
+        unreadContainers: {
+          count: 0,
+          label: namespace.label,
+          labelPlural: namespace.labelPlural,
+          read: ["spark_catalog.default"],
+          unlistedParentsNotNamed: { count, label: catalog.label, labelPlural: catalog.labelPlural },
+        },
+      });
+      const found = packed.match(new RegExp(`${count} more [^.]*\\.`));
+      if (found === null) throw new Error(`the packing wrote no count of ${count} catalogs`);
+      return found[0];
+    };
+    const plan = flat(sectionOf(DOC, "### 8.3 Plan mode and agent operations"));
+    for (const count of [N, 1]) expect(plan).toContain(`\`${note(count)}\``);
   });
 
   test("names every confirmation form and session key the grammar declares", () => {
