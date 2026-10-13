@@ -87,6 +87,9 @@ function nameParts(text: string): string[] {
   return parts;
 }
 
+/** Parts as a statement names them: each in backticks, a backtick inside doubled, joined by dots. */
+const backticked = (parts: readonly string[]) => parts.map((part) => `\`${part.replaceAll("`", "``")}\``).join(".");
+
 // The capabilities the Spark provider declares for the generators.
 const SPARK_CAPS: ProviderCapabilities = {
   queryLanguage: "sql",
@@ -154,16 +157,16 @@ describe("namespaces", () => {
     const { deps, sent } = stub({
       ...CURRENT,
       "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }, { namespace: "b" }],
-      "SHOW NAMESPACES IN `lake`.a": [{ namespace: "a.c" }],
-      "SHOW NAMESPACES IN `lake`.b": [],
-      "SHOW NAMESPACES IN `lake`.a.c": [],
+      "SHOW NAMESPACES IN `lake`.`a`": [{ namespace: "a.c" }],
+      "SHOW NAMESPACES IN `lake`.`b`": [],
+      "SHOW NAMESPACES IN `lake`.`a`.`c`": [],
     });
     expect((await listNamespaces(deps, "lake")).map((c) => c.name)).toStrictEqual(["a", "b", "a.c"]);
     expect(sent.slice(1)).toStrictEqual([
       "SHOW NAMESPACES IN `lake`",
-      "SHOW NAMESPACES IN `lake`.a",
-      "SHOW NAMESPACES IN `lake`.b",
-      "SHOW NAMESPACES IN `lake`.a.c",
+      "SHOW NAMESPACES IN `lake`.`a`",
+      "SHOW NAMESPACES IN `lake`.`b`",
+      "SHOW NAMESPACES IN `lake`.`a`.`c`",
     ]);
   });
 
@@ -171,7 +174,7 @@ describe("namespaces", () => {
     const elsewhere = stub({
       ...CURRENT,
       "SHOW NAMESPACES IN `lake`": [{ namespace: "studio" }],
-      "SHOW NAMESPACES IN `lake`.studio": [],
+      "SHOW NAMESPACES IN `lake`.`studio`": [],
     });
     expect(await listNamespaces(elsewhere.deps, "lake")).toStrictEqual([
       { path: ["lake", "studio"], name: "studio", level: 1 },
@@ -179,8 +182,8 @@ describe("namespaces", () => {
     const nested = stub({
       "SHOW CURRENT NAMESPACE": [{ catalog: "lake", namespace: "a.`b c`" }],
       "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }],
-      "SHOW NAMESPACES IN `lake`.a": [{ namespace: "a.`b c`" }],
-      "SHOW NAMESPACES IN `lake`.a.`b c`": [],
+      "SHOW NAMESPACES IN `lake`.`a`": [{ namespace: "a.`b c`" }],
+      "SHOW NAMESPACES IN `lake`.`a`.`b c`": [],
     });
     expect(await listNamespaces(nested.deps, "lake")).toStrictEqual([
       { path: ["lake", "a"], name: "a", level: 1 },
@@ -192,8 +195,8 @@ describe("namespaces", () => {
     const { deps } = stub({
       "SHOW CURRENT NAMESPACE": [{ catalog: "lake", namespace: "a" }],
       "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }],
-      "SHOW NAMESPACES IN `lake`.a": [{ namespace: "a.b" }],
-      "SHOW NAMESPACES IN `lake`.a.b": [],
+      "SHOW NAMESPACES IN `lake`.`a`": [{ namespace: "a.b" }],
+      "SHOW NAMESPACES IN `lake`.`a`.`b`": [],
     });
     expect(await listNamespaces(deps, "lake")).toStrictEqual([
       { path: ["lake", "a"], name: "a", level: 1, isSessionDefault: true },
@@ -235,11 +238,11 @@ describe("namespaces", () => {
           return result([{ namespace: "a" }, { namespace: "b" }, { namespace: "c" }]);
         }
         // c fails at once; a and b answer only once the gate opens, a with a failure.
-        if (sql === "SHOW NAMESPACES IN `lake`.c") throw later;
+        if (sql === "SHOW NAMESPACES IN `lake`.`c`") throw later;
         running++;
         await gate;
         running--;
-        if (sql === "SHOW NAMESPACES IN `lake`.a") throw first;
+        if (sql === "SHOW NAMESPACES IN `lake`.`a`") throw first;
         return result([]);
       },
       confKeys: async () => [],
@@ -274,7 +277,7 @@ describe("namespaces", () => {
         if (sql === "SHOW CURRENT NAMESPACE") return result([{ catalog: "spark_catalog", namespace: "studio" }]);
         if (sql === "SHOW NAMESPACES IN `lake`") return result(top);
         // n3 fails at once; every other namespace answers none a timer later, so its batch is still running.
-        if (sql === "SHOW NAMESPACES IN `lake`.n3") throw failure;
+        if (sql === "SHOW NAMESPACES IN `lake`.`n3`") throw failure;
         inFlight++;
         await new Promise((resolve) => setTimeout(resolve, 1));
         inFlight--;
@@ -287,7 +290,7 @@ describe("namespaces", () => {
     expect(sent).toStrictEqual([
       "SHOW CURRENT NAMESPACE",
       "SHOW NAMESPACES IN `lake`",
-      ...Array.from({ length: SPARK_INTROSPECT_IN_FLIGHT_MAX }, (_, i) => `SHOW NAMESPACES IN \`lake\`.n${i}`),
+      ...Array.from({ length: SPARK_INTROSPECT_IN_FLIGHT_MAX }, (_, i) => `SHOW NAMESPACES IN \`lake\`.\`n${i}\``),
     ]);
   });
 
@@ -296,16 +299,16 @@ describe("namespaces", () => {
     const { deps, sent } = stub({
       ...CURRENT,
       "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }, { namespace: "b" }],
-      "SHOW NAMESPACES IN `lake`.a": [{ namespace: "a.x" }],
-      "SHOW NAMESPACES IN `lake`.b": failure,
-      "SHOW NAMESPACES IN `lake`.a.x": [],
+      "SHOW NAMESPACES IN `lake`.`a`": [{ namespace: "a.x" }],
+      "SHOW NAMESPACES IN `lake`.`b`": failure,
+      "SHOW NAMESPACES IN `lake`.`a`.`x`": [],
     });
     await expect(listNamespaces(deps, "lake")).rejects.toBe(failure);
     expect(sent).toStrictEqual([
       "SHOW CURRENT NAMESPACE",
       "SHOW NAMESPACES IN `lake`",
-      "SHOW NAMESPACES IN `lake`.a",
-      "SHOW NAMESPACES IN `lake`.b",
+      "SHOW NAMESPACES IN `lake`.`a`",
+      "SHOW NAMESPACES IN `lake`.`b`",
     ]);
   });
 
@@ -317,18 +320,18 @@ describe("namespaces", () => {
       "SHOW NAMESPACES IN `lake`": Array.from({ length: SPARK_INTROSPECT_IN_FLIGHT_MAX + 1 }, (_, i) => ({
         namespace: `n${i}`,
       })),
-      "SHOW NAMESPACES IN `lake`.n0": [{ namespace: "n0.x" }],
-      [`SHOW NAMESPACES IN \`lake\`.${last}`]: failure,
-      "SHOW NAMESPACES IN `lake`.n0.x": [],
+      "SHOW NAMESPACES IN `lake`.`n0`": [{ namespace: "n0.x" }],
+      [`SHOW NAMESPACES IN \`lake\`.\`${last}\``]: failure,
+      "SHOW NAMESPACES IN `lake`.`n0`.`x`": [],
     };
-    for (let i = 1; i < SPARK_INTROSPECT_IN_FLIGHT_MAX; i++) answers[`SHOW NAMESPACES IN \`lake\`.n${i}`] = [];
+    for (let i = 1; i < SPARK_INTROSPECT_IN_FLIGHT_MAX; i++) answers[`SHOW NAMESPACES IN \`lake\`.\`n${i}\``] = [];
     const { deps, sent } = stub(answers);
     // The first batch answers whole, n0 with a child; the second batch fails, so n0.x is never asked.
     await expect(listNamespaces(deps, "lake")).rejects.toBe(failure);
     expect(sent).toStrictEqual([
       "SHOW CURRENT NAMESPACE",
       "SHOW NAMESPACES IN `lake`",
-      ...Array.from({ length: SPARK_INTROSPECT_IN_FLIGHT_MAX + 1 }, (_, i) => `SHOW NAMESPACES IN \`lake\`.n${i}`),
+      ...Array.from({ length: SPARK_INTROSPECT_IN_FLIGHT_MAX + 1 }, (_, i) => `SHOW NAMESPACES IN \`lake\`.\`n${i}\``),
     ]);
   });
 
@@ -342,14 +345,14 @@ describe("namespaces", () => {
     const fits: Record<string, Answer> = {
       ...CURRENT,
       "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }],
-      "SHOW NAMESPACES IN `lake`.a": children("a", 999),
+      "SHOW NAMESPACES IN `lake`.`a`": children("a", 999),
     };
-    for (let i = 0; i < 999; i++) fits[`SHOW NAMESPACES IN \`lake\`.a.c${i}`] = [];
+    for (let i = 0; i < 999; i++) fits[`SHOW NAMESPACES IN \`lake\`.\`a\`.\`c${i}\``] = [];
     expect(await listNamespaces(stub(fits).deps, "lake")).toHaveLength(1_000);
     const over = stub({
       ...CURRENT,
       "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }],
-      "SHOW NAMESPACES IN `lake`.a": children("a", 1_000),
+      "SHOW NAMESPACES IN `lake`.`a`": children("a", 1_000),
     });
     await expect(listNamespaces(over.deps, "lake")).rejects.toThrow(SPARK_INTROSPECT_SENTENCES.walkBound);
     expect(over.sent.filter((sql) => sql.startsWith("SHOW NAMESPACES"))).toHaveLength(2);
@@ -361,9 +364,9 @@ describe("namespaces", () => {
       "SHOW NAMESPACES IN `lake`": Array.from({ length: SPARK_INTROSPECT_IN_FLIGHT_MAX + 1 }, (_, i) => ({
         namespace: `n${i}`,
       })),
-      "SHOW NAMESPACES IN `lake`.n0": children("n0", 1_000 - SPARK_INTROSPECT_IN_FLIGHT_MAX),
+      "SHOW NAMESPACES IN `lake`.`n0`": children("n0", 1_000 - SPARK_INTROSPECT_IN_FLIGHT_MAX),
     };
-    for (let i = 1; i < SPARK_INTROSPECT_IN_FLIGHT_MAX; i++) answers[`SHOW NAMESPACES IN \`lake\`.n${i}`] = [];
+    for (let i = 1; i < SPARK_INTROSPECT_IN_FLIGHT_MAX; i++) answers[`SHOW NAMESPACES IN \`lake\`.\`n${i}\``] = [];
     const { deps, sent } = stub(answers);
     // Nine namespaces and the 992 children of the first batch make 1,001: the ninth is never asked for its children.
     await expect(listNamespaces(deps, "lake")).rejects.toThrow(SPARK_INTROSPECT_SENTENCES.walkBound);
@@ -375,7 +378,7 @@ describe("namespaces", () => {
     const letters = "abcdefghi".split("");
     answers["SHOW NAMESPACES IN `lake`"] = [{ namespace: "a" }];
     for (let depth = 1; depth <= 8; depth++) {
-      answers[`SHOW NAMESPACES IN \`lake\`.${letters.slice(0, depth).join(".")}`] = [
+      answers[`SHOW NAMESPACES IN \`lake\`.${backticked(letters.slice(0, depth))}`] = [
         { namespace: letters.slice(0, depth + 1).join(".") },
       ];
     }
@@ -386,7 +389,7 @@ describe("namespaces", () => {
     const answers: Record<string, Answer> = { ...CURRENT, "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }] };
     const letters = "abcdefgh".split("");
     for (let depth = 1; depth <= 8; depth++) {
-      answers[`SHOW NAMESPACES IN \`lake\`.${letters.slice(0, depth).join(".")}`] =
+      answers[`SHOW NAMESPACES IN \`lake\`.${backticked(letters.slice(0, depth))}`] =
         depth < 8 ? [{ namespace: letters.slice(0, depth + 1).join(".") }] : [];
     }
     expect(await listNamespaces(stub(answers).deps, "lake")).toHaveLength(8);
@@ -396,7 +399,7 @@ describe("namespaces", () => {
     const { deps } = stub({
       ...CURRENT,
       "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }],
-      "SHOW NAMESPACES IN `lake`.a": [{ namespace: "b.c" }],
+      "SHOW NAMESPACES IN `lake`.`a`": [{ namespace: "b.c" }],
     });
     await expect(listNamespaces(deps, "lake")).rejects.toThrow(SPARK_INTROSPECT_SENTENCES.namespaceListingNotReadable);
   });
@@ -405,7 +408,7 @@ describe("namespaces", () => {
     const { deps } = stub({
       ...CURRENT,
       "SHOW NAMESPACES IN `lake`": [{ namespace: "a" }],
-      "SHOW NAMESPACES IN `lake`.a": [{ namespace: "a" }],
+      "SHOW NAMESPACES IN `lake`.`a`": [{ namespace: "a" }],
     });
     await expect(listNamespaces(deps, "lake")).rejects.toThrow(SPARK_INTROSPECT_SENTENCES.namespaceListingNotReadable);
   });
@@ -418,7 +421,7 @@ describe("namespaces", () => {
 });
 
 describe("objects", () => {
-  const Q = "`spark_catalog`.studio";
+  const Q = "`spark_catalog`.`studio`";
   const container = ["spark_catalog", "studio"] as const;
 
   test("tables are SHOW TABLES minus temporary rows and the views SHOW VIEWS lists", async () => {
@@ -462,7 +465,7 @@ describe("objects", () => {
 
   test("a function row is matched to the asked prefix without case, and a row that is the prefix alone is skipped", async () => {
     const { deps } = stub({
-      "SHOW USER FUNCTIONS IN `spark_catalog`.STUDIO": [
+      "SHOW USER FUNCTIONS IN `spark_catalog`.`STUDIO`": [
         { function: "spark_catalog.studio.f" },
         { function: "SPARK_CATALOG.Studio.g" },
         { function: "spark_catalog.studio." },
@@ -608,7 +611,7 @@ describe("objects", () => {
 
 describe("columns and definitions", () => {
   const path = ["spark_catalog", "studio", "orders"] as const;
-  const D = "DESCRIBE TABLE `spark_catalog`.studio.`orders`";
+  const D = "DESCRIBE TABLE `spark_catalog`.`studio`.`orders`";
 
   test("DESCRIBE TABLE is read to the first empty row or `#` header, and a column named `#tag` keeps its type", async () => {
     const { deps } = stub({
@@ -653,11 +656,11 @@ describe("columns and definitions", () => {
   test("describeObjects runs one DESCRIBE per object in listing order and reports the caller's bound", async () => {
     const tables = ["a", "b", "c"].map((tableName) => ({ namespace: "studio", tableName, isTemporary: false }));
     const answers: Record<string, Answer> = {
-      "SHOW VIEWS IN `spark_catalog`.studio": [],
-      "SHOW TABLES IN `spark_catalog`.studio": tables,
+      "SHOW VIEWS IN `spark_catalog`.`studio`": [],
+      "SHOW TABLES IN `spark_catalog`.`studio`": tables,
     };
     for (const name of ["a", "b", "c"]) {
-      answers[`DESCRIBE TABLE \`spark_catalog\`.studio.\`${name}\``] = [{ col_name: "id", data_type: "int" }];
+      answers[`DESCRIBE TABLE \`spark_catalog\`.\`studio\`.\`${name}\``] = [{ col_name: "id", data_type: "int" }];
     }
     const { deps, sent } = stub(answers);
     const batch = await describeObjects(deps, ["spark_catalog", "studio"], "table", 2);
@@ -704,9 +707,10 @@ describe("columns and definitions", () => {
     let described = 0;
     const deps: SparkIntrospectDeps = {
       runSql: async (sql) => {
-        if (sql === "SHOW VIEWS IN `spark_catalog`.studio") return result([]);
-        if (sql === "SHOW TABLES IN `spark_catalog`.studio") return result(rows);
-        if (!sql.startsWith("DESCRIBE TABLE `spark_catalog`.studio.")) throw new Error(`unexpected statement: ${sql}`);
+        if (sql === "SHOW VIEWS IN `spark_catalog`.`studio`") return result([]);
+        if (sql === "SHOW TABLES IN `spark_catalog`.`studio`") return result(rows);
+        if (!sql.startsWith("DESCRIBE TABLE `spark_catalog`.`studio`."))
+          throw new Error(`unexpected statement: ${sql}`);
         described++;
         return result([{ col_name: "id", data_type: "int" }]);
       },
@@ -794,15 +798,15 @@ describe("columns and definitions", () => {
   /** Tables a, b and c in listing order, where the DESCRIBE of b answers `answer`. */
   function threeTables(answer: Answer) {
     return stub({
-      "SHOW VIEWS IN `spark_catalog`.studio": [],
-      "SHOW TABLES IN `spark_catalog`.studio": ["a", "b", "c"].map((tableName) => ({
+      "SHOW VIEWS IN `spark_catalog`.`studio`": [],
+      "SHOW TABLES IN `spark_catalog`.`studio`": ["a", "b", "c"].map((tableName) => ({
         namespace: "studio",
         tableName,
         isTemporary: false,
       })),
-      "DESCRIBE TABLE `spark_catalog`.studio.`a`": [{ col_name: "id", data_type: "int" }],
-      "DESCRIBE TABLE `spark_catalog`.studio.`b`": answer,
-      "DESCRIBE TABLE `spark_catalog`.studio.`c`": [{ col_name: "day", data_type: "date" }],
+      "DESCRIBE TABLE `spark_catalog`.`studio`.`a`": [{ col_name: "id", data_type: "int" }],
+      "DESCRIBE TABLE `spark_catalog`.`studio`.`b`": answer,
+      "DESCRIBE TABLE `spark_catalog`.`studio`.`c`": [{ col_name: "day", data_type: "date" }],
     });
   }
 
@@ -825,9 +829,9 @@ describe("columns and definitions", () => {
       ],
     });
     expect(sent.filter((sql) => sql.startsWith("DESCRIBE"))).toStrictEqual([
-      "DESCRIBE TABLE `spark_catalog`.studio.`a`",
-      "DESCRIBE TABLE `spark_catalog`.studio.`b`",
-      "DESCRIBE TABLE `spark_catalog`.studio.`c`",
+      "DESCRIBE TABLE `spark_catalog`.`studio`.`a`",
+      "DESCRIBE TABLE `spark_catalog`.`studio`.`b`",
+      "DESCRIBE TABLE `spark_catalog`.`studio`.`c`",
     ]);
   });
 
@@ -851,7 +855,7 @@ describe("columns and definitions", () => {
   });
 
   test("SHOW CREATE TABLE gives one part: regenerated for a table, stored for a view, bounded by the limit", async () => {
-    const S = "SHOW CREATE TABLE `spark_catalog`.studio.`orders`";
+    const S = "SHOW CREATE TABLE `spark_catalog`.`studio`.`orders`";
     const ddl = "CREATE TABLE spark_catalog.studio.orders (id BIGINT) USING parquet";
     const { deps } = stub({ [S]: [{ createtab_stmt: ddl }] });
     expect(await readObjectSource(deps, path, "table")).toStrictEqual({
@@ -864,7 +868,7 @@ describe("columns and definitions", () => {
   });
 
   test("Spark's refusal becomes the part's unavailable sentence; other failures and an empty answer do not", async () => {
-    const S = "SHOW CREATE TABLE `spark_catalog`.studio.`orders`";
+    const S = "SHOW CREATE TABLE `spark_catalog`.`studio`.`orders`";
     const refused = "[UNSUPPORTED_SHOW_CREATE_TABLE.ON_TEMPORARY_VIEW] x";
     expect((await readObjectSource(stub({ [S]: spark(refused) }).deps, path, "view")).parts).toStrictEqual([
       { id: "ddl", label: "Definition", unavailable: refused },
@@ -880,6 +884,76 @@ describe("columns and definitions", () => {
   });
 });
 
+// Spark prints a namespace with quoteIfNeeded, which leaves a reserved word such as select bare, and under
+// spark.sql.ansi.enforceReservedKeywords=true a statement that names it bare does not parse. So a statement names every
+// part of a namespace backticked, while the tree keeps Spark's spelling as the name and the path segment.
+describe("a statement backticks every part of the namespace it names", () => {
+  /** The namespaces on the way down to the one read, the top first: Spark's spelling, then the statement's. */
+  const CASES: [string, [string, string][]][] = [
+    ["a namespace named select", [["select", "`select`"]]],
+    ["a part that holds a backtick", [["`x``y`", "`x``y`"]]],
+    ["a dot inside a quoted part", [["`a.b`", "`a.b`"]]],
+    [
+      "a nested namespace",
+      [
+        ["a", "`a`"],
+        ["a.`b c`", "`a`.`b c`"],
+        ["a.`b c`.select", "`a`.`b c`.`select`"],
+      ],
+    ],
+  ];
+
+  test.each(CASES)("%s", async (_label, chain) => {
+    const [spelling, quoted] = chain[chain.length - 1];
+    const q = `\`lake\`.${quoted}`;
+    const parts = parseNamespaceSpelling(spelling) ?? [];
+    const answers: Record<string, Answer> = {
+      ...CURRENT,
+      "SHOW NAMESPACES IN `lake`": [{ namespace: chain[0][0] }],
+      [`SHOW VIEWS IN ${q}`]: [{ namespace: spelling, viewName: "v", isTemporary: false }],
+      [`SHOW TABLES IN ${q}`]: [{ namespace: spelling, tableName: "t", isTemporary: false }],
+      [`SHOW USER FUNCTIONS IN ${q}`]: [{ function: `${["lake", ...parts].join(".")}.f` }],
+      [`DESCRIBE TABLE ${q}.\`t\``]: [{ col_name: "id", data_type: "int" }],
+      [`SHOW CREATE TABLE ${q}.\`t\``]: [{ createtab_stmt: "CREATE TABLE t (id INT)" }],
+    };
+    chain.forEach(([, name], i) => {
+      answers[`SHOW NAMESPACES IN \`lake\`.${name}`] = i + 1 < chain.length ? [{ namespace: chain[i + 1][0] }] : [];
+    });
+    const { deps, sent } = stub(answers);
+    const container = ["lake", spelling];
+    const path = ["lake", spelling, "t"];
+
+    expect(await listNamespaces(deps, "lake")).toStrictEqual(
+      chain.map(([name]) => ({ path: ["lake", name], name, level: 1 })),
+    );
+    expect(await countObjects(deps, container)).toStrictEqual({
+      table: { count: 1 },
+      view: { count: 1 },
+      function: { count: 1 },
+    });
+    expect(await listObjects(deps, container, "table")).toStrictEqual([{ path, name: "t", kind: "table" }]);
+    expect(await describeObject(deps, path, "table")).toStrictEqual({
+      path,
+      columns: [{ name: "id", type: "int", nullable: true, isPrimary: false }],
+      indexes: [],
+      foreignKeys: [],
+    });
+    expect((await readObjectSource(deps, path, "table")).path).toStrictEqual(path);
+    expect(sent).toStrictEqual([
+      "SHOW CURRENT NAMESPACE",
+      "SHOW NAMESPACES IN `lake`",
+      ...chain.map(([, name]) => `SHOW NAMESPACES IN \`lake\`.${name}`),
+      `SHOW VIEWS IN ${q}`,
+      `SHOW TABLES IN ${q}`,
+      `SHOW USER FUNCTIONS IN ${q}`,
+      `SHOW VIEWS IN ${q}`,
+      `SHOW TABLES IN ${q}`,
+      `DESCRIBE TABLE ${q}.\`t\``,
+      `SHOW CREATE TABLE ${q}.\`t\``,
+    ]);
+  });
+});
+
 // Names that need quoting on every path they travel: the tree, the statements and the generators all name one object.
 describe("every listed name round-trips to the statement that reads it", () => {
   const NAMESPACES: [string, string[]][] = [
@@ -891,7 +965,7 @@ describe("every listed name round-trips to the statement that reads it", () => {
   ];
 
   test.each(NAMESPACES)("namespace %s and a table named #tag", async (spelling, parts) => {
-    const q = `\`lake\`.${spelling}`;
+    const q = `\`lake\`.${backticked(parts)}`;
     const { deps, sent } = stub({
       ...CURRENT,
       "SHOW NAMESPACES IN `lake`": [{ namespace: spelling }],

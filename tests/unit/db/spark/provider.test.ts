@@ -43,7 +43,7 @@ const CURRENT = columnsStream([
 const ONE = columnsStream([{ name: "1", kind: "int32", values: [1] }]);
 /** What a SET CATALOG or a USE NAMESPACE answers here; a setup statement's answer is read past, never decoded. */
 const SET_ANSWER = columnsStream([{ name: "key", kind: "utf8", values: [] }]);
-const DEFAULT = "`spark_catalog`.default";
+const DEFAULT = "`spark_catalog`.`default`";
 const CATALOGS = columnsStream([{ name: "catalog", kind: "utf8", values: ["spark_catalog"] }]);
 const T_DDL = "CREATE TABLE spark_catalog.default.t (\n  id BIGINT,\n  `#tag` STRING)\nUSING parquet\n";
 const T_COLUMNS = [
@@ -51,7 +51,7 @@ const T_COLUMNS = [
   { name: "#tag", type: "string", nullable: true, isPrimary: false },
 ];
 
-/** SHOW TABLES or SHOW VIEWS in `spark_catalog`.default: every name in `default`, none temporary. */
+/** SHOW TABLES or SHOW VIEWS in `spark_catalog`.`default`: every name in `default`, none temporary. */
 const listing = (column: "tableName" | "viewName", names: readonly string[]) =>
   columnsStream([
     { name: "namespace", kind: "utf8", values: names.map(() => "default") },

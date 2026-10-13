@@ -53,7 +53,10 @@ export const SPARK_INTROSPECT_SENTENCES = Object.freeze({
 
 type Row = Readonly<Record<string, unknown>>;
 
-/** A namespace SHOW NAMESPACES listed: Spark's spelling, which names it in the tree and in statements, and its parts. */
+/**
+ * A namespace SHOW NAMESPACES listed: Spark's spelling, which names it in the tree, and its parts, from which a
+ * statement names it.
+ */
 interface Listed {
   readonly parts: readonly string[];
   readonly spelling: string;
@@ -64,7 +67,7 @@ interface Place {
   readonly catalog: string;
   readonly spelling: string;
   readonly parts: readonly string[];
-  /** The catalog quoted, then the namespace as Spark spells it. */
+  /** The catalog and every part of the namespace, each quoted. */
   readonly name: string;
 }
 
@@ -125,6 +128,15 @@ async function currentNamespace(deps: SparkIntrospectDeps): Promise<{ catalog: s
 }
 
 /**
+ * A namespace as a statement names it: every part quoted. Spark spells a namespace with quoteIfNeeded, which leaves a
+ * reserved word such as select bare, and under spark.sql.ansi.enforceReservedKeywords=true a statement that names it
+ * bare does not parse; quoted, every part reads as a name whatever the session's settings.
+ */
+function quotedNamespace(parts: readonly string[]): string {
+  return parts.map(quoteSparkName).join(".");
+}
+
+/**
  * The container at the head of a path of `length` segments: a path of any other length, or a namespace spelling that
  * `parseNamespaceSpelling` does not read completely, is refused before any statement is built.
  */
@@ -132,13 +144,13 @@ function placeOf(path: readonly string[], length: 2 | 3): Place {
   const [catalog, spelling] = path;
   const parts = path.length === length ? parseNamespaceSpelling(spelling) : undefined;
   if (parts === undefined) throw new SparkError("refused", SPARK_INTROSPECT_SENTENCES.namespaceNotReadable);
-  return { catalog, spelling, parts, name: qualifiedName(catalog, spelling) };
+  return { catalog, spelling, parts, name: qualifiedName(catalog, quotedNamespace(parts)) };
 }
 
-/** A `[catalog, namespace, name]` path as a statement's name, the object's name quoted. */
+/** A `[catalog, namespace, name]` path as a statement's name, every part quoted. */
 function objectName(path: readonly string[]): string {
   const place = placeOf(path, 3);
-  return qualifiedName(place.catalog, place.spelling, path[2]);
+  return qualifiedName(place.catalog, quotedNamespace(place.parts), path[2]);
 }
 
 export async function listCatalogs(deps: SparkIntrospectDeps): Promise<Container[]> {
@@ -155,7 +167,7 @@ export async function listCatalogs(deps: SparkIntrospectDeps): Promise<Container
 
 /** The namespaces SHOW NAMESPACES lists inside `parent` (the catalog itself at the top), each read as its parts. */
 async function listChildren(deps: SparkIntrospectDeps, catalog: string, parent: Listed | undefined): Promise<Listed[]> {
-  const target = parent === undefined ? quoteSparkName(catalog) : qualifiedName(catalog, parent.spelling);
+  const target = parent === undefined ? quoteSparkName(catalog) : qualifiedName(catalog, quotedNamespace(parent.parts));
   const rows = await readWhole(deps, `SHOW NAMESPACES IN ${target}`);
   const above = parent?.parts ?? [];
   if (above.length >= SPARK_NAMESPACE_MAX_PARTS && rows.length > 0) {
