@@ -236,6 +236,27 @@ describe("docker/spark/make-certs.sh", () => {
     expect(readdirSync(path.join(ROOT, "docker", "spark")).sort()).toEqual(["make-certs.sh", "nginx.conf"]);
   });
 
+  test("refuses a nested directory inside the repository before creating any level of it", () => {
+    const run = spawnSync("bash", [SCRIPT, path.join(ROOT, "docker", "spark", "certs", "nested")], {
+      encoding: "utf8",
+    });
+    expect(run.status).toBe(2);
+    expect(run.stderr).toContain("outside the repository");
+    expect(readdirSync(path.join(ROOT, "docker", "spark")).sort()).toEqual(["make-certs.sh", "nginx.conf"]);
+  });
+
+  test("refuses a path that climbs back through a level it would create, and creates nothing", () => {
+    const parent = mkdtempSync(path.join(tmpdir(), "spark-certs-"));
+    temporary.push(parent);
+    const climb = "../".repeat(parent.split("/").length);
+    const run = spawnSync("bash", [SCRIPT, `${parent}/missing/${climb}${ROOT.slice(1)}/docker/spark/certs`], {
+      encoding: "utf8",
+    });
+    expect(run.status).toBe(2);
+    expect(readdirSync(parent)).toEqual([]);
+    expect(readdirSync(path.join(ROOT, "docker", "spark")).sort()).toEqual(["make-certs.sh", "nginx.conf"]);
+  });
+
   test("writes a CA and a server certificate for localhost and 127.0.0.1 signed by it, and nothing else", () => {
     const directory = mkdtempSync(path.join(tmpdir(), "spark-certs-"));
     temporary.push(directory);

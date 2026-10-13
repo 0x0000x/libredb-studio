@@ -10,15 +10,32 @@ if [[ $# -ne 1 || -z "$1" ]]; then
   exit 2
 fi
 repo="$(cd "$(dirname "$0")/../.." && pwd -P)"
-mkdir -p "$1"
-dir="$(cd "$1" && pwd -P)"
+# Resolve <dir> before creating anything: its nearest existing directory with links followed, then the levels below
+# it, which may not climb with . or .., so the repository check reads the directory mkdir would create.
+case "$1" in
+  /*) base="$1" ;;
+  *) base="$PWD/$1" ;;
+esac
+rest=""
+until [[ -d "$base" ]]; do
+  level="$(basename -- "$base")"
+  if [[ "$level" == "." || "$level" == ".." ]]; then
+    echo "make-certs.sh takes a directory whose levels below the last existing one hold no . or ..; nothing was created" >&2
+    exit 2
+  fi
+  rest="/$level$rest"
+  base="$(dirname -- "$base")"
+done
+resolved="$(cd -P -- "$base" && pwd -P)"
+dir="${resolved%/}$rest"
+dir="${dir:-/}"
 case "$dir/" in
   "$repo"/*)
-    rmdir "$1" 2>/dev/null || true
     echo "make-certs.sh writes key material only outside the repository; choose a directory outside $repo" >&2
     exit 2
     ;;
 esac
+mkdir -p -- "$dir"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=LibreDB Studio Spark fixture CA" \
