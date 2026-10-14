@@ -497,9 +497,10 @@ export class SparkProvider extends SQLBaseProvider {
       overtaken = this.connecting;
       this.connecting = opened;
       if (overtaken !== null) {
-        // Its close begins now, so the displaced connect sends nothing more but its probe's release; this connect waits
-        // for that close before it answers.
-        void this.close(overtaken);
+        // Its close begins now, so the displaced connect sends nothing more but its probe's release. This connect waits
+        // for that close before it answers and meets its failure there; the handler here only keeps a failure that
+        // lands before then from being reported as unhandled.
+        this.close(overtaken).catch(() => undefined);
       }
       await this.checkVersion(opened);
       await this.metadataSql(opened, "SHOW CURRENT NAMESPACE");
@@ -531,8 +532,8 @@ export class SparkProvider extends SQLBaseProvider {
       }
       if (opened !== null && this.connecting === opened) this.connecting = null;
       // Every close starts at once, so no connection waits outside `connection`, `connecting` and `closing` for
-      // another's close, and a Stop reaches its runs throughout. close() never rejects: the failure stays this
-      // connect's.
+      // another's close, and a Stop reaches its runs throughout. A close rejects only when a channel's close() throws,
+      // and that error then reaches this connect's caller in place of its own failure.
       await Promise.all(
         [opened, previous, overtaken]
           .filter((item): item is SparkConnection => item !== null)
@@ -605,7 +606,8 @@ export class SparkProvider extends SQLBaseProvider {
 
   /**
    * Closes `connection` once: the close that began first is recorded before any of it runs, and every caller, a
-   * disconnect, a failed connect or one that displaced another, waits for that one. It never rejects.
+   * disconnect, a failed connect or one that displaced another, waits for that one. It rejects only when the channel's
+   * close() throws, and then every caller meets that error.
    */
   private close(connection: SparkConnection): Promise<void> {
     const began = this.closes.get(connection);
@@ -632,9 +634,10 @@ export class SparkProvider extends SQLBaseProvider {
       await connection.sessions.releaseAll();
       await connection.probe;
     } finally {
-      connection.channel.close();
+      // The bookkeeping comes first, so a channel whose close() throws leaves nothing closing and nothing in flight.
       this.releasing -= 1;
       this.closing.delete(connection);
+      connection.channel.close();
     }
   }
 

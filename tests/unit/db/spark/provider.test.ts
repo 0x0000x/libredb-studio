@@ -2142,6 +2142,97 @@ describe("SparkProvider: the version floor and the probe session", () => {
     expect(lastErrorOf(provider)).toBe(cut as Error);
     expect(provider.isConnected()).toBe(false);
   });
+
+  test("a channel whose close() throws fails the disconnect with that error and leaves nothing closing, so the next disconnect answers", async () => {
+    const script = scripted({ commands: { "SHOW CURRENT NAMESPACE": CURRENT } });
+    const broken = new Error("the channel did not close");
+    const transport: SparkWireTransport = (options) => {
+      const channel = script.transport(options);
+      return {
+        ...channel,
+        close: () => {
+          channel.close();
+          throw broken;
+        },
+      };
+    };
+    const provider = new SparkProvider(connection(1), {}, { transport });
+    await provider.connect();
+    expect(await failureOf(provider.disconnect())).toBe(broken);
+    expect(provider.hasRunsInFlight()).toBe(false);
+    expect(await failureOf(provider.disconnect())).toBeUndefined();
+    expect(provider.isConnected()).toBe(false);
+    expect(script.closed()).toBe(1);
+  });
+
+  test("the close of a displaced connection whose channel's close() throws leaves no rejection unhandled, and the connect that displaced it meets that error", async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", record);
+    try {
+      const firstNamespace = gate();
+      const secondNamespace = gate();
+      let shows = 0;
+      const script = scripted({
+        commands: { "SHOW CURRENT NAMESPACE": CURRENT },
+        // Each connect's namespace read waits on the test. The first one's answer arrives after its close ended, which
+        // stops the run without waiting for its stream, so the displaced connect still waits when that close fails.
+        stream: (sql, request, call) => {
+          if (sql !== "SHOW CURRENT NAMESPACE") return undefined;
+          shows += 1;
+          if (shows > 1) return heldStream(request, call, CURRENT, secondNamespace.promise);
+          let reads = 0;
+          return {
+            read: async () => {
+              reads += 1;
+              if (reads > 1) return undefined;
+              await firstNamespace.promise;
+              return commandAnswer(request, CURRENT);
+            },
+            receivedBytes: 0,
+            truncated: false,
+            cancel: () => undefined,
+          };
+        },
+      });
+      const broken = new Error("the channel did not close");
+      let opens = 0;
+      const transport: SparkWireTransport = (options) => {
+        const channel = script.transport(options);
+        opens += 1;
+        const first = opens === 1;
+        return {
+          ...channel,
+          close: () => {
+            channel.close();
+            if (first) throw broken;
+          },
+        };
+      };
+      const provider = new SparkProvider(connection(1), {}, { transport });
+      const displaced = failureOf(provider.connect());
+      await eventually(() => shows === 1);
+      const displacing = failureOf(provider.connect());
+      // The first connection's close has stopped its run, released its session and failed at its channel's close().
+      await eventually(() => script.closed() === 1);
+      // A rejection that no handler took is reported once the turn that raised it is over.
+      await later(20);
+      expect(unhandled).toStrictEqual([]);
+      secondNamespace.open();
+      expect(await displacing).toBe(broken);
+      firstNamespace.open();
+      expect(await displaced).toBe(broken);
+      expect(provider.isConnected()).toBe(true);
+      expect(provider.hasRunsInFlight()).toBe(false);
+      await provider.disconnect();
+      expect(script.closed()).toBe(2);
+      expect(unhandled).toStrictEqual([]);
+    } finally {
+      process.off("unhandledRejection", record);
+    }
+  });
 });
 
 describe("SparkProvider: Stop at the edges of a run", () => {
