@@ -15,6 +15,7 @@ import {
   type SparkLiveArguments,
   sparkLiveSecrets,
 } from "../../../helpers/spark-live";
+import { describeIf, MISSING_POSIX_FILE_MODES, missingPosixShell, posixShell } from "../../../helpers/posix-tools";
 
 const ROOT = path.resolve(import.meta.dir, "../../../..");
 // 27 characters, a multiple of 3, so its base64 carries no `=` padding and masks whole.
@@ -226,18 +227,22 @@ describe("the compose fixture", () => {
   });
 });
 
-describe("docker/spark/make-certs.sh", () => {
+// The script resolves POSIX paths and sets POSIX file modes on what it writes, so it runs where those exist; on
+// Windows the skip names why, as every packaging script test here does.
+const BASH = posixShell("bash");
+
+describeIf(missingPosixShell("bash") ?? MISSING_POSIX_FILE_MODES, "docker/spark/make-certs.sh", () => {
   const SCRIPT = path.join(ROOT, "docker", "spark", "make-certs.sh");
 
   test("refuses a directory inside the repository and writes nothing there", () => {
-    const run = spawnSync("bash", [SCRIPT, path.join(ROOT, "docker", "spark", "certs")], { encoding: "utf8" });
+    const run = spawnSync(BASH!, [SCRIPT, path.join(ROOT, "docker", "spark", "certs")], { encoding: "utf8" });
     expect(run.status).toBe(2);
     expect(run.stderr).toContain("outside the repository");
     expect(readdirSync(path.join(ROOT, "docker", "spark")).sort()).toEqual(["make-certs.sh", "nginx.conf"]);
   });
 
   test("refuses a nested directory inside the repository before creating any level of it", () => {
-    const run = spawnSync("bash", [SCRIPT, path.join(ROOT, "docker", "spark", "certs", "nested")], {
+    const run = spawnSync(BASH!, [SCRIPT, path.join(ROOT, "docker", "spark", "certs", "nested")], {
       encoding: "utf8",
     });
     expect(run.status).toBe(2);
@@ -249,7 +254,7 @@ describe("docker/spark/make-certs.sh", () => {
     const parent = mkdtempSync(path.join(tmpdir(), "spark-certs-"));
     temporary.push(parent);
     const climb = "../".repeat(parent.split("/").length);
-    const run = spawnSync("bash", [SCRIPT, `${parent}/missing/${climb}${ROOT.slice(1)}/docker/spark/certs`], {
+    const run = spawnSync(BASH!, [SCRIPT, `${parent}/missing/${climb}${ROOT.slice(1)}/docker/spark/certs`], {
       encoding: "utf8",
     });
     expect(run.status).toBe(2);
@@ -260,7 +265,7 @@ describe("docker/spark/make-certs.sh", () => {
   test("writes a CA and a server certificate for localhost and 127.0.0.1 signed by it, and nothing else", () => {
     const directory = mkdtempSync(path.join(tmpdir(), "spark-certs-"));
     temporary.push(directory);
-    const run = spawnSync("bash", [SCRIPT, directory], { encoding: "utf8" });
+    const run = spawnSync(BASH!, [SCRIPT, directory], { encoding: "utf8" });
     expect(run.status).toBe(0);
     expect(readdirSync(directory).sort()).toEqual(["ca.pem", "server.key", "server.pem"]);
     const san = execFileSync(

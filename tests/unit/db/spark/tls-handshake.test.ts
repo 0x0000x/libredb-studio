@@ -168,7 +168,9 @@ function cases(): SparkHandshakeCase[] {
 }
 
 type Runtime = "bun" | "node";
-type Expected = "answered" | { readonly category: SparkErrorCategory; readonly message: string };
+type Mapped = { readonly category: SparkErrorCategory; readonly message: string };
+/** One mapping, or the mappings a case may read as where the runtime's text varies by platform. */
+type Expected = "answered" | Mapped | readonly Mapped[];
 
 /** What each case maps to; `host` and `port` are what the sentence names. */
 function expected(item: SparkHandshakeCase, runtime: Runtime): Expected {
@@ -184,8 +186,12 @@ function expected(item: SparkHandshakeCase, runtime: Runtime): Expected {
       return runtime === "node" ? { category: "tls", message: S.tlsClientCertificateRequired } : notConnected;
     case "a client certificate from a CA the proxy does not trust":
       return runtime === "node" ? { category: "tls", message: S.tlsClientCertificateRefused } : notConnected;
-    case "plaintext to a port that answers HTTP/1.1":
-      return { category: "tls", message: S.tlsPortExpected(host, item.port) };
+    // Under Node on Windows this case read as not-connected (measured on windows-latest, Node 24.21.0): grpc-js named
+    // no cause there, as it names none for a TLS port. Bun on Windows and Node on Linux and macOS read the answer.
+    case "plaintext to a port that answers HTTP/1.1": {
+      const portExpected = { category: "tls", message: S.tlsPortExpected(host, item.port) } as const;
+      return runtime === "node" && process.platform === "win32" ? [portExpected, notConnected] : portExpected;
+    }
     // A TLS server that closes on plaintext bytes leaves grpc-js "Failed to connect", which names no cause.
     case "plaintext to a TLS port":
       return notConnected;
@@ -214,10 +220,9 @@ function expectRun(outcomes: readonly SparkHandshakeOutcome[], runtime: Runtime)
       phase,
       timeoutMs: TIMEOUT,
     });
-    expect({ name: item.name, category: error.category, message: error.message }).toStrictEqual({
-      name: item.name,
-      ...want,
-    });
+    const mapped = { name: item.name, category: error.category, message: error.message };
+    if ("category" in want) expect(mapped).toStrictEqual({ name: item.name, ...want });
+    else expect(want).toContainEqual({ category: mapped.category, message: mapped.message });
   }
   const raw = (name: string) =>
     outcomes.find((outcome) => outcome.name === name) as { code?: number; details?: string };
