@@ -9,6 +9,7 @@ import { describe, expect, mock, test } from "bun:test";
 import {
   AGENT_CONTEXT_PACK_MAX_CHARS,
   captureContextSnapshot,
+  fingerprintInventory,
   packContextForTask,
   packOperationsInventory,
 } from "@/lib/agent/context-snapshot";
@@ -16,7 +17,7 @@ import { AgentRunDeadline } from "@/lib/agent/deadline";
 import { AGENT_WORKFLOW_BUDGETS } from "@/lib/agent/execution-policy";
 import { AgentRepairLedger } from "@/lib/agent/repair-ledger";
 import type { AgentToolContext } from "@/lib/agent/tools";
-import type { AgentContextSnapshot } from "@/lib/agent/types";
+import type { AgentContextSnapshot, AgentInventory } from "@/lib/agent/types";
 import { QueryError } from "@/lib/db/errors";
 import { ExecutionArtifactStore } from "@/lib/db/operations/artifacts";
 import { ExecutionBudgetTracker } from "@/lib/db/operations/budgets";
@@ -710,7 +711,7 @@ describe("a scoped walk over two levels where a catalog's namespaces cannot be l
       }
     });
 
-    test("forty failing with sentences at the cut leave both packings inside their bound, holding the session's rows", async () => {
+    test("forty failing with sentences at the cut: the whole inventory names the first five and counts 35, and both packings stay inside their bound, holding the session's rows", async () => {
       // Every one named, their notes alone were about twice the bound, and no row fitted beside them.
       const tree = {
         spark_catalog: ["default"],
@@ -723,8 +724,41 @@ describe("a scoped walk over two levels where a catalog's namespaces cannot be l
       };
       const { snapshot } = await captured(walk(tree, scoped));
 
-      expect(snapshot.unreadContainers?.unlistedParents).toHaveLength(5);
-      expect(snapshot.unreadContainers?.unlistedParentsNotNamed?.count).toBe(35);
+      // The first five the walk met, each sentence cut at 200 code points; the other 35 counted; no namespace left out.
+      const inventory: AgentInventory = {
+        objects: [
+          {
+            path: ["spark_catalog", "default", "ORDERS"],
+            name: "spark_catalog.default.ORDERS",
+            kind: "table",
+            columns: [],
+            indexes: [],
+            foreignKeys: [],
+            label: "ORDERS",
+          },
+        ],
+        kinds: [{ id: "table", role: "relation", label: "Table", labelPlural: "Tables" }],
+        unreadContainers: {
+          count: 0,
+          label: "Namespace",
+          labelPlural: "Namespaces",
+          read: ["spark_catalog.default"],
+          unlistedParents: Array.from({ length: 5 }, (_unused, index) => ({
+            path: `lake_${index}`,
+            label: "Catalog",
+            reason: `${`Spark could not load the catalog lake_${index}: `.padEnd(200, "x")}...`,
+          })),
+          unlistedParentsNotNamed: { count: 35, label: "Catalog", labelPlural: "Catalogs" },
+        },
+        defaultContainer: ["spark_catalog", "default"],
+      };
+      expect(snapshot).toStrictEqual({
+        connectionId: "conn-1",
+        fingerprint: fingerprintInventory(inventory),
+        capturedAtMs: 1_000,
+        ...inventory,
+        readVia: "provider-inventory",
+      });
       for (const packed of packings(snapshot)) {
         expect(packed.length).toBeLessThanOrEqual(AGENT_CONTEXT_PACK_MAX_CHARS);
         expect(packed).toContain("spark_catalog.default.ORDERS");
