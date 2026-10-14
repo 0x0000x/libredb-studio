@@ -136,8 +136,8 @@ export const SPARK_OBJECT_KINDS: readonly ObjectKindSpec[] = Object.freeze([
 ] as const);
 
 /**
- * The probe session ids of connects the version floor refused, by connection id and configured endpoint, which is the
- * far end under an SSH tunnel: the tunnel's local forward listens on a new ephemeral port for each attempt, so the
+ * The probe session ids of connects refused at the version check, by connection id and configured endpoint, which is
+ * the far end under an SSH tunnel: the tunnel's local forward listens on a new ephemeral port for each attempt, so the
  * channel target changes from one attempt to the next. A server without ReleaseSession keeps a session until it idles
  * out, so the next connect of the same connection reads the version on the remembered id, and repeated refusals hold
  * one server session, not one per attempt. Past the bound the oldest entry is dropped; a connect that meets the floor,
@@ -553,8 +553,9 @@ export class SparkProvider extends SQLBaseProvider {
   /**
    * The version read on a probe session before any setup, and the floor. The probe is released whatever the version:
    * a connect that meets the floor sets up a metadata session of its own, because the session registry creates every
-   * session id itself, and a refused one leaves no session behind on a server that offers ReleaseSession. A server below
-   * the floor without ReleaseSession keeps the probe, so its id is remembered for the next connect of this connection.
+   * session id itself, and a refused one leaves no session behind on a server that offers ReleaseSession. A probe is
+   * remembered for the next connect of this connection when it was refused, for a version below the floor or for one
+   * Studio cannot read, and the server cannot release it, having no ReleaseSession.
    * The read and the release are the connection's probe from the moment the read is sent, so a close that begins
    * between the version answer and the release, a disconnect's or a second connect's, waits for the release before it
    * closes the channel.
@@ -570,7 +571,7 @@ export class SparkProvider extends SQLBaseProvider {
     if (refusal !== undefined) throw new SparkError("version", refusal);
   }
 
-  /** The version read on the probe session and the probe's release; answers the floor's refusal, if any. */
+  /** The version read on the probe session and the probe's release; answers the version check's refusal, if any. */
   private async readVersionOnProbe(connection: SparkConnection): Promise<string | undefined> {
     const { host, port } = connection.options.endpoint;
     const key = `${this.config.id}\u0000${host}\u0000${port}`;

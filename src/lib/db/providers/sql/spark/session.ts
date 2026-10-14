@@ -1,6 +1,7 @@
 /**
  * The session registry: one Spark session per request scope, a statement session for a call with no scope, and the
- * provider's metadata session, which never receives user text. No two requests share a session, so no Studio user sees
+ * provider's metadata session, which never receives user text. No two requests run their statements on a shared
+ * session: the metadata session, which the tree and panel reads share, runs no user statement, so no Studio user sees
  * another's SET, USE or temp view.
  *
  * Every new session is set up once, as a memoized promise: Config set of SPARK_SESSION_CONF (and, on the metadata
@@ -155,8 +156,10 @@ export class SparkSessions {
   }
 
   /**
-   * Drops the metadata session the server closed; the next metadata() sets up a new one. A session still in setup was
-   * not closed by the server, so it is released once its setup settles; a failed setup released its own.
+   * Drops the metadata session the server closed; the next metadata() sets up a new one. The caller must hold the
+   * current metadata session: whatever session is current is dropped, so a caller whose session another caller already
+   * replaced would drop the new one. A session still in setup was not closed by the server, so it is released once its
+   * setup settles; a failed setup released its own.
    */
   discardMetadata(): void {
     const entry = this.metadataEntry;
