@@ -656,6 +656,9 @@ To repeat the captures by hand:
    The harness dials a service only once `docker port` lists its target for the fixture container running the pinned image, and an answer other than the catalog expects stops the run with exit code 1, so a surprise is reported rather than recorded.
 4. Stop the services with `docker compose -f database-compose.yml --profile spark-4-1 --profile spark-auth down`.
 
+A surface changed in the catalog, the text that tells what an entry's captures record, needs no retake.
+The render-only `bun tests/live/spark-evidence.ts --surfaces` contacts no server and reads no variable: it rewrites that surface in every capture, every other byte as written, and `--readme` then regenerates the fixtures README.
+
 ### References
 
 - Spark Connect overview: https://spark.apache.org/docs/4.2.0/spark-connect-overview.html

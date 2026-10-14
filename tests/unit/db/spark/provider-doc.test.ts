@@ -325,6 +325,16 @@ describe("docs/providers/spark.md", () => {
     expect(what).toContain("4.2.0");
   });
 
+  test("names every mode of the capture harness's usage in section 13", () => {
+    const harness = readFileSync(path.join(ROOT, "tests/live/spark-evidence.ts"), "utf8");
+    const usage = harness.match(/const USAGE =\s*"([^"]*)"/)?.[1];
+    if (usage === undefined) throw new Error("tests/live/spark-evidence.ts declares no USAGE");
+    const modes = usage.match(/--[a-z]+/g) ?? [];
+    expect(modes).toStrictEqual(["--setup", "--capture", "--readme", "--surfaces"]);
+    const testing = flat(sectionOf(DOC, "## 13. Testing and evidence"));
+    expect(modes.filter((mode) => !testing.includes(mode))).toStrictEqual([]);
+  });
+
   test("states every security topic the provider owes its reader", () => {
     const security = flat(sectionOf(DOC, "## 10. Security"));
     for (const topic of ["no engine-side read-only mode", "D212", "3.22", "web UI", "global temp", "loopback"]) {
