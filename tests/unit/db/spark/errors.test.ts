@@ -1,8 +1,10 @@
 /**
- * Every error category from its trigger to its class and sentence, over hand-built gRPC statuses and the captured
- * answers of tests/fixtures/spark/; the Cause line; the TIME, maxResultSize and empty-UNKNOWN sentences;
- * FetchErrorDetails read for one root and at most five causes; every sentence word for word; and a token in any server
- * text never reaching a sentence.
+ * The categories toSparkError gives, each from its trigger to its sentence, over hand-built gRPC statuses and the
+ * captured answers of tests/fixtures/spark/; the Cause line and the TIME, maxResultSize, empty-UNKNOWN and empty-status
+ * sentences; errorDetailsFromResponse read for one root and at most five causes; sparkVersionText's trim, cut and
+ * withheld token; the class toDatabaseError gives every category, the five that other modules raise included; a token
+ * in a status text, a FetchErrorDetails cause or a local error never reaching the message; and every sentence word for
+ * word, with the article the cell refusal writes before each type.
  */
 import { describe, expect, test } from "bun:test";
 import {
