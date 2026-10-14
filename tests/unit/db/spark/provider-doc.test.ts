@@ -31,7 +31,7 @@ import { SPARK_STATEMENT_SENTENCES } from "@/lib/db/providers/sql/spark/statemen
 import { cellValue } from "@/lib/db/providers/sql/spark/values";
 import { DB_UI_CONFIG, SPARK_FIELD_HINTS } from "@/lib/db-ui-config";
 import { MAX_UNLIMITED_ROWS } from "@/lib/db/utils/query-limiter";
-import { resolveSqlGrammar } from "@/lib/sql/grammar";
+import { type ConfirmCodeForm, resolveSqlGrammar } from "@/lib/sql/grammar";
 import { CENSUS_CONNECTION } from "../../../helpers/census-connection";
 import { captureBytes, readSparkCapture } from "../../../helpers/spark-captures";
 
@@ -70,6 +70,15 @@ function sectionOf(text: string, heading: string): string {
     (line, at) => at > start && /^#{1,6} /.test(line) && line.indexOf(" ") <= level && !inFence(at),
   );
   return lines.slice(start, end < 0 ? lines.length : end).join("\n");
+}
+
+/** How section 9 names a code form: its words, its prefix, its word before a string, or the call it reads. */
+function namedForm(form: ConfirmCodeForm): string {
+  if ("prefix" in form) return form.prefix;
+  if ("wordThenLiteral" in form) return `${form.wordThenLiteral} '<command>'`;
+  if ("quotedCall" in form) return form.quotedCall;
+  if ("computedCall" in form) return `${form.computedCall}(...)(...)`;
+  return form.join(" ");
 }
 
 /** The cells of every body row of the first table in `text`. */
@@ -246,15 +255,7 @@ describe("docs/providers/spark.md", () => {
     const grammar = resolveSqlGrammar("spark");
     const gate = flat(sectionOf(DOC, "## 9. The confirmation gate"));
     for (const form of grammar.confirmForms ?? []) expect(gate).toContain(`\`${form.join(" ")}\``);
-    for (const form of grammar.confirmCodeForms ?? []) {
-      const named =
-        "prefix" in form
-          ? form.prefix
-          : "wordThenLiteral" in form
-            ? `${form.wordThenLiteral} '<command>'`
-            : form.join(" ");
-      expect(gate).toContain(`\`${named}\``);
-    }
+    for (const form of grammar.confirmCodeForms ?? []) expect(gate).toContain(`\`${namedForm(form)}\``);
     for (const key of grammar.confirmConfigKeys ?? []) expect(gate).toContain(`\`${key}\``);
     expect(gate).toContain("a second look, not a boundary");
   });

@@ -154,6 +154,11 @@ describe("the Spark grammar", () => {
       { wordThenLiteral: "USING" },
       ["REFLECT"],
       ["JAVA_METHOD"],
+      ["TRY_REFLECT"],
+      { quotedCall: "REFLECT" },
+      { quotedCall: "JAVA_METHOD" },
+      { quotedCall: "TRY_REFLECT" },
+      { computedCall: "IDENTIFIER" },
     ]);
     expect(grammar.confirmConfigKeys).toEqual([
       "spark.sql.variable.substitute",

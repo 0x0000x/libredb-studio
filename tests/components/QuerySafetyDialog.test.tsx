@@ -2428,6 +2428,70 @@ describe("a confirmCodeForms word followed by a string literal", () => {
   });
 });
 
+// The `quotedCall` code form, read before any row declares it: a terminated quoted name whose text is the form's name,
+// compared without case, that a `(` follows past whitespace and comments. Spark's row declares one per reflection
+// function, since Spark resolves `` `reflect`(...) `` as `reflect(...)`.
+describe("a confirmCodeForms quoted name called as a function", () => {
+  const FORM: SqlGrammar = { ...DEFAULT_SQL_GRAMMAR, confirmCodeForms: [{ quotedCall: "REFLECT" }] };
+
+  test.each([
+    "SELECT `reflect`('a', 'b')",
+    "SELECT `REFLECT`('a')",
+    "SELECT \"Reflect\"('a')",
+    "SELECT `reflect` /* c */ ('a')",
+    "SELECT `reflect` -- c\n('a')",
+    "SELECT s.`reflect`('a')",
+    // A quoted name no `(` follows does not end the reading: a later one still asks.
+    "SELECT `reflect` AS c, `reflect`('a') FROM t",
+  ])("asks for %j", (sql) => {
+    expect(writesUnderGrammar(sql, FORM)).toBe(true);
+  });
+
+  test.each([
+    "SELECT `reflect` FROM t",
+    "SELECT `reflect`.a FROM t",
+    "SELECT `reflection`('a')",
+    "SELECT `re``flect`('a')",
+    "SELECT 'reflect'('a')",
+    "SELECT 1 /* `reflect`('a') */",
+    // The bare word is the word sequence's to ask for, not this form's.
+    "SELECT reflect('a')",
+    // A quoted name that never closes is not read as a call here; `isDangerousQuery` asks for it as unreadable text.
+    "SELECT `reflect('a')",
+  ])("does not ask for %j", (sql) => {
+    expect(writesUnderGrammar(sql, FORM)).toBe(false);
+  });
+});
+
+// The `computedCall` code form, read before any row declares it: a code word, then a parenthesised run, then a `(`, past
+// whitespace and comments, which calls a function whose name the run computes. Spark's row declares
+// `{ computedCall: "IDENTIFIER" }` for `IDENTIFIER(<expr>)(...)`.
+describe("a confirmCodeForms word whose parenthesised run names the function called", () => {
+  const FORM: SqlGrammar = { ...DEFAULT_SQL_GRAMMAR, confirmCodeForms: [{ computedCall: "IDENTIFIER" }] };
+
+  test.each([
+    "SELECT IDENTIFIER('f')('a', 'b')",
+    "SELECT identifier('f' || 'g')(1)",
+    "SELECT IDENTIFIER /* c */ (concat('f', ')')) -- c\n (1)",
+    "SELECT IDENTIFIER(f(g(1), '('))(2)",
+    // An IDENTIFIER whose name is not called does not end the reading: a later one still asks.
+    "SELECT IDENTIFIER('c') FROM t WHERE IDENTIFIER('f')(1) > 0",
+  ])("asks for %j", (sql) => {
+    expect(writesUnderGrammar(sql, FORM)).toBe(true);
+  });
+
+  test.each([
+    "SELECT * FROM IDENTIFIER('t')",
+    "SELECT IDENTIFIER('c') FROM t",
+    "SELECT identifier FROM t",
+    "SELECT IDENTIFIER('f'",
+    "SELECT 'IDENTIFIER(f)(1)'",
+    "SELECT 1 /* IDENTIFIER('f')(1) */",
+  ])("does not ask for %j", (sql) => {
+    expect(writesUnderGrammar(sql, FORM)).toBe(false);
+  });
+});
+
 // The `confirmConfigKeys` fact, read before any row declares it: a SET or RESET of a listed session key asks, and so
 // does a RESET with no key, which restores every key. Spark's row lists variable substitution and the catalog keys.
 describe("a confirmConfigKeys key set or reset", () => {
@@ -2550,6 +2614,15 @@ describe("Apache Spark's confirmation forms", () => {
     "SELECT TRANSFORM(a) USING /* c */ r'cat' FROM t",
     "SELECT reflect('java.util.UUID', 'randomUUID')",
     "SELECT java_method('java.util.UUID', 'randomUUID')",
+    "SELECT try_reflect('java.util.UUID', 'randomUUID')",
+    // Spark resolves a function name without case, quoted or not, and IDENTIFIER(<expr>) computes the name it calls.
+    "SELECT `reflect`('java.util.UUID', 'randomUUID')",
+    "SELECT `java_method`('java.util.UUID', 'randomUUID')",
+    "SELECT `try_reflect`('java.util.UUID', 'randomUUID')",
+    "SELECT system.builtin.`REFLECT` /* c */ ('java.util.UUID', 'randomUUID')",
+    "SELECT \"Java_Method\"('java.util.UUID', 'randomUUID')",
+    "SELECT IDENTIFIER('reflect')('java.util.UUID', 'randomUUID')",
+    "SELECT identifier -- c\n('java' || '_method') /* d */ ('java.util.UUID', 'randomUUID')",
     "SET spark.sql.variable.substitute=true",
     "SET spark.sql.defaultCatalog=lake",
     "SET spark.sql.catalog.lake=org.apache.iceberg.spark.SparkCatalog",
@@ -2598,6 +2671,15 @@ describe("Apache Spark's confirmation forms", () => {
     expect(isDangerousQuery("SELECT replace(a, 'x', 'y') FROM t JOIN u ON t.id = u.id", "spark")).toBe(false);
   });
 
+  test("a quoted reflection name asks only where a `(` follows it, and IDENTIFIER only where its name is called", () => {
+    expect(isDangerousQuery("SELECT `Reflect` ('java.util.UUID', 'randomUUID')", "spark")).toBe(true);
+    expect(isDangerousQuery("SELECT `reflect`, `java_method` FROM t", "spark")).toBe(false);
+    expect(isDangerousQuery("SELECT `reflection`('a') FROM t", "spark")).toBe(false);
+    expect(isDangerousQuery("SELECT * FROM IDENTIFIER('t') WHERE IDENTIFIER('c') > 1", "spark")).toBe(false);
+    // The text cannot tell a column list from a call's arguments, so a table IDENTIFIER names before one asks too.
+    expect(isDangerousQuery("CREATE TABLE IDENTIFIER('t') (a INT)", "spark")).toBe(true);
+  });
+
   test.each([
     "SELECT transform(arr, x -> x + 1) FROM t",
     "SELECT map(1, 2)",
@@ -2624,6 +2706,9 @@ describe("Apache Spark's confirmation forms", () => {
 
   test.each(["postgres", "databend", "snowflake"] as const)("%s keeps its verdicts", (type) => {
     expect(isDangerousQuery("SELECT reflect('a', 'b')", type)).toBe(false);
+    expect(isDangerousQuery("SELECT try_reflect('a', 'b')", type)).toBe(false);
+    expect(isDangerousQuery("SELECT `reflect`('a', 'b')", type)).toBe(false);
+    expect(isDangerousQuery("SELECT IDENTIFIER('reflect')('a', 'b')", type)).toBe(false);
     expect(isDangerousQuery("SET spark.sql.variable.substitute=true", type)).toBe(false);
     expect(isDangerousQuery("SELECT TRANSFORM(a) USING 'cat' FROM t", type)).toBe(false);
   });

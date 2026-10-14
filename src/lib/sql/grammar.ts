@@ -306,8 +306,11 @@ export interface SqlGrammar {
   /**
    * Forms that ask for a confirmation wherever they appear in a statement's code, strings and comments skipped: a
    * word sequence, the start of an identifier (`{ prefix: "SYSTEM$" }` matches `SYSTEM$CLUSTERING_INFORMATION`),
-   * or a word whose next code, past whitespace and comments, is a string literal (`{ wordThenLiteral: "USING" }`
-   * matches `TRANSFORM (a) USING 'cat'` and not `JOIN u USING (id)`). Absent means none.
+   * a word whose next code, past whitespace and comments, is a string literal (`{ wordThenLiteral: "USING" }`
+   * matches `TRANSFORM (a) USING 'cat'` and not `JOIN u USING (id)`), a closed quoted name whose text is the name,
+   * compared without case, that a `(` follows (`{ quotedCall: "REFLECT" }` matches `` `Reflect`('a') ``), or a word
+   * followed by a parenthesised run and then a `(` (`{ computedCall: "IDENTIFIER" }` matches `IDENTIFIER('f')(1)`, a
+   * call whose function name the run computes). Absent means none.
    */
   readonly confirmCodeForms?: readonly ConfirmCodeForm[];
   /**
@@ -327,9 +330,15 @@ export interface SqlGrammar {
 }
 
 /**
- * A form `SqlGrammar.confirmCodeForms` looks for: a word sequence, an identifier prefix, or a word a literal follows.
+ * A form `SqlGrammar.confirmCodeForms` looks for: a word sequence, an identifier prefix, a word a literal follows, a
+ * quoted name called as a function, or a word whose parenthesised run names the function called.
  */
-export type ConfirmCodeForm = readonly string[] | { readonly prefix: string } | { readonly wordThenLiteral: string };
+export type ConfirmCodeForm =
+  | readonly string[]
+  | { readonly prefix: string }
+  | { readonly wordThenLiteral: string }
+  | { readonly quotedCall: string }
+  | { readonly computedCall: string };
 
 /**
  * What a call that names no dialect gets.
@@ -969,8 +978,10 @@ const SPARK_GRAMMAR: SqlGrammar = {
   ],
   // Anywhere in the code: overwrite or replace rows (4.2 also writes `INSERT WITH SCHEMA EVOLUTION OVERWRITE` and
   // `REPLACE ON <condition>`), load a function's code, remove partitions from the catalog, start an external process
-  // (`TRANSFORM`, `MAP` or `REDUCE` ... `USING '<command>'`) or call a Java method by reflection. `reflect` and
-  // `java_method` are whole code words, so a name such as `reflection` does not ask.
+  // (`TRANSFORM`, `MAP` or `REDUCE` ... `USING '<command>'`) or call a Java method by reflection. `reflect`,
+  // `java_method` and `try_reflect` are whole code words, so a name such as `reflection` does not ask, and a quoted
+  // name of one asks where a `(` follows it, since Spark resolves a function name without case, quoted or not. A
+  // function `IDENTIFIER(<expr>)` names asks wherever it is called, since the gate cannot read the computed name.
   confirmCodeForms: [
     ["INSERT", "OVERWRITE"],
     ["EVOLUTION", "OVERWRITE"],
@@ -985,6 +996,11 @@ const SPARK_GRAMMAR: SqlGrammar = {
     { wordThenLiteral: "USING" },
     ["REFLECT"],
     ["JAVA_METHOD"],
+    ["TRY_REFLECT"],
+    { quotedCall: "REFLECT" },
+    { quotedCall: "JAVA_METHOD" },
+    { quotedCall: "TRY_REFLECT" },
+    { computedCall: "IDENTIFIER" },
   ],
   // Variable substitution is off in every session Studio opens; a SET or RESET that turns it back on, or rebinds a
   // catalog, asks.

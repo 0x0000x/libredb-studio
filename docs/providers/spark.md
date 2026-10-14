@@ -538,7 +538,8 @@ Anywhere in the statement's code:
 - `USING JAR`, `USING FILE` and `USING ARCHIVE` load code for a function.
 - `DROP PARTITIONS` and `SYNC PARTITIONS` remove partitions from the catalog in REPAIR TABLE.
 - `USING '<command>'`, the word followed by a string, as `TRANSFORM (...) USING '<command>'`, `MAP ... USING` and `REDUCE ... USING` start an external process; `USING (id)` and `USING parquet` do not ask.
-- `REFLECT` and `JAVA_METHOD` call a Java method on the cluster; they match as whole words, so a name such as `reflection` does not ask.
+- `REFLECT`, `JAVA_METHOD` and `TRY_REFLECT` call a Java method on the cluster; they match as whole words, so a name such as `reflection` does not ask, and as a name in backticks or double quotes that a `(` follows, such as `` `reflect`(...) ``.
+- `IDENTIFIER(...)(...)` calls a function whose name an expression computes, which the gate cannot read; the same shape in `CREATE TABLE IDENTIFIER('t') (a INT)` asks too.
 
 A `SET` with `=` or a `RESET` of `spark.sql.variable.substitute`, `spark.sql.defaultCatalog` or any key under `spark.sql.catalog.` asks, and so does a bare `RESET`, which restores every key.
 Not asked, on purpose: a plain INSERT, CREATE without REPLACE, `USE` and `SET CATALOG`, which change only the request's own session, and CACHE, UNCACHE, CLEAR CACHE and REFRESH, which change no data.
