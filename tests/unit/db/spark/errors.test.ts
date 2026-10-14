@@ -23,6 +23,7 @@ import {
   toDatabaseError,
   toSparkError,
 } from "@/lib/db/providers/sql/spark/errors";
+import type { SparkValueKind } from "@/lib/db/providers/sql/spark/schema";
 import { secretForms, serverText } from "@/lib/db/utils/server-text";
 import { captureBytes, readSparkCapture, type SparkCaptureVersion } from "../../../helpers/spark-captures";
 import type { SparkCaptureName } from "../../../live/spark-evidence-plan";
@@ -1033,6 +1034,40 @@ describe("every sentence, word for word", () => {
   test("streamFailed without a status text drops the parentheses", () => {
     expect(S.streamFailed("")).toBe(
       "The connection to Spark failed while the statement ran. Studio asked Spark to stop it; run it again.",
+    );
+  });
+
+  /** The type a cell refusal names for each kind (values.ts), and the article its spoken name takes. */
+  const CELL_TYPES: Readonly<Record<SparkValueKind["type"], readonly [type: string, article: "a" | "an"]>> = {
+    void: ["void", "a"],
+    boolean: ["boolean", "a"],
+    tinyint: ["tinyint", "a"],
+    smallint: ["smallint", "a"],
+    int: ["int", "an"],
+    bigint: ["bigint", "a"],
+    float: ["float", "a"],
+    double: ["double", "a"],
+    decimal: ["decimal", "a"],
+    string: ["string", "a"],
+    binary: ["binary", "a"],
+    date: ["date", "a"],
+    timestamp: ["timestamp", "a"],
+    timestamp_ntz: ["timestamp_ntz", "a"],
+    time: ["time", "a"],
+    "year-month-interval": ["year-month interval", "a"],
+    "day-time-interval": ["day-time interval", "a"],
+    "calendar-interval": ["calendar interval", "a"],
+    array: ["array", "an"],
+    map: ["map", "a"],
+    struct: ["struct", "a"],
+    variant: ["variant", "a"],
+    geometry: ["geometry", "a"],
+    geography: ["geography", "a"],
+  };
+
+  test.each(Object.values(CELL_TYPES))("cellUnreadable writes %s after the article %s", (type, article) => {
+    expect(S.cellUnreadable(type, "c")).toBe(
+      `Spark sent ${article} ${type} value in column "c" that Studio could not read, so the result is not shown.`,
     );
   });
 

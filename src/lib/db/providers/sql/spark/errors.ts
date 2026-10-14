@@ -72,6 +72,13 @@ export interface SparkErrorContext {
   readonly details?: SparkErrorDetails;
 }
 
+/**
+ * The article before a type's name: "an" before a vowel sound, "a" before any other. Every type a cell refusal names
+ * (values.ts) is a lowercase Spark name said as its first letter reads, so that letter decides: "an int", "an array",
+ * "a year-month interval", "a geometry".
+ */
+const articleOf = (type: string): "a" | "an" => (/^[aeiou]/.test(type) ? "an" : "a");
+
 /** The sentences of the provider's failures and connect warnings; docs/providers/spark.md quotes each word for word. */
 export const SPARK_ERROR_SENTENCES = Object.freeze({
   notConnected: (host: string, port: number) =>
@@ -146,7 +153,7 @@ export const SPARK_ERROR_SENTENCES = Object.freeze({
     "Spark sent this result with large string and binary types (spark.sql.execution.arrow.useLargeVarTypes is true in this session), and Studio reads only the standard ones. Run SET spark.sql.execution.arrow.useLargeVarTypes=false, or leave the setting out.",
   unreadable: (what: string) => `Spark sent a result Studio could not read (${what}), so it is not shown.`,
   cellUnreadable: (type: string, column: string) =>
-    `Spark sent a ${type} value in column "${column}" that Studio could not read, so the result is not shown.`,
+    `Spark sent ${articleOf(type)} ${type} value in column "${column}" that Studio could not read, so the result is not shown.`,
 });
 
 // gRPC status codes (grpc/grpc `doc/statuscodes.md`), the numbers grpc-js reports.

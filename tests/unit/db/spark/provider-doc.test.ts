@@ -310,6 +310,14 @@ describe("docs/providers/spark.md", () => {
     });
   });
 
+  test("names the types the cell refusal writes `an` before, as the sentence writes them", () => {
+    const nested = flat(sectionOf(DOC, "### 6.2 Nested values"));
+    for (const type of ["int", "array"]) {
+      expect(nested).toContain(`\`an ${type} value\``);
+      expect(SPARK_ERROR_SENTENCES.cellUnreadable(type, "<column>")).toContain(` an ${type} value `);
+    }
+  });
+
   test("states the floor and the tested versions", () => {
     const what = flat(sectionOf(DOC, "## 1. What it is"));
     expect(what).toContain(`Spark ${SPARK_MIN_VERSION.major}.${SPARK_MIN_VERSION.minor} or later`);

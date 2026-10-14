@@ -355,6 +355,7 @@ A `timestamp` is the UTC instant with `+00:00`, a `timestamp_ntz` the same text 
 Inside an array, map or struct every value is JSON-safe: an int64 is a number when safe and digits otherwise, a decimal its text, a binary value `\x<hex>` text, temporal values their texts, a variant its JSON text as a string.
 A map is an object keyed by its key texts when the key type is scalar and the texts are all distinct, and an array of `[key, value]` pairs otherwise, so no entry is lost.
 A cell whose layout does not match its type is refused, naming its column: `Spark sent a <type> value in column "<column>" that Studio could not read, so the result is not shown.`
+Before a type said with a vowel sound the sentence writes `an`, as in `an int value` and `an array value`.
 
 VARIANT is decoded per the Variant encoding spec into JSON text: a decimal keeps its scale's digits (`1.10`), a double is written as JavaScript writes it, a timestamp in ISO 8601 with `T` and `+00:00`, binary in base64, object fields in their stored order.
 It therefore differs from Spark's own `to_json(v)` in three ways: Spark strips trailing decimal zeros, writes doubles in Java's text, and separates date and time with a space.
