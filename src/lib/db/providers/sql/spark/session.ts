@@ -6,7 +6,8 @@
  *
  * Every new session is set up once, as a memoized promise: Config set of SPARK_SESSION_CONF (and, on the metadata
  * session, SPARK_METADATA_SESSION_CONF in the same call), SET CATALOG as a string literal, USE NAMESPACE with every part
- * quoted. Every answer's server-side id is observed, so every later request of the session carries it and a restarted
+ * quoted; both setup statements are given the moment the setup began, from which index.ts counts their deadline.
+ * Every answer's server-side id is observed, so every later request of the session carries it and a restarted
  * server answers SESSION_CHANGED instead of opening a session without the setup. A release that fails changes nothing:
  * the deps log it with no server text and Spark drops the session after its idle timeout. Once close or releaseAll
  * began, the registry is closed: a session asked for later is refused with the cancelled sentence, so no session is set
@@ -27,13 +28,16 @@ export interface SparkSessionHandle extends SparkSessionRef {
 /**
  * Built by index.ts over the channel. The registry holds no error context and maps no failure: a setup failure reaches
  * the statement or the read that needed the session unchanged. So `configSet` and `runSetup` reject only with a
- * SparkError, mapped by toSparkError with the phase control.
+ * SparkError, mapped by toSparkError with the phase control and the phase setup.
  */
 export interface SparkSessionDeps {
   /** Config set on `session`; answers the server_side_session_id of the answer. */
   configSet(session: SparkSessionRef, pairs: readonly (readonly [string, string])[]): Promise<string>;
-  /** One setup statement on `session`; answers the server_side_session_id of its answer. */
-  runSetup(session: SparkSessionRef, sql: string): Promise<string>;
+  /**
+   * One setup statement on `session`, whose deadline counts from `setupStart`, the Date.now() at which the session's
+   * setup began; answers the server_side_session_id of its answer.
+   */
+  runSetup(session: SparkSessionRef, sql: string, setupStart: number): Promise<string>;
   /** ReleaseSession; a failure is logged by the deps with no server text and rejected. */
   release(session: SparkSessionRef): Promise<void>;
 }
@@ -218,6 +222,8 @@ export class SparkSessions {
     this.assertNotReleased();
     const handle: SparkSessionHandle = { sessionId: crypto.randomUUID(), kind };
     this.open.add(handle);
+    // Both setup statements count their deadline from here, however long the Config set took.
+    const setupStart = Date.now();
     try {
       const pairs = kind === "metadata" ? [...SPARK_SESSION_CONF, ...SPARK_METADATA_SESSION_CONF] : SPARK_SESSION_CONF;
       this.observe(handle, await this.deps.configSet(handle, pairs));
@@ -225,13 +231,13 @@ export class SparkSessions {
         this.assertNotReleased();
         this.observe(
           handle,
-          await this.deps.runSetup(handle, `SET CATALOG ${quoteLiteral(this.place.catalog, "spark")}`),
+          await this.deps.runSetup(handle, `SET CATALOG ${quoteLiteral(this.place.catalog, "spark")}`, setupStart),
         );
       }
       if (this.place.namespace !== undefined) {
         this.assertNotReleased();
         const spelled = this.place.namespace.map(quoteSparkName).join(".");
-        this.observe(handle, await this.deps.runSetup(handle, `USE NAMESPACE ${spelled}`));
+        this.observe(handle, await this.deps.runSetup(handle, `USE NAMESPACE ${spelled}`, setupStart));
       }
       return handle;
     } catch (error) {

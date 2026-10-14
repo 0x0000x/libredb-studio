@@ -66,9 +66,15 @@ export interface SparkErrorDetails {
 
 export interface SparkErrorContext {
   readonly connection: SparkErrorConnection;
-  readonly phase: "connect" | "command" | "relation" | "control";
-  /** The connection's query timeout, which a statement's deadline names; required in the command and relation phases. */
+  /** `setup` is a session setup statement (SET CATALOG or USE NAMESPACE); the session's Config set is `control`. */
+  readonly phase: "connect" | "command" | "relation" | "control" | "setup";
+  /**
+   * The connection's query timeout, which the deadline sentences of a statement and of a setup statement name; required
+   * in the command, relation and setup phases.
+   */
   readonly timeoutMs?: number;
+  /** The setup statement that a setup statement's failure names; required in the setup phase. */
+  readonly step?: string;
   readonly details?: SparkErrorDetails;
 }
 
@@ -118,6 +124,10 @@ export const SPARK_ERROR_SENTENCES = Object.freeze({
     statusText === ""
       ? "The connection to Spark failed while the statement ran. Studio asked Spark to stop it; run it again."
       : `The connection to Spark failed while the statement ran (${statusText}). Studio asked Spark to stop it; run it again.`,
+  setupFailed: (step: string, statusText: string) =>
+    statusText === ""
+      ? `The connection to Spark failed while Studio set up the session with ${step}. Run it again.`
+      : `The connection to Spark failed while Studio set up the session with ${step} (${statusText}). Run it again.`,
   pingGoaway:
     "The connection to Spark was closed by the server's keepalive rule while the statement ran. Studio asked Spark to stop the statement; run it again.",
   receiveCapCommand:
@@ -134,6 +144,8 @@ export const SPARK_ERROR_SENTENCES = Object.freeze({
     `The statement ran past the connection's query timeout (${timeoutMs} ms); Studio asked Spark to stop it.`,
   deadlineBeforeSend: (timeoutMs: number) =>
     `The statement was not sent: the connection's query timeout (${timeoutMs} ms) passed before Studio could send it.`,
+  setupDeadline: (step: string, timeoutMs: number) =>
+    `Spark did not finish setting up the session with ${step} within the connection's query timeout (${timeoutMs} ms); the catalog may be slow to answer. Run it again, or raise Query Timeout in the connection.`,
   cancelled: "The query was cancelled.",
   sessionChanged: "The Spark server restarted during this request, and the session it held is gone. Run it again.",
   sessionClosed:
@@ -234,9 +246,18 @@ const inStatement = (context: SparkErrorContext) => context.phase === "command" 
 const RECEIVE_CAP_SENTENCES: Readonly<Record<SparkErrorContext["phase"], string>> = {
   connect: SPARK_ERROR_SENTENCES.receiveCapControl,
   control: SPARK_ERROR_SENTENCES.receiveCapControl,
+  setup: SPARK_ERROR_SENTENCES.receiveCapControl,
   command: SPARK_ERROR_SENTENCES.receiveCapCommand,
   relation: SPARK_ERROR_SENTENCES.receiveCapRelation,
 };
+
+/** What a setup statement's sentences name, the statement and the timeout, which its context must carry. */
+function setupOf(context: SparkErrorContext): { readonly step: string; readonly timeoutMs: number } {
+  if (context.step === undefined || context.timeoutMs === undefined) {
+    throw new TypeError("toSparkError: a setup statement's failure needs context.step and context.timeoutMs");
+  }
+  return { step: context.step, timeoutMs: context.timeoutMs };
+}
 
 /** The first `max` code points of `text`, so a cut never leaves half of a surrogate pair. */
 function firstCodePoints(text: string, max: number): string {
@@ -271,8 +292,9 @@ function sparkMessage(status: GrpcStatusLike, info: SparkErrorInfo | undefined, 
 }
 
 /**
- * The category and sentence of any failure the provider meets. A `SparkError` is returned unchanged. The one throw is a
- * caller's defect: a statement's deadline without `context.timeoutMs`, whose sentence names it.
+ * The category and sentence of any failure the provider meets. A `SparkError` is returned unchanged. The throws are a
+ * caller's defect, a context without what the sentence names: a statement's deadline without `context.timeoutMs`, and a
+ * setup statement's deadline or failed connection without `context.step` and `context.timeoutMs`.
  */
 export function toSparkError(error: unknown, context: SparkErrorContext): SparkError {
   if (error instanceof SparkError) return error;
@@ -287,20 +309,27 @@ export function toSparkError(error: unknown, context: SparkErrorContext): SparkE
     return new SparkError("spark", SPARK_ERROR_SENTENCES.localClientError, options);
   }
   const { code, details } = error;
-  const streamFailed = () =>
-    new SparkError(
-      "stream-failed",
-      SPARK_ERROR_SENTENCES.streamFailed(serverText(details.trim(), secretForms)),
-      options,
-    );
-  // In connect and control no statement runs, so none was asked to stop: such a failure reads as not-connected.
-  const inStatementOr = (failure: () => SparkError) => (inStatement(context) ? failure() : notConnected());
+  const statusText = () => serverText(details.trim(), secretForms);
+  const streamFailed = () => new SparkError("stream-failed", SPARK_ERROR_SENTENCES.streamFailed(statusText()), options);
+  const setupFailed = () =>
+    new SparkError("stream-failed", SPARK_ERROR_SENTENCES.setupFailed(setupOf(context).step, statusText()), options);
+  // A setup statement follows the session's Config set, which the server answered, so its failure is never read as a
+  // server that did not answer.
+  const unreachable = () => (context.phase === "setup" ? setupFailed() : notConnected());
+  // Outside a statement of the user's none was asked to stop: in connect and control such a failure reads as
+  // not-connected, and in a setup statement as the setup's failed connection.
+  const inStatementOr = (failure: () => SparkError) => (inStatement(context) ? failure() : unreachable());
   switch (code) {
     case CANCELLED:
       // Only grpc-js's own client cancel is the user's; any other is a peer's reset of the stream.
       if (details === CLIENT_CANCEL) return new SparkError("cancelled", SPARK_ERROR_SENTENCES.cancelled, options);
       return inStatementOr(streamFailed);
     case DEADLINE_EXCEEDED:
+      // A setup statement's deadline is the query timeout from the setup's start, whether or not the statement left.
+      if (context.phase === "setup") {
+        const { step, timeoutMs } = setupOf(context);
+        return new SparkError("deadline", SPARK_ERROR_SENTENCES.setupDeadline(step, timeoutMs), options);
+      }
       if (!details.includes("remote_addr=") && PRE_SEND_DEADLINE.some((marker) => details.includes(marker))) {
         return notConnected();
       }
@@ -353,7 +382,7 @@ export function toSparkError(error: unknown, context: SparkErrorContext): SparkE
         return new SparkError("tls", SPARK_ERROR_SENTENCES.tlsClientCertificateRefused, options);
       }
       if (details.includes("No connection established") || details.startsWith("Name resolution failed")) {
-        return notConnected();
+        return unreachable();
       }
       return inStatementOr(streamFailed);
   }

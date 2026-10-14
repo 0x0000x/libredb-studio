@@ -683,6 +683,142 @@ describe("SparkProvider: connect, disconnect and warnings over the fake", () => 
   });
 });
 
+describe("SparkProvider: a session setup statement on a slow catalog", () => {
+  /** grpc-js's text for a deadline that passed once the call had left: it names the server's address. */
+  const SENT_DEADLINE = "Deadline exceeded after 10.002s,LB pick: 0.001s,remote_addr=127.0.0.1:15002";
+  const SET_HIVE = "SET CATALOG 'hive_prod'";
+  const TIMEOUT = 300_000;
+  /** This fake's answers, which a test may change between its calls: the fake reads them as each call arrives. */
+  const answers: Record<string, SparkFakeAnswer> = {
+    "SHOW CURRENT NAMESPACE": { kind: "command", ipc: CURRENT },
+    "SELECT 1": { kind: "command", ipc: ONE },
+  };
+  let slow: SparkFakeServer;
+  let slowPort: number;
+  beforeAll(async () => {
+    slow = await startSparkFake({ progressEveryMs: 0, statements: answers });
+    slowPort = Number(slow.target.split(":").at(-1));
+  });
+  afterAll(() => slow.close());
+  /** Every call the fake received, in order: its RPC, an ExecutePlan with its statement, and its session. */
+  const received = () =>
+    slow.log.entries.map((entry) => [
+      entry.rpc === "ExecutePlan" ? `ExecutePlan:${statementOf(entry.request)}` : entry.rpc,
+      entry.sessionId,
+    ]);
+
+  test("a session's two setup statements share the connection's query timeout from the setup's start, and its Config set keeps the control deadline", async () => {
+    let clock = 1_000_000;
+    const script = scripted({
+      commands: {
+        "SHOW CURRENT NAMESPACE": CURRENT,
+        "SELECT 1": ONE,
+        "SET CATALOG 'spark_catalog'": SET_ANSWER,
+        "USE NAMESPACE `default`": SET_ANSWER,
+      },
+      // The Config set takes 2 s of the clock and SET CATALOG 3 s, so each later step leaves after the setup began.
+      unary: (rpc, request) => {
+        if (rpc === "Config" && setsConfig(request)) clock += 2_000;
+        return undefined;
+      },
+      stream: (sql) => {
+        if (sql === "SET CATALOG 'spark_catalog'") clock += 3_000;
+        return undefined;
+      },
+    });
+    const now = spyOn(Date, "now").mockImplementation(() => clock);
+    const provider = new SparkProvider(
+      connection(1, { database: "spark_catalog", schema: "default" }),
+      { queryTimeout: TIMEOUT },
+      script,
+    );
+    try {
+      await provider.connect();
+      await provider.query("SELECT 1", undefined, "q-setup-deadlines", "scope-setup-deadlines");
+      const steps = script.calls
+        .filter((call) =>
+          call.rpc === "Config"
+            ? setsConfig(call.request)
+            : /^(?:SET CATALOG|USE NAMESPACE) /.test(statementOf(call.request) ?? ""),
+        )
+        .map((call) => [
+          call.sessionId,
+          call.rpc === "Config" ? "Config set" : statementOf(call.request),
+          call.at,
+          call.deadline,
+        ]);
+      const [metadata, scope] = [steps[0]?.[0], steps[3]?.[0]];
+      expect(steps).toStrictEqual([
+        [metadata, "Config set", 1_000_000, 1_000_000 + SPARK_CONTROL_DEADLINE_MS],
+        [metadata, "SET CATALOG 'spark_catalog'", 1_002_000, 1_000_000 + TIMEOUT],
+        [metadata, "USE NAMESPACE `default`", 1_005_000, 1_000_000 + TIMEOUT],
+        [scope, "Config set", 1_005_000, 1_005_000 + SPARK_CONTROL_DEADLINE_MS],
+        [scope, "SET CATALOG 'spark_catalog'", 1_007_000, 1_005_000 + TIMEOUT],
+        [scope, "USE NAMESPACE `default`", 1_010_000, 1_005_000 + TIMEOUT],
+      ]);
+      expect(scope).not.toBe(metadata);
+      await provider.endOpenQueryTransaction("scope-setup-deadlines");
+    } finally {
+      now.mockRestore();
+      await provider.disconnect();
+    }
+  });
+
+  test("a SET CATALOG past its deadline fails connect with the setup's sentence, a QueryError, and the metadata session it opened is released", async () => {
+    answers[SET_HIVE] = { kind: "error", code: 4, message: SENT_DEADLINE };
+    slow.log.clear();
+    const provider = new SparkProvider(connection(slowPort, { database: "hive_prod" }), { queryTimeout: TIMEOUT });
+    const failure = await failureOf(provider.connect());
+    expect(failure).toBeInstanceOf(QueryError);
+    expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.setupDeadline(SET_HIVE, TIMEOUT));
+    expect(lastErrorOf(provider)).toBe(failure as Error);
+    expect(provider.isConnected()).toBe(false);
+    const sent = received();
+    const [probe, metadata] = [sent[0]?.[1], sent[2]?.[1]];
+    expect(sent).toStrictEqual([
+      ["AnalyzePlan", probe],
+      ["ReleaseSession", probe],
+      ["Config", metadata],
+      [`ExecutePlan:${SET_HIVE}`, metadata],
+      ["ReleaseSession", metadata],
+    ]);
+  });
+
+  test("a SET CATALOG past its deadline fails a request's statement with the setup's sentence, sends neither the statement nor an Interrupt, and leaves the connection up", async () => {
+    answers[SET_HIVE] = { kind: "command", ipc: SET_ANSWER };
+    const provider = new SparkProvider(connection(slowPort, { database: "hive_prod" }), { queryTimeout: TIMEOUT });
+    await provider.connect();
+    try {
+      answers[SET_HIVE] = { kind: "error", code: 4, message: SENT_DEADLINE };
+      slow.log.clear();
+      const failure = await failureOf(provider.query("SELECT 1", undefined, "q-slow-catalog", "scope-slow-catalog"));
+      expect(failure).toBeInstanceOf(QueryError);
+      expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.setupDeadline(SET_HIVE, TIMEOUT));
+      expect(provider.isConnected()).toBe(true);
+      const scope = slow.log.entries[0]?.sessionId;
+      expect(received()).toStrictEqual([
+        ["Config", scope],
+        [`ExecutePlan:${SET_HIVE}`, scope],
+        ["ReleaseSession", scope],
+      ]);
+      expect(await provider.endOpenQueryTransaction("scope-slow-catalog")).toBe("none");
+      expect(slow.log.entries).toHaveLength(3);
+    } finally {
+      await provider.disconnect();
+    }
+  });
+
+  test("an UNAVAILABLE on USE NAMESPACE fails connect as the setup's failed connection, never as a server that did not answer", async () => {
+    const text = "upstream connect error or disconnect/reset before headers. reset reason: connection termination";
+    answers["USE NAMESPACE `analytics`"] = { kind: "error", code: 14, message: text };
+    const provider = new SparkProvider(connection(slowPort, { schema: "analytics" }));
+    const failure = await failureOf(provider.connect());
+    expect(failure).toBeInstanceOf(ConnectionError);
+    expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.setupFailed("USE NAMESPACE `analytics`", text));
+    expect(provider.isConnected()).toBe(false);
+  });
+});
+
 describe("SparkProvider: the object surface on the metadata session", () => {
   test("every object method reads through statements sent on the metadata session only", async () => {
     const provider = new SparkProvider(connection(port));

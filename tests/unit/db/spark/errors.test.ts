@@ -1,7 +1,8 @@
 /**
  * The categories toSparkError gives, each from its trigger to its sentence, over hand-built gRPC statuses and the
  * captured answers of tests/fixtures/spark/; the Cause line and the TIME, maxResultSize, empty-UNKNOWN and empty-status
- * sentences; errorDetailsFromResponse read for one root and at most five causes; sparkVersionText's trim, cut and
+ * sentences; a session setup statement's failure, which names the statement and never reads as a server that did not
+ * answer; errorDetailsFromResponse read for one root and at most five causes; sparkVersionText's trim, cut and
  * withheld token; the class toDatabaseError gives every category, the five that other modules raise included; a token
  * in a status text, a FetchErrorDetails cause or a local error never reaching the message; and every sentence word for
  * word, with the article the cell refusal writes before each type.
@@ -45,7 +46,7 @@ const metadataOf = (bytes?: Uint8Array) => ({
 });
 const statusOf = (code: number, details: string, bytes?: Uint8Array) =>
   Object.assign(new Error(`${code} ${details}`), { code, details, metadata: metadataOf(bytes) });
-const PHASES: readonly SparkErrorContext["phase"][] = ["connect", "command", "relation", "control"];
+const PHASES: readonly SparkErrorContext["phase"][] = ["connect", "command", "relation", "control", "setup"];
 const S = SPARK_ERROR_SENTENCES;
 
 /** google.rpc.Status with one ErrorInfo, written by hand: reason and metadata entries. */
@@ -503,6 +504,84 @@ describe("the run rows", () => {
   });
 });
 
+describe("a session setup statement's failure names the statement, never a server that did not answer", () => {
+  const STEP = "SET CATALOG 'hive_prod'";
+  const setup = (extra: Partial<SparkErrorContext> = {}) => context("setup", { step: STEP, ...extra });
+
+  test("its deadline is the setup's sentence, a QueryError, whether or not the statement had left", () => {
+    for (const text of [
+      // The call had left: grpc-js names the server's address.
+      "Deadline exceeded after 10.002s,LB pick: 0.001s,remote_addr=127.0.0.1:15002",
+      // The call was still waiting for a connection: no address, and one of grpc-js's waiting markers.
+      "Deadline exceeded after 59.902s,name resolution: 0.002s,Waiting for LB pick",
+      "Deadline exceeded",
+    ]) {
+      const error = toSparkError(statusOf(4, text), setup());
+      expectCategory(error, "deadline", S.setupDeadline(STEP, 60_000));
+      expect(toDatabaseError(error)).toBeInstanceOf(QueryError);
+    }
+  });
+
+  test.each([
+    [14, "Connection dropped"],
+    [14, "upstream connect error or disconnect/reset before headers. reset reason: connection termination"],
+    [14, "No connection established. Last error: connect ECONNREFUSED 127.0.0.1:15002"],
+    [14, "Name resolution failed for target dns:spark.test:15002"],
+    [1, "Call cancelled"],
+    [8, "Bandwidth exhausted or memory limit exceeded"],
+    [13, "Received RST_STREAM with code 2 (Internal server error)"],
+    [13, "Received HTTP status code 502"],
+  ] as const)("gRPC %d with %p is the setup's failed connection, a ConnectionError", (code, text) => {
+    const error = toSparkError(statusOf(code, text), setup());
+    expectCategory(error, "stream-failed", S.setupFailed(STEP, text));
+    expect(toDatabaseError(error)).toBeInstanceOf(ConnectionError);
+  });
+
+  test("a failed connection with no status text drops the parentheses", () => {
+    expectCategory(
+      toSparkError(statusOf(14, " \n"), setup()),
+      "stream-failed",
+      "The connection to Spark failed while Studio set up the session with SET CATALOG 'hive_prod'. Run it again.",
+    );
+  });
+
+  test("a TLS cause, a message over the cap, the client's own cancel and Spark's own error keep their rows", () => {
+    expectCategory(
+      toSparkError(
+        statusOf(14, "No connection established. Last error: unable to verify the first certificate"),
+        setup(),
+      ),
+      "tls",
+      S.tlsUntrusted,
+    );
+    expectCategory(
+      toSparkError(statusOf(8, "Received message larger than max (17000000 vs 16777216)"), setup()),
+      "receive-cap",
+      S.receiveCapControl,
+    );
+    expectCategory(toSparkError(statusOf(1, "Cancelled on client"), setup()), "cancelled", S.cancelled);
+    const missing = statusOf(
+      13,
+      "[SCHEMA_NOT_FOUND] The schema `missing` cannot be found.",
+      details("org.apache.spark.sql.AnalysisException", { errorClass: "SCHEMA_NOT_FOUND" }),
+    );
+    expectCategory(toSparkError(missing, setup()), "spark", "[SCHEMA_NOT_FOUND] The schema `missing` cannot be found.");
+  });
+
+  test("a setup statement's failure without the statement or the connection's timeout is the caller's defect, raised", () => {
+    const status = statusOf(4, "Deadline exceeded after 60.001s,remote_addr=127.0.0.1:15002");
+    expect(() => toSparkError(status, { connection: CONNECTION, phase: "setup", timeoutMs: 60_000 })).toThrow(
+      "context.step",
+    );
+    expect(() => toSparkError(status, { connection: CONNECTION, phase: "setup", step: STEP })).toThrow(
+      "context.timeoutMs",
+    );
+    expect(() => toSparkError(statusOf(14, "upstream reset"), { connection: CONNECTION, phase: "setup" })).toThrow(
+      TypeError,
+    );
+  });
+});
+
 describe("Spark's own errors", () => {
   test("a syntax error keeps Spark's text, trimmed", () => {
     const status = capturedStatus("error-syntax");
@@ -820,6 +899,11 @@ describe("a token in any server text never reaches a sentence", () => {
     ).toBe(false);
   });
 
+  test.each(holders)("in a session setup statement's failure text (%s)", (form) => {
+    const setup = context("setup", { step: "USE NAMESPACE `analytics`" });
+    expect(carries(toSparkError(statusOf(14, `upstream ${form}`), setup).message)).toBe(false);
+  });
+
   test.each(holders)("in a value that is not a status (%s)", (form) => {
     expect(carries(toSparkError(new Error(`odd ${form}`), context("command")).message)).toBe(false);
   });
@@ -927,6 +1011,11 @@ describe("every sentence, word for word", () => {
       "The connection to Spark failed while the statement ran (Received RST_STREAM with code 2 (Internal server error)). Studio asked Spark to stop it; run it again.",
     ],
     [
+      "setupFailed",
+      S.setupFailed("USE NAMESPACE `analytics`", "Connection dropped"),
+      "The connection to Spark failed while Studio set up the session with USE NAMESPACE `analytics` (Connection dropped). Run it again.",
+    ],
+    [
       "pingGoaway",
       S.pingGoaway,
       "The connection to Spark was closed by the server's keepalive rule while the statement ran. Studio asked Spark to stop the statement; run it again.",
@@ -965,6 +1054,11 @@ describe("every sentence, word for word", () => {
       "deadlineBeforeSend",
       S.deadlineBeforeSend(60_000),
       "The statement was not sent: the connection's query timeout (60000 ms) passed before Studio could send it.",
+    ],
+    [
+      "setupDeadline",
+      S.setupDeadline("SET CATALOG 'hive_prod'", 300_000),
+      "Spark did not finish setting up the session with SET CATALOG 'hive_prod' within the connection's query timeout (300000 ms); the catalog may be slow to answer. Run it again, or raise Query Timeout in the connection.",
     ],
     ["cancelled", S.cancelled, "The query was cancelled."],
     [

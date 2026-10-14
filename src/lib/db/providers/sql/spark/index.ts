@@ -290,10 +290,11 @@ function serverSideId(answer: unknown): string {
 }
 
 /**
- * A control call or a setup step with its failure mapped. The session registry maps no failure and repeats a metadata
- * read only for a SparkError of the categories session-closed and session-changed, so every session setup step, and
- * every metadata read that is not a run, maps its own failure here: unmapped, a closed session would never be read
- * again on a new one, and a server's text would reach a sentence without passing serverText.
+ * A control call, a session's Config set among them, with its failure mapped. The session registry maps no failure and
+ * repeats a metadata read only for a SparkError of the categories session-closed and session-changed, so every session
+ * setup step, and every metadata read that is not a run, maps its own failure: here, or for a setup statement in the
+ * setup phase. Unmapped, a closed session would never be read again on a new one, and a server's text would reach a
+ * sentence without passing serverText.
  */
 async function mapControl<T>(connection: SparkErrorConnection, call: () => Promise<T>): Promise<T> {
   try {
@@ -428,10 +429,27 @@ export class SparkProvider extends SQLBaseProvider {
           mapControl(errorConnection, async () =>
             serverSideId(await channel.unary("Config", configSetRequest(session, pairs), control())),
           ),
-        runSetup: (session, sql) =>
-          mapControl(errorConnection, () =>
-            readSetupAnswer(channel.executePlan(sqlCommandRequest(session, sql, setupIds()), control(), SETUP_LIMITS)),
-          ),
+        // SET CATALOG and USE NAMESPACE can wait on a catalog that is slow on first use, so both share the
+        // connection's query timeout from the setup's start, and a failure names its statement.
+        runSetup: async (session, sql, setupStart) => {
+          const call: SparkWireCall = {
+            metadata,
+            deadline: new Date(setupStart + options.callTimeoutMs),
+            signal: new AbortController().signal,
+          };
+          try {
+            return await readSetupAnswer(
+              channel.executePlan(sqlCommandRequest(session, sql, setupIds()), call, SETUP_LIMITS),
+            );
+          } catch (error) {
+            throw toSparkError(error, {
+              connection: errorConnection,
+              phase: "setup",
+              step: sql,
+              timeoutMs: options.callTimeoutMs,
+            });
+          }
+        },
         release: async (session) => {
           try {
             await channel.unary("ReleaseSession", releaseSessionRequest(session), control());

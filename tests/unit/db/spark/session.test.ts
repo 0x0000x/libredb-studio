@@ -8,9 +8,10 @@
  * flight released once it settles; the repeat only for a failure the read mapped to a SparkError, never for the
  * channel's own error; a setup in flight when releaseAll begins sending no further step, and a metadata read whose
  * setup answers then sending nothing; close doing the same at once, sending nothing itself and leaving the releases to
- * releaseAll; the wait and the read told whether they serve the repeat.
+ * releaseAll; the wait and the read told whether they serve the repeat; both setup statements given the moment the
+ * setup began.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { SPARK_METADATA_SESSION_CONF, SPARK_SESSION_CONF } from "@/lib/db/providers/sql/spark/constants";
 import { buildSparkConnectionOptions } from "@/lib/db/providers/sql/spark/connection-options";
@@ -168,6 +169,38 @@ describe("sessions by scope", () => {
     expect(setupOf(statement.sessionId)).toStrictEqual(expected);
     expect(typeof handle.serverSideSessionId).toBe("string");
     await sessions.releaseAll();
+  });
+
+  test("both setup statements are given the moment the setup began, taken before the Config set", async () => {
+    let clock = 5_000;
+    const now = spyOn(Date, "now").mockImplementation(() => clock);
+    const given: (readonly [string, number])[] = [];
+    try {
+      const sessions = new SparkSessions(
+        {
+          // The Config set takes 2 s of the clock, and each setup statement 3 s.
+          configSet: async () => {
+            clock += 2_000;
+            return "";
+          },
+          runSetup: async (_session, sql, setupStart) => {
+            given.push([sql, setupStart]);
+            clock += 3_000;
+            return "";
+          },
+          release: async () => undefined,
+        },
+        PLACE,
+      );
+      await sessions.forScope("timed");
+      expect(given).toStrictEqual([
+        ["SET CATALOG 'spark_catalog'", 5_000],
+        ["USE NAMESPACE `studio`", 5_000],
+      ]);
+      await sessions.releaseAll();
+    } finally {
+      now.mockRestore();
+    }
   });
 
   test("a catalog with a quote is a backslash-escaped literal and every namespace part is quoted", async () => {
