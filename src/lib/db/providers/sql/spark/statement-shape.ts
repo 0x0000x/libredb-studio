@@ -25,8 +25,11 @@ const UNICODE_SPACE = /[\u00A0\u1680\u2000-\u200A\u2028\u202F\u205F\u3000]/;
  * digits and `_ / - . ? = & # %`. Spark's lexer takes the longest token, so such a run is one token wherever a token
  * starts with it. A letter here is `\p{L}` or U+0345: Spark's lexer upper-cases each character before it matches one
  * (`UpperCaseCharStream.LA`, `parsers.scala` v4.2.0), and U+0345, a combining mark, upper-cases to U+0399, a letter.
+ * The form is read in two runs, its letters and what follows `://`: `:` is no letter, so only the longest letter run
+ * can be followed by `://`, and neither run is retried at a shorter length.
  */
-const ADDRESS_RUN = /[\p{L}\u{345}]+:\/\/[\p{L}\u{345}0-9_/.?=&#%-]+/uy;
+const ADDRESS_LETTERS = /[\p{L}\u{345}]+/uy;
+const ADDRESS_REST = /[\p{L}\u{345}0-9_/.?=&#%-]+/uy;
 /**
  * A non-ASCII letter right after an ASCII letter or digit, the one place inside a word run where Spark's lexer can
  * start a token: it ends a decimal such as `1.5` (also `1.5D`, `1.5BD`, `1.5E3`) before any character but `A-Z`, `0-9`
@@ -36,13 +39,13 @@ const ADDRESS_RUN = /[\p{L}\u{345}]+:\/\/[\p{L}\u{345}0-9_/.?=&#%-]+/uy;
  */
 const LATE_START = /(?<=[A-Za-z0-9])(?![\x00-\x7F])\p{L}/u;
 /**
- * What a try that found no address steps over: the letters it started at, since an address starting at any of them
- * would need the same `://` right after them, then the rest of the word run (Spark's other IDENTIFIER form: letters,
- * ASCII digits and `_`) up to its next `LATE_START`, where the next try starts. Empty at any other character, which the
- * walk steps over by one. Each character is read a bounded number of times, so the walk stays linear however many
- * `LATE_START`s one word holds.
+ * What a try that found no address steps over: the letters it started at, an address's letters U+0345 included, since
+ * an address starting at any of them would need the same `://` right after them, then the rest of the word run
+ * (Spark's other IDENTIFIER form: letters, ASCII digits and `_`) up to its next `LATE_START`, where the next try starts.
+ * Empty at any other character, which the walk steps over by one. Each character is read a bounded number of times, so
+ * the walk stays linear however many `LATE_START`s one word holds and however long a run of U+0345 is.
  */
-const WORD_STEP = new RegExp(String.raw`\p{L}*(?:(?!${LATE_START.source})[\p{L}0-9_])*`, "uy");
+const WORD_STEP = new RegExp(String.raw`[\p{L}\u{345}]*(?:(?!${LATE_START.source})[\p{L}0-9_])*`, "uy");
 
 /**
  * The script-block refusal when the statement's leading keyword under the Spark grammar is BEGIN. Spark's lexer
@@ -78,6 +81,14 @@ export function unicodeSpaceRefusal(sql: string): string | undefined {
   return undefined;
 }
 
+/** The address form that starts at `index` (`ADDRESS_LETTERS`, `://`, `ADDRESS_REST`), or undefined. */
+function addressAt(sql: string, index: number): string | undefined {
+  ADDRESS_LETTERS.lastIndex = index;
+  if (!ADDRESS_LETTERS.test(sql) || !sql.startsWith("://", ADDRESS_LETTERS.lastIndex)) return undefined;
+  ADDRESS_REST.lastIndex = ADDRESS_LETTERS.lastIndex + 3;
+  return ADDRESS_REST.test(sql) ? sql.slice(index, ADDRESS_REST.lastIndex) : undefined;
+}
+
 /**
  * The address refusal when an address written without quotes stands at a code position in one of the three shapes
  * where Studio's span reader starts a comment or a raw string at a character Spark reads as part of the address: a
@@ -95,13 +106,11 @@ export function uriFormRefusal(sql: string): string | undefined {
       index = span.end;
       continue;
     }
-    ADDRESS_RUN.lastIndex = index;
-    const address = ADDRESS_RUN.exec(sql)?.[0];
+    const address = addressAt(sql, index);
     if (address === undefined) {
       // WORD_STEP matches here, empty at a character that is no part of a word, and leaves lastIndex at its end.
       WORD_STEP.lastIndex = index;
-      WORD_STEP.test(sql);
-      index = Math.max(WORD_STEP.lastIndex, index + 1);
+      index = Math.max(WORD_STEP.test(sql) ? WORD_STEP.lastIndex : index, index + 1);
       continue;
     }
     const next = sql[index + address.length];

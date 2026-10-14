@@ -209,6 +209,25 @@ describe("uriFormRefusal (the URI form of IDENTIFIER, SqlBaseLexer.g4 v4.2.0:655
       expect(elapsed, `${label} took ${elapsed.toFixed(1)}ms`).toBeLessThan(BOUND_MS);
     }
   });
+
+  /**
+   * The same guard for U+0345, which an address's letters hold and a word's letters did not: a try that found no `://`
+   * after a run of it stepped one character on, so the next try read the rest of the run again, quadratic in its length.
+   */
+  test("a long run of U+0345 is read in bounded time", () => {
+    const BOUND_MS = 200;
+    const long: [string, string][] = [
+      ["50k U+0345", `SELECT ${"ͅ".repeat(50_000)}`],
+      ["a letter then 50k U+0345", `SELECT a${"ͅ".repeat(50_000)}`],
+    ];
+    for (const [label, sql] of long) {
+      const started = performance.now();
+      const refusal = uriFormRefusal(sql);
+      const elapsed = performance.now() - started;
+      expect(refusal).toBeUndefined();
+      expect(elapsed, `${label} took ${elapsed.toFixed(1)}ms`).toBeLessThan(BOUND_MS);
+    }
+  });
 });
 
 describe("unicodeSpaceRefusal and uriFormRefusal at a bracket", () => {
