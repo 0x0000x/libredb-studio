@@ -182,7 +182,9 @@ export async function listCatalogs(deps: SparkIntrospectDeps): Promise<Container
   const listed = (await readWhole(deps, "SHOW CATALOGS")).map((row) => cell(row, "catalog"));
   // A key with no further dot names a configured catalog plugin; the values are never read.
   const configured = (await deps.confKeys("spark.sql.catalog.")).filter((key) => key !== "" && !key.includes("."));
-  const others = [...new Set([...listed, ...configured])].filter((name) => name !== current.catalog).sort();
+  const others = [...new Set([...listed, ...configured])]
+    .filter((name) => name !== current.catalog)
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   return [
     { path: [current.catalog], name: current.catalog, level: 0, isSessionDefault: true },
     ...others.map((name) => ({ path: [name], name, level: 0 })),
