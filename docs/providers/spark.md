@@ -226,8 +226,8 @@ The driver's web UI shows every session's statement text without authentication 
 Every Studio request gets a Spark session of its own, created for that request and released when its request scope ends: Studio's query routes end it, and in the embedded package a host that passes a scope ends it ([section 12](#12-embedded-package)).
 A script's statements run in the same request, so they share one session: a temp view, a `SET` or a `USE NAMESPACE` made by one statement is seen by the next, and by nothing after the request.
 A `query()` call outside a request scope runs in a session of its own, released when the statement ends.
-A disconnect of the provider releases every session.
 The provider also keeps one metadata session for the tree, the overview and health; it never runs a user statement.
+A disconnect of the provider releases every request, statement and metadata session; a connect the disconnect cuts can leave that connect's version probe session on the server until Spark's idle timeout, as the end of this section says.
 
 At most 8 of the statements the provider writes run on one connection's metadata session at once, and the rest wait for a slot, served in arrival order.
 A statement's wait for a slot and for the metadata session's setup counts against the connection's query timeout.
@@ -256,7 +256,7 @@ The metadata session is set up again once when the server closed it, and its rea
 When the repeated read meets a closed session again, or a statement's deadline passes before it is sent again, while it waits for the new session's setup or at the send itself, the read fails with `Studio's Spark session for the tree and the panels was closed by the server (it idled out or the server restarted), and a new one could not complete the read.`
 A release that cannot reach the server is logged and left to Spark's 60-minute idle timeout.
 
-Closing a connection, at a disconnect, when a second connect replaces or displaces it, or when its own connect fails, first closes its metadata slots and its sessions to new work, then stops its runs, releases its sessions and closes its channel.
+Closing a connection, at a disconnect, when its own connect fails, when a second connect displaces it while it is still opening, or, once it is connected, when a second connect replaces it or fails, first closes its metadata slots and its sessions to new work, then stops its runs, releases its sessions and closes its channel.
 From the moment the close begins, no session setup sends a further step and no metadata read sends anything more.
 A statement then still waiting for a slot or for its session's setup, and every later one on that connection, ends with `The query was cancelled.`
 A tree or panel read that fails once its connection's close began ends with the same sentence, whatever its call met, so a channel the close shut never reads as a server that did not answer.
