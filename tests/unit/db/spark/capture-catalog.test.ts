@@ -3,10 +3,10 @@
  * the capture shape, from its service's pinned image and the server version of its directory; every captured request is
  * stored as the provider's codec reads it back; no capture holds the token, a client-chosen id or a configured
  * catalog's value, inside its bytes values included; each stays under 2 MB; every statement an entry runs before its
- * capture is captured too, and a FetchErrorDetails capture asks for the errorId of its own failure capture; every
- * capture's surface is the one its entry gives it, which `--surfaces` rewrites alone; the session settings the harness
- * sends are the provider's; the harness dials only an address a fixture container publishes; and README.md is what the
- * harness renders.
+ * capture is captured too, and a FetchErrorDetails capture asks for the errorId of its own failure capture and holds
+ * that failure's text as its root message; every capture's surface is the one its entry gives it, which `--surfaces`
+ * rewrites alone; the session settings the harness sends are the provider's; the harness dials only an address a
+ * fixture container publishes; and README.md is what the harness renders.
  */
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -312,6 +312,28 @@ describe("the answers the captures hold", () => {
         version,
         name,
         asked: errorId,
+      });
+    }
+  });
+
+  test("each FetchErrorDetails capture's root message is the failure text its paired capture holds, both as the harness writes them", () => {
+    const pairs = VERSIONS.flatMap((version) =>
+      [...expected(version).keys()].filter((name) => name.endsWith("-details")).map((name) => [version, name] as const),
+    );
+    expect(pairs.length).toBeGreaterThan(0);
+    for (const [version, name] of pairs) {
+      const failure = readSparkCapture(version, name.slice(0, -"-details".length) as SparkCaptureName);
+      if (failure.outcome !== "error") throw new Error(`${version}/${name} pairs with a pass capture`);
+      const details = readSparkCapture(version, name);
+      if (details.outcome !== "pass") throw new Error(`${version}/${name} is an error capture`);
+      const { root_error_idx: rootIndex, errors } = details.payload as {
+        readonly root_error_idx?: number;
+        readonly errors: readonly { readonly message?: string }[];
+      };
+      expect({ version, name, root: rootIndex === undefined ? undefined : errors[rootIndex]?.message }).toStrictEqual({
+        version,
+        name,
+        root: failure.details,
       });
     }
   });
