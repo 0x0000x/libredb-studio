@@ -360,7 +360,7 @@ describe("docs/providers/spark.md", () => {
 
   test("puts no secret in an example and names no private record", () => {
     for (const match of DOC.matchAll(/password:\s*"([^"]*)"/g)) expect(match[1]).toBe("${SPARK_TOKEN}");
-    expect(DOC).not.toMatch(/Bearer\s+(?!<token>)[A-Za-z0-9._~+/=-]{8,}/);
+    expect(DOC).not.toMatch(/Bearer\s+(?!<token>)\S{8,}/);
     expect(DOC).not.toMatch(/\b[DLP]\d{2}-C\d+\b/);
     expect(DOC).not.toMatch(/\/home\/|PRIVATE-FINDINGS|design record/);
     // No en dash (U+2013) and no em dash (U+2014), written by code point so this file carries neither.

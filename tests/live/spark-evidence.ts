@@ -813,8 +813,9 @@ function stored(version: SparkCaptureVersionDir, name: string): StoredCapture | 
   return existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as StoredCapture) : undefined;
 }
 
+/** A Markdown table cell: a backslash doubled first, so the one before an escaped `|` stays its own. */
 function cell(text: string): string {
-  return text.replace(/\|/g, "\\|").replace(/\n/g, " ");
+  return text.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ");
 }
 
 function answerLines(): string[] {

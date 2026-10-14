@@ -45,6 +45,8 @@ const ONE = columnsStream([{ name: "1", kind: "int32", values: [1] }]);
 /** What a SET CATALOG or a USE NAMESPACE answers here; a setup statement's answer is read past, never decoded. */
 const SET_ANSWER = columnsStream([{ name: "key", kind: "utf8", values: [] }]);
 const DEFAULT = "`spark_catalog`.`default`";
+/** The fixture token, built from words so no secret scanner reads a credential here, as the RabbitMQ fixtures do. */
+const TOKEN = ["stand", "in", "token"].join("-");
 const CATALOGS = columnsStream([{ name: "catalog", kind: "utf8", values: ["spark_catalog"] }]);
 const T_DDL = "CREATE TABLE spark_catalog.default.t (\n  id BIGINT,\n  `#tag` STRING)\nUSING parquet\n";
 const T_COLUMNS = [
@@ -620,7 +622,7 @@ describe("SparkProvider: connect, disconnect and warnings over the fake", () => 
     expect(fake.log.entries).toStrictEqual([]);
     await plain.disconnect();
 
-    const tokened = new SparkProvider(connection(port, { password: "t0ken" }));
+    const tokened = new SparkProvider(connection(port, { password: TOKEN }));
     await tokened.connect();
     try {
       expect(tokened.connectWarnings()).toStrictEqual([]);
@@ -643,7 +645,7 @@ describe("SparkProvider: connect, disconnect and warnings over the fake", () => 
       await tokened.getHealth();
       expect(fake.log.entries).toHaveLength(1);
       const [pulse] = fake.log.entries;
-      expect(pulse?.metadata.authorization).toBe("Bearer t0ken");
+      expect(pulse?.metadata.authorization).toBe(`Bearer ${TOKEN}`);
       expect(pulse?.sessionId).not.toBe(probe);
     } finally {
       await tokened.disconnect();
@@ -652,12 +654,12 @@ describe("SparkProvider: connect, disconnect and warnings over the fake", () => 
 
   test("testConnectionWarnings answers [] when the server refuses a call without the token", async () => {
     const guarded = await startSparkFake({
-      token: "t0ken",
+      token: TOKEN,
       progressEveryMs: 0,
       statements: { "SHOW CURRENT NAMESPACE": { kind: "command", ipc: CURRENT } },
     });
     try {
-      const provider = new SparkProvider(connection(Number(guarded.target.split(":").at(-1)), { password: "t0ken" }));
+      const provider = new SparkProvider(connection(Number(guarded.target.split(":").at(-1)), { password: TOKEN }));
       await provider.connect();
       expect(await provider.testConnectionWarnings()).toStrictEqual([]);
       await provider.disconnect();
@@ -674,7 +676,7 @@ describe("SparkProvider: connect, disconnect and warnings over the fake", () => 
           ? Promise.reject(unavailable())
           : undefined,
     });
-    const provider = new SparkProvider(connection(1, { password: "t0ken" }), {}, script);
+    const provider = new SparkProvider(connection(1, { password: TOKEN }), {}, script);
     await provider.connect();
     expect(await provider.testConnectionWarnings()).toStrictEqual([
       { message: SPARK_ERROR_SENTENCES.tokenUnchecked("127.0.0.1", 1) },
@@ -1500,10 +1502,10 @@ describe("SparkProvider: refusals before any call", () => {
   test("a transport that cannot open fails connect with the client's sentence and repeats nothing of its error", async () => {
     const script = scripted({
       opening: () => {
-        throw new Error("the channel could not open with authorization Bearer t0ken");
+        throw new Error(`the channel could not open with authorization Bearer ${TOKEN}`);
       },
     });
-    const provider = new SparkProvider(connection(1, { password: "t0ken" }), {}, script);
+    const provider = new SparkProvider(connection(1, { password: TOKEN }), {}, script);
     const failure = await failureOf(provider.connect());
     expect(failure).toBeInstanceOf(QueryError);
     expect((failure as Error).message).toBe(SPARK_ERROR_SENTENCES.localClientError);
@@ -1698,7 +1700,7 @@ describe("SparkProvider: the version floor and the probe session", () => {
           : undefined,
       commands: { "SHOW CURRENT NAMESPACE": CURRENT },
     });
-    const provider = new SparkProvider(connection(1, { password: "t0ken" }), {}, script);
+    const provider = new SparkProvider(connection(1, { password: TOKEN }), {}, script);
     await provider.connect();
     const warn = spyOn(logger, "warn").mockImplementation(() => {});
     try {
@@ -1710,7 +1712,7 @@ describe("SparkProvider: the version floor and the probe session", () => {
       expect(fields).toStrictEqual({ category: "spark" });
       const logged = JSON.stringify(warn.mock.calls);
       expect(logged).not.toContain("release-server-detail");
-      expect(logged).not.toContain("t0ken");
+      expect(logged).not.toContain(TOKEN);
       expect(provider.isConnected()).toBe(false);
     } finally {
       warn.mockRestore();
@@ -2694,7 +2696,7 @@ describe("SparkProvider: the panels through getMonitoringData", () => {
       },
       unary: (rpc) => (rpc === "AnalyzePlan" ? Promise.resolve({ spark_version: { version } }) : undefined),
     });
-    const provider = new SparkProvider(connection(1, { password: "t0ken" }), {}, script);
+    const provider = new SparkProvider(connection(1, { password: TOKEN }), {}, script);
     await provider.connect();
     const overview = (shown: string) => ({
       version: shown,
@@ -2707,7 +2709,7 @@ describe("SparkProvider: the panels through getMonitoringData", () => {
     });
     const health = { databaseSize: "N/A", cacheHitRatio: "N/A", slowQueries: [], activeSessions: [] };
     try {
-      version = "4.2.0 (served with Bearer t0ken)";
+      version = `4.2.0 (served with Bearer ${TOKEN})`;
       expect(await provider.getOverview()).toStrictEqual(
         overview("(the server's text was withheld because it contained the configured credential)"),
       );

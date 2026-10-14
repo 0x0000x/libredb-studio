@@ -9,7 +9,7 @@
  * fixture container publishes; and README.md is what the harness renders.
  */
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   captureBytes,
@@ -228,8 +228,9 @@ describe.each([...VERSIONS])("the captures of %s", (version) => {
   test("no capture is larger than 2 MB, or holds a bearer token or a client-chosen tag, inside its bytes values too", () => {
     for (const name of names.keys()) {
       const file = path.join(FIXTURES, version, `${name}.json`);
-      expect({ name, small: statSync(file).size <= 2_000_000 }).toEqual({ name, small: true });
-      const text = readFileSync(file, "utf8");
+      const bytes = readFileSync(file);
+      expect({ name, small: bytes.length <= 2_000_000 }).toEqual({ name, small: true });
+      const text = bytes.toString("utf8");
       const decoded = bytesValues(JSON.parse(text)).map((bytes) => Buffer.from(bytes).toString("latin1"));
       for (const value of [text, ...decoded]) {
         expect({ name, bearer: /Bearer (?!<token>)/.test(value) }).toEqual({ name, bearer: false });

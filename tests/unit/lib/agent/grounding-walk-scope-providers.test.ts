@@ -97,7 +97,7 @@ const HELD: Readonly<Partial<Record<DatabaseType, "one level" | ParentProof>>> =
           database: "sales",
           schema: "public",
           authMethod: "pat",
-          password: "pat-value",
+          password: ["stand", "in", "pat"].join("-"),
           createdAt: new Date(0),
         } as DatabaseConnection,
         {},
