@@ -260,7 +260,7 @@ Closing a connection, at a disconnect, when its own connect fails, when a second
 From the moment the close begins, no session setup sends a further step and no metadata read sends anything more.
 A statement then still waiting for a slot or for its session's setup, and every later one on that connection, ends with `The query was cancelled.`
 A tree or panel read that fails once its connection's close began ends with the same sentence, whatever its call met, so a channel the close shut never reads as a server that did not answer.
-A connect that a disconnect or a second connect cut ends with that sentence too and never records a reachability error; a second connect closes the connection of a connect still opening at once, and the displaced connect never replaces the last error of the connect that displaced it.
+A connect that a disconnect or a second connect cut ends with that sentence too and never records a reachability error; a second connect closes the connection of a connect still opening at once, and a cut connect that ends after a later connect began, the one that displaced it or one begun after a disconnect cut it, never replaces the last error that later connect left, whether it is still opening, connected, failed or disconnected since.
 `connect()` answers only once every connection it displaced or replaced is closed, and `disconnect()` only once every close in progress has ended, so no channel of the provider is left open.
 A connect that a disconnect or a second connect cut once its version read was sent still releases its probe session: the close waits for the version answer and then for the probe's release, each under a 10 s deadline of its own, before it closes the channel.
 

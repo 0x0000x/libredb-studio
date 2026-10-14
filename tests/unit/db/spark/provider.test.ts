@@ -2070,6 +2070,78 @@ describe("SparkProvider: the version floor and the probe session", () => {
       expect(script.closed()).toBe(2);
     },
   );
+
+  test.each<[string, string, boolean]>([
+    ["failed", "3.5.1", false],
+    ["connected and was disconnected", "4.2.0", true],
+  ])(
+    "a connect a disconnect took that ends after a later connect %s leaves the provider's last error as that later connect left it",
+    async (_label, laterVersion, connects) => {
+      const firstVersion = gate();
+      let versions = 0;
+      const script = scripted({
+        commands: { "SHOW CURRENT NAMESPACE": CURRENT },
+        unary: (rpc, request) => {
+          if (rpc !== "AnalyzePlan") return undefined;
+          versions += 1;
+          // The first connect's version read waits on the test; the later connect's answers at once.
+          const answer = {
+            session_id: sessionOf(request),
+            spark_version: { version: versions === 1 ? "4.2.0" : laterVersion },
+          };
+          return versions === 1 ? firstVersion.promise.then(() => answer) : Promise.resolve(answer);
+        },
+      });
+      const provider = new SparkProvider(connection(1), {}, script);
+      const taken = failureOf(provider.connect());
+      await eventually(() => versions === 1);
+      // The disconnect takes the first connect, and its close waits for the first probe's release.
+      const closing = provider.disconnect();
+      const next = await failureOf(provider.connect());
+      const ending = connects ? provider.disconnect() : Promise.resolve();
+      const recorded = lastErrorOf(provider);
+      if (connects) {
+        expect(next).toBeUndefined();
+        expect(recorded).toBeUndefined();
+      } else {
+        expect(next).toBeInstanceOf(ConnectionError);
+        expect((next as Error).message).toBe(SPARK_ERROR_SENTENCES.versionTooOld("3.5.1"));
+        expect(recorded).toBe(next as Error);
+      }
+      firstVersion.open();
+      await Promise.all([closing, ending]);
+      const cut = await taken;
+      expect(cut).toBeInstanceOf(QueryCancelledError);
+      expect((cut as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+      expect(lastErrorOf(provider)).toBe(recorded);
+      expect(provider.isConnected()).toBe(false);
+      expect(provider.hasRunsInFlight()).toBe(false);
+      expect(script.closed()).toBe(2);
+    },
+  );
+
+  test("a connect a disconnect took, with no later connect, records its cancelled failure as the provider's last error once it ends", async () => {
+    const firstVersion = gate();
+    const script = scripted({
+      commands: { "SHOW CURRENT NAMESPACE": CURRENT },
+      unary: (rpc, request) =>
+        rpc === "AnalyzePlan"
+          ? firstVersion.promise.then(() => ({ session_id: sessionOf(request), spark_version: { version: "4.2.0" } }))
+          : undefined,
+    });
+    const provider = new SparkProvider(connection(1), {}, script);
+    const taken = failureOf(provider.connect());
+    await eventually(() => script.calls.some((call) => call.rpc === "AnalyzePlan"));
+    const closing = provider.disconnect();
+    expect(lastErrorOf(provider)).toBeUndefined();
+    firstVersion.open();
+    await closing;
+    const cut = await taken;
+    expect(cut).toBeInstanceOf(QueryCancelledError);
+    expect((cut as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);
+    expect(lastErrorOf(provider)).toBe(cut as Error);
+    expect(provider.isConnected()).toBe(false);
+  });
 });
 
 describe("SparkProvider: Stop at the edges of a run", () => {

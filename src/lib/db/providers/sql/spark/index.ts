@@ -330,8 +330,8 @@ export class SparkProvider extends SQLBaseProvider {
   private readonly closing = new Set<SparkConnection>();
   /** Each connection's one close, from the moment it began: none is closed twice, and every caller waits for it. */
   private readonly closes = new WeakMap<SparkConnection, Promise<void>>();
-  /** Connections whose connect a second connect() displaced while they opened. */
-  private readonly displacedConnections = new WeakSet<SparkConnection>();
+  /** How many connects began: each connect takes the next number when it begins. */
+  private connectsBegun = 0;
   /** Session releases in progress, each under the control deadline. */
   private releasing = 0;
 
@@ -484,6 +484,7 @@ export class SparkProvider extends SQLBaseProvider {
    * replaced or displaced is closed.
    */
   public async connect(): Promise<void> {
+    const generation = ++this.connectsBegun;
     let options: SparkConnectionOptions | undefined;
     let opened: SparkConnection | null = null;
     // The connection of a connect still opening that this one displaced.
@@ -496,7 +497,6 @@ export class SparkProvider extends SQLBaseProvider {
       overtaken = this.connecting;
       this.connecting = opened;
       if (overtaken !== null) {
-        this.displacedConnections.add(overtaken);
         // Its close begins now, so the displaced connect sends nothing more but its probe's release; this connect waits
         // for that close before it answers.
         void this.close(overtaken);
@@ -510,11 +510,10 @@ export class SparkProvider extends SQLBaseProvider {
       // whatever its own call met then, a failure of the channel a disconnect closed included, so it never reports a
       // server that answered as unreachable.
       const taken = opened !== null && this.connecting !== opened;
-      // Displaced by a second connect(), this connect leaves the state of the connect that displaced it alone, whether
-      // that one is still opening, connected or failed. Taken by a disconnect, it does too once a later connect began.
-      const displaced =
-        (opened !== null && this.displacedConnections.has(opened)) ||
-        (taken && (this.connecting ?? this.connection) !== null);
+      // Once a later connect began, whether it displaced this one or began after a disconnect took it, this connect
+      // leaves the provider's state to that later connect, whatever became of it since: still opening, connected,
+      // failed, or connected and then disconnected.
+      const displaced = this.connectsBegun !== generation;
       // A refusal of the option checks is already the repository's DatabaseConfigError.
       const failure = toDatabaseError(
         taken
