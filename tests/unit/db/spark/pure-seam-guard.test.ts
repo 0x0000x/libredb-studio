@@ -7,7 +7,8 @@ import { basename, join } from "node:path";
  * imported by the connection-string parser, which the browser bundle carries, so it imports types only; every pure
  * module imports no I/O, no logger and no transport, and a sibling it imports, by a relative path or through the `@/`
  * alias, is only another pure module, the directory's constants, its errors or its name spelling. The lists name
- * the decoder modules, and only the listed files import apache-arrow.
+ * the decoder modules, and only the listed files import apache-arrow, by an import, a re-export or a require() call,
+ * in a file of any script extension.
  */
 const ROOT = join(import.meta.dir, "..", "..", "..", "..");
 const SPARK = "src/lib/db/providers/sql/spark";
@@ -43,13 +44,19 @@ interface ImportLine {
   readonly typeOnly: boolean;
 }
 
-/** Every static import, re-export and side-effect import of a text, the `import type` ones marked, and every dynamic import. */
+/**
+ * Every static import, re-export and side-effect import of a text, the `import type` ones marked, every dynamic import,
+ * and every require() call, `import x = require()` among them.
+ */
 function importLinesIn(text: string): ImportLine[] {
   const lines: ImportLine[] = [];
   for (const match of text.matchAll(/^\s*(?:import|export)\s+(type\s+)?(?:[^'"`;]*?\s+from\s+)?["']([^"']+)["']/gm)) {
     lines.push({ specifier: match[2], typeOnly: match[1] !== undefined });
   }
   for (const match of text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)) {
+    lines.push({ specifier: match[1], typeOnly: false });
+  }
+  for (const match of text.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) {
     lines.push({ specifier: match[1], typeOnly: false });
   }
   return lines;
@@ -91,7 +98,7 @@ const ARROW_IMPORTERS: readonly string[] = [
   "tests/helpers/spark-ipc.ts",
   "tests/unit/db/spark/arrow-reader-failure.test.ts",
 ];
-const SCANNED = /\.(?:ts|tsx|mts|js|mjs)$/;
+const SCANNED = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
 function filesUnder(dir: string): string[] {
   return (readdirSync(join(ROOT, dir), { recursive: true }) as string[])
@@ -133,6 +140,22 @@ describe("the Spark pure-module seam guard", () => {
       "@/lib/db/providers/sql/spark/grpc-client",
       "@/lib/db/providers/sql/spark",
     ]);
+  });
+
+  // The planted names are not apache-arrow, since the importer rule below reads this file too.
+  test("the reader finds a require() call, and the importer rule scans every script extension (planted text and names)", () => {
+    const planted = [
+      'const pad = require("left-pad");',
+      "const { join } = require( 'node:path' );",
+      'import sibling = require("./sibling");',
+    ].join("\n");
+    expect(importLinesIn(planted)).toStrictEqual([
+      { specifier: "left-pad", typeOnly: false },
+      { specifier: "node:path", typeOnly: false },
+      { specifier: "./sibling", typeOnly: false },
+    ]);
+    const names = ["a.ts", "a.tsx", "a.mts", "a.cts", "a.js", "a.jsx", "a.mjs", "a.cjs", "a.json", "a.d.ts.map"];
+    expect(names.filter((name) => SCANNED.test(name))).toStrictEqual(names.slice(0, 8));
   });
 
   test("only the listed files import apache-arrow", () => {
