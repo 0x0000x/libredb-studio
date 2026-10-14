@@ -533,7 +533,8 @@ At the operative keyword:
 Anywhere in the statement's code:
 
 - `INSERT OVERWRITE` overwrites a table or writes a directory, also inside a FROM-led multi-insert.
-- `REPLACE WHERE` and `REPLACE USING` replace rows of the table an INSERT names.
+- `EVOLUTION OVERWRITE` overwrites a table in Spark 4.2's `INSERT WITH SCHEMA EVOLUTION OVERWRITE`.
+- `REPLACE WHERE`, `REPLACE ON` and `REPLACE USING` replace rows of the table an INSERT names.
 - `USING JAR`, `USING FILE` and `USING ARCHIVE` load code for a function.
 - `DROP PARTITIONS` and `SYNC PARTITIONS` remove partitions from the catalog in REPAIR TABLE.
 - `USING '<command>'`, the word followed by a string, as `TRANSFORM (...) USING '<command>'`, `MAP ... USING` and `REDUCE ... USING` start an external process; `USING (id)` and `USING parquet` do not ask.

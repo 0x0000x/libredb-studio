@@ -2535,6 +2535,11 @@ describe("Apache Spark's confirmation forms", () => {
     "FROM s INSERT INTO u SELECT a INSERT OVERWRITE TABLE t SELECT a",
     "INSERT INTO t REPLACE WHERE a = 1 SELECT 1",
     "INSERT INTO t REPLACE USING (a) SELECT 1",
+    // Spark 4.2's INSERT forms: WITH SCHEMA EVOLUTION before OVERWRITE, and REPLACE ON with a condition.
+    "INSERT WITH SCHEMA EVOLUTION OVERWRITE TABLE t SELECT * FROM s",
+    "FROM s INSERT INTO u SELECT a INSERT WITH SCHEMA EVOLUTION OVERWRITE t SELECT a",
+    "INSERT INTO t REPLACE ON t.id = s.id SELECT * FROM s",
+    "INSERT WITH SCHEMA EVOLUTION INTO t AS x BY NAME REPLACE ON x.id = s.id (SELECT * FROM u) AS s",
     "CREATE FUNCTION f AS 'com.example.F' USING JAR '/opt/lib/udf.jar'",
     "CREATE TEMPORARY FUNCTION f AS 'com.example.F' USING FILE '/opt/lib/f.py'",
     "CREATE FUNCTION f AS 'com.example.F' USING ARCHIVE '/opt/lib/a.zip'",
@@ -2583,6 +2588,14 @@ describe("Apache Spark's confirmation forms", () => {
 
   test("a CTE-led DELETE after a hint closed right before `*` asks: `*/*` is the hint's closer and a `*`", () => {
     expect(isDangerousQuery("WITH c AS (SELECT /*+ H */* FROM t) DELETE FROM u -- */", "spark")).toBe(true);
+  });
+
+  test("schema evolution and a REPLACE ask only where the INSERT overwrites or replaces rows", () => {
+    expect(isDangerousQuery("INSERT WITH SCHEMA EVOLUTION /* note */ OVERWRITE t SELECT 1", "spark")).toBe(true);
+    expect(isDangerousQuery("INSERT INTO t REPLACE -- note\nON t.id = 1 SELECT 1", "spark")).toBe(true);
+    expect(isDangerousQuery("INSERT WITH SCHEMA EVOLUTION INTO t SELECT 1", "spark")).toBe(false);
+    expect(isDangerousQuery("CREATE VIEW v WITH SCHEMA EVOLUTION AS SELECT 1", "spark")).toBe(false);
+    expect(isDangerousQuery("SELECT replace(a, 'x', 'y') FROM t JOIN u ON t.id = u.id", "spark")).toBe(false);
   });
 
   test.each([

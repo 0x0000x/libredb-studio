@@ -967,12 +967,15 @@ const SPARK_GRAMMAR: SqlGrammar = {
     ["EXECUTE", "IMMEDIATE"],
     ["ADD"],
   ],
-  // Anywhere in the code: overwrite or replace rows, load a function's code, remove partitions from the catalog,
-  // start an external process (`TRANSFORM`, `MAP` or `REDUCE` ... `USING '<command>'`) or call a Java method by
-  // reflection. `reflect` and `java_method` are whole code words, so a name such as `reflection` does not ask.
+  // Anywhere in the code: overwrite or replace rows (4.2 also writes `INSERT WITH SCHEMA EVOLUTION OVERWRITE` and
+  // `REPLACE ON <condition>`), load a function's code, remove partitions from the catalog, start an external process
+  // (`TRANSFORM`, `MAP` or `REDUCE` ... `USING '<command>'`) or call a Java method by reflection. `reflect` and
+  // `java_method` are whole code words, so a name such as `reflection` does not ask.
   confirmCodeForms: [
     ["INSERT", "OVERWRITE"],
+    ["EVOLUTION", "OVERWRITE"],
     ["REPLACE", "WHERE"],
+    ["REPLACE", "ON"],
     ["REPLACE", "USING"],
     ["USING", "JAR"],
     ["USING", "FILE"],

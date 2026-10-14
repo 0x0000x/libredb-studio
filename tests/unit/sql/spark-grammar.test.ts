@@ -140,9 +140,11 @@ describe("the Spark grammar", () => {
       ["EXECUTE", "IMMEDIATE"],
       ["ADD"],
     ]);
-    expect(grammar.confirmCodeForms).toEqual([
+    expect(grammar.confirmCodeForms).toStrictEqual([
       ["INSERT", "OVERWRITE"],
+      ["EVOLUTION", "OVERWRITE"],
       ["REPLACE", "WHERE"],
+      ["REPLACE", "ON"],
       ["REPLACE", "USING"],
       ["USING", "JAR"],
       ["USING", "FILE"],
