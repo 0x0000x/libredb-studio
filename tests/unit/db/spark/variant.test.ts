@@ -76,6 +76,27 @@ const float64Bytes = (value: number) => {
   return Array.from(new Uint8Array(view.buffer));
 };
 
+/**
+ * Runs `decode` and counts the decoder's steps: every offset or length it reads passes one bounds check, which calls
+ * Number.isInteger once, so the calls count the reads. Past `limit` steps the count stops the decode with an error, so
+ * a decoder whose work outgrows its bound fails at once instead of running on.
+ */
+function stepsOf<T>(limit: number, decode: () => T): { readonly answer: T; readonly steps: number } {
+  const isInteger = Number.isInteger;
+  let steps = 0;
+  Number.isInteger = (value: unknown): boolean => {
+    steps += 1;
+    if (steps > limit) throw new Error(`the decoder took more than ${limit} steps`);
+    return isInteger(value);
+  };
+  try {
+    const answer = decode();
+    return { answer, steps };
+  } finally {
+    Number.isInteger = isInteger;
+  }
+}
+
 /** Expects the value to be refused as unreadable, with the sentence that names the Variant encoding. */
 function refused(value: Uint8Array, metadata: Uint8Array = NO_NAMES): void {
   let caught: unknown;
@@ -208,16 +229,20 @@ describe("variantJson: objects and arrays", () => {
 });
 
 describe("variantJson: the text bound", () => {
-  test("an object whose two fields share one nested value, repeated to depth 64, answers undefined at maxChars", () => {
-    const started = performance.now();
-    expect(variantJson(deepShared(), meta(["a", "b"]), 10_000)).toBeUndefined();
-    expect(performance.now() - started).toBeLessThan(1_000);
+  // Each test bounds the decoder's steps by maxChars, which no wall clock can make flaky; the lower bound shows the count
+  // measured a decode that wrote up to maxChars, at about one step for every two characters of this value's text.
+  test("an object whose two fields share one nested value, repeated to depth 64, answers undefined at maxChars after no more steps than maxChars", () => {
+    const { answer, steps } = stepsOf(10_000, () => variantJson(deepShared(), meta(["a", "b"]), 10_000));
+    expect(answer).toBeUndefined();
+    expect(steps).toBeGreaterThan(10_000 / 4);
   });
 
-  test("the same value at the statement's whole decoded budget answers undefined within the same second", () => {
-    const started = performance.now();
-    expect(variantJson(deepShared(), meta(["a", "b"]), SPARK_RESULT_BYTE_BUDGET)).toBeUndefined();
-    expect(performance.now() - started).toBeLessThan(1_000);
+  test("the same value at the statement's whole decoded budget answers undefined after no more steps than that budget", () => {
+    const { answer, steps } = stepsOf(SPARK_RESULT_BYTE_BUDGET, () =>
+      variantJson(deepShared(), meta(["a", "b"]), SPARK_RESULT_BYTE_BUDGET),
+    );
+    expect(answer).toBeUndefined();
+    expect(steps).toBeGreaterThan(SPARK_RESULT_BYTE_BUDGET / 4);
   });
 
   test("a text of more parts than the writer joins at once comes back whole and in order", () => {
