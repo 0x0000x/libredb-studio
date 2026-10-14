@@ -227,7 +227,7 @@ Every Studio request gets a Spark session of its own, created for that request a
 A script's statements run in the same request, so they share one session: a temp view, a `SET` or a `USE NAMESPACE` made by one statement is seen by the next, and by nothing after the request.
 A `query()` call outside a request scope runs in a session of its own, released when the statement ends.
 The provider also keeps one metadata session for the tree, the overview and health; it never runs a user statement.
-A disconnect of the provider releases every request, statement and metadata session; a connect the disconnect cuts can leave that connect's version probe session on the server until Spark's idle timeout, as the end of this section says.
+A disconnect of the provider releases every request, statement and metadata session, and the version probe session of a connect it cuts, as the end of this section says.
 
 At most 8 of the statements the provider writes run on one connection's metadata session at once, and the rest wait for a slot, served in arrival order.
 A statement's wait for a slot and for the metadata session's setup counts against the connection's query timeout.
@@ -256,13 +256,13 @@ The metadata session is set up again once when the server closed it, and its rea
 When the repeated read meets a closed session again, or a statement's deadline passes before it is sent again, while it waits for the new session's setup or at the send itself, the read fails with `Studio's Spark session for the tree and the panels was closed by the server (it idled out or the server restarted), and a new one could not complete the read.`
 A release that cannot reach the server is logged and left to Spark's 60-minute idle timeout.
 
-Closing a connection, at a disconnect, when its own connect fails, when a second connect displaces it while it is still opening, or, once it is connected, when a second connect replaces it or fails, first closes its metadata slots and its sessions to new work, then stops its runs, releases its sessions and closes its channel.
+Closing a connection, at a disconnect, when its own connect fails, when a second connect displaces it while it is still opening, or, once it is connected, when a second connect replaces it or fails, first closes its metadata slots and its sessions to new work, then stops its runs, releases its sessions, waits for its connect's version read and the probe's release, and closes its channel.
 From the moment the close begins, no session setup sends a further step and no metadata read sends anything more.
 A statement then still waiting for a slot or for its session's setup, and every later one on that connection, ends with `The query was cancelled.`
 A tree or panel read that fails once its connection's close began ends with the same sentence, whatever its call met, so a channel the close shut never reads as a server that did not answer.
 A connect that a disconnect or a second connect cut ends with that sentence too and never records a reachability error; a second connect closes the connection of a connect still opening at once, and the displaced connect never replaces the last error of the connect that displaced it.
 `connect()` answers only once every connection it displaced or replaced is closed, and `disconnect()` only once every close in progress has ended, so no channel of the provider is left open.
-A connect cut after the server received its version read and before the probe's release goes out leaves the probe session on the server until Spark's 60-minute idle timeout, a known limit ([section 10](#10-security)).
+A connect that a disconnect or a second connect cut once its version read was sent still releases its probe session: the close waits for the version answer and then for the probe's release, each under a 10 s deadline of its own, before it closes the channel.
 
 ## 5. How a statement runs
 
@@ -591,7 +591,6 @@ Known limits:
 - under Bun, a client-certificate failure reads as no Spark Connect server answering, because the TLS proxy's alert reaches the status text under Node only.
 - a result of more than about 16,000 tiny batches is cut by the 16 MiB budget, with its bytes warning, because each kept batch counts 1,024 bytes beside its values.
 - a legacy negative-scale decimal whose scale is below -38 is refused as unreadable.
-- a connect that a disconnect or a second connect cuts after the server received its version read, and before the probe's release goes out, leaves the probe session on the server until Spark's 60-minute idle timeout, because the close shuts the channel before the release goes out.
 
 ## 11. Errors
 

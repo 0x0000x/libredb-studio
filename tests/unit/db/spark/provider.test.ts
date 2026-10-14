@@ -188,7 +188,15 @@ const failingStream = (error: unknown): SparkPlanStream => ({
   cancel: () => undefined,
 });
 
-/** A channel that answers each unary RPC from `unary` (default: an empty answer) and each command from `commands`. */
+/** grpc-js's own failure for a call on a channel its client closed: no gRPC code, and nothing reached the server. */
+const shutDown = () => new Error("Channel has been shut down");
+
+/**
+ * A channel that answers each unary RPC from `unary` (default: an empty answer) and each command from `commands`. Each
+ * open is a channel of its own, as grpc-js opens one per connection: once closed, it refuses every call as grpc-js
+ * does, ExecutePlan by throwing at once and a unary call by rejecting, and records none, so no test passes on a call
+ * the real channel would drop.
+ */
 function scripted(options: ScriptOptions = {}): Scripted {
   const calls: ScriptedCall[] = [];
   let closed = 0;
@@ -202,33 +210,39 @@ function scripted(options: ScriptOptions = {}): Scripted {
       deadline: call.deadline.getTime(),
     });
   };
-  const channel: SparkWireChannel = {
-    unary: async (rpc, request, call) => {
-      record(rpc, request, call);
-      const scriptedAnswer = options.unary?.(rpc, request, call);
-      if (scriptedAnswer !== undefined) return scriptedAnswer;
-      const base = { session_id: sessionOf(request), server_side_session_id: "server-1" };
-      if (rpc === "AnalyzePlan") return { ...base, spark_version: { version: options.version ?? "4.2.0" } };
-      if (rpc === "Config") return { ...base, pairs: [], warnings: [] };
-      if (rpc === "Interrupt") return { ...base, interrupted_ids: [] };
-      return base;
-    },
-    executePlan: (request, call) => {
-      record("ExecutePlan", request, call);
-      const sql = statementOf(request) ?? "";
-      const stream = options.stream?.(sql, request, call);
-      if (stream !== undefined) return stream;
-      const answer = options.commands?.[sql];
-      return streamOf(answer === undefined ? [] : [commandAnswer(request, answer)]);
-    },
-    close: () => {
-      closed += 1;
-    },
+  const channel = (): SparkWireChannel => {
+    let open = true;
+    return {
+      unary: async (rpc, request, call) => {
+        if (!open) throw shutDown();
+        record(rpc, request, call);
+        const scriptedAnswer = options.unary?.(rpc, request, call);
+        if (scriptedAnswer !== undefined) return scriptedAnswer;
+        const base = { session_id: sessionOf(request), server_side_session_id: "server-1" };
+        if (rpc === "AnalyzePlan") return { ...base, spark_version: { version: options.version ?? "4.2.0" } };
+        if (rpc === "Config") return { ...base, pairs: [], warnings: [] };
+        if (rpc === "Interrupt") return { ...base, interrupted_ids: [] };
+        return base;
+      },
+      executePlan: (request, call) => {
+        if (!open) throw shutDown();
+        record("ExecutePlan", request, call);
+        const sql = statementOf(request) ?? "";
+        const stream = options.stream?.(sql, request, call);
+        if (stream !== undefined) return stream;
+        const answer = options.commands?.[sql];
+        return streamOf(answer === undefined ? [] : [commandAnswer(request, answer)]);
+      },
+      close: () => {
+        open = false;
+        closed += 1;
+      },
+    };
   };
   return {
     transport: () => {
       options.opening?.();
-      return channel;
+      return channel();
     },
     calls,
     closed: () => closed,
@@ -1891,7 +1905,7 @@ describe("SparkProvider: the version floor and the probe session", () => {
     await provider.disconnect();
   });
 
-  test("a second connect then a disconnect while the first connect still opens close both connections before the disconnect answers, and only the probes' releases follow", async () => {
+  test("a second connect then a disconnect while the first connect still reads its version close each connection once its probe is released, the disconnect answers only then, and only the probes' releases follow", async () => {
     const firstVersion = gate();
     let versions = 0;
     const script = scripted({
@@ -1914,9 +1928,17 @@ describe("SparkProvider: the version floor and the probe session", () => {
     await eventually(() => versions === 1);
     const second = failureOf(provider.connect());
     const at = script.calls.length;
-    await provider.disconnect();
-    expect(channels.closed()).toStrictEqual([true, true]);
+    let disconnected = false;
+    const closing = provider.disconnect().then(() => {
+      disconnected = true;
+    });
+    await later(20);
+    // The second connection closed once its probe was released; the first still waits for its version answer.
+    expect(disconnected).toBe(false);
+    expect(channels.closed()).toStrictEqual([false, true]);
     firstVersion.open();
+    await closing;
+    expect(channels.closed()).toStrictEqual([true, true]);
     const failures = await Promise.all([first, second]);
     expect(
       failures.map((failure) => [failure instanceof QueryCancelledError, (failure as Error).message]),
@@ -2029,11 +2051,16 @@ describe("SparkProvider: the version floor and the probe session", () => {
       const provider = new SparkProvider(connection(1), {}, script);
       const displaced = failureOf(provider.connect());
       await eventually(() => versions === 1);
-      const failure = await failureOf(provider.connect());
+      const second = failureOf(provider.connect());
+      // The second connect's failure is the provider's state at once; the connect answers once the first connection's
+      // close, which waits for the first probe's release, ended.
+      await eventually(() => lastErrorOf(provider) !== undefined);
+      const recorded = lastErrorOf(provider);
+      firstVersion.open();
+      const failure = await second;
+      expect(failure).toBe(recorded);
       expect(failure).toBeInstanceOf(ConnectionError);
       expect((failure as Error).message).toBe(message);
-      expect(lastErrorOf(provider)).toBe(failure as Error);
-      firstVersion.open();
       const cut = await displaced;
       expect(cut).toBeInstanceOf(QueryCancelledError);
       expect((cut as Error).message).toBe(SPARK_ERROR_SENTENCES.cancelled);

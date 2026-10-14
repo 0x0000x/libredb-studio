@@ -5,6 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import { SPARK_HEARTBEAT_INTERVAL_MS } from "@/lib/db/providers/sql/spark/constants";
+import { grpcWireTransport, type SparkWireTransport } from "@/lib/db/providers/sql/spark/grpc-client";
 import { SparkProvider } from "@/lib/db/providers/sql/spark/index";
 import { checkIpcStream } from "@/lib/db/providers/sql/spark/ipc-guard";
 import { columnsFromDataType } from "@/lib/db/providers/sql/spark/schema";
@@ -204,6 +205,55 @@ const statementFails = (answer: SparkFakeOptions["statements"][string]) =>
     return "answered";
   });
 
+/**
+ * A connect cut by a disconnect or by a second connect once its version answer arrived and before it sends its probe's
+ * release: the real adapter over a fresh fake, with the cut started as the first version answer reaches the provider.
+ * Answers how the cut connect and the cut itself ended, then the RPCs the fake received on each session, the sessions
+ * in the order each was first used, once a last disconnect ended.
+ */
+async function cutAtVersionAnswer(cut: "disconnect" | "connect"): Promise<string> {
+  const fake = await startSparkFake({
+    progressEveryMs: 0,
+    statements: { "SHOW CURRENT NAMESPACE": { kind: "command", ipc: CURRENT } },
+  });
+  const port = Number(fake.target.split(":").at(-1));
+  let cutting: Promise<string> | undefined;
+  const transport: SparkWireTransport = (options) => {
+    const channel = grpcWireTransport(options);
+    return {
+      ...channel,
+      unary: async (rpc, request, call) => {
+        const answer = await channel.unary(rpc, request, call);
+        if (rpc === "AnalyzePlan" && cutting === undefined) {
+          cutting = provider[cut]().then(() => "answered", failed);
+        }
+        return answer;
+      },
+    };
+  };
+  const provider = new SparkProvider(
+    { id: `rt-cut-${port}`, name: "rt", type: "spark", host: "127.0.0.1", port } as DatabaseConnection,
+    {},
+    { transport },
+  );
+  try {
+    const cutConnect = await provider.connect().then(() => "connected", failed);
+    const ended = await cutting;
+    await provider.disconnect();
+    const { entries } = fake.log;
+    const sessions = [...new Set(entries.map((entry) => entry.sessionId))].map((id) =>
+      entries
+        .filter((entry) => entry.sessionId === id)
+        .map((entry) => entry.rpc)
+        .join(" "),
+    );
+    return `${cutConnect} | ${cut} ${ended} | ${sessions.join(", ")}`;
+  } finally {
+    await provider.disconnect();
+    fake.close();
+  }
+}
+
 export async function runSparkRuntimeCases(): Promise<readonly SparkRuntimeOutcome[]> {
   const cases: [string, () => Promise<string>][] = [
     [
@@ -280,6 +330,8 @@ export async function runSparkRuntimeCases(): Promise<readonly SparkRuntimeOutco
         ),
     ],
     ["reset", () => statementFails({ kind: "reset" })],
+    ["probe release past a disconnect", () => cutAtVersionAnswer("disconnect")],
+    ["probe release past a second connect", () => cutAtVersionAnswer("connect")],
     [
       "ipc bounds",
       async () =>

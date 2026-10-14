@@ -8,6 +8,7 @@ import { SPARK_FIELD_SENTENCES } from "@/lib/db/providers/sql/spark/connection-o
 import {
   SPARK_ARROW_CHUNK_BYTES,
   SPARK_ARROW_MAX_RECORDS_PER_BATCH,
+  SPARK_CONTROL_DEADLINE_MS,
   SPARK_DEFAULT_PORT,
   SPARK_DESCRIBE_OBJECTS_MAX,
   SPARK_HEARTBEAT_INTERVAL_MS,
@@ -279,6 +280,7 @@ describe("docs/providers/spark.md", () => {
       `${n(MAX_UNLIMITED_ROWS)} rows`,
       `${n(SPARK_ARROW_MAX_RECORDS_PER_BATCH)} rows a batch`,
       `${SPARK_HEARTBEAT_INTERVAL_MS / 1000} s`,
+      `${SPARK_CONTROL_DEADLINE_MS / 1000} s deadline`,
       `${n(SPARK_NAMESPACE_WALK_MAX)} namespaces`,
       `${SPARK_NAMESPACE_MAX_PARTS} levels`,
       `${n(SPARK_DESCRIBE_OBJECTS_MAX)} objects`,

@@ -33,6 +33,9 @@ function expectedOutcomes(port: { plain: number; tls: number }): Readonly<Record
     "plaintext to tls": `${port.tls} ConnectionError: ${SPARK_ERROR_SENTENCES.tlsPortExpected("127.0.0.1", port.tls)}`,
     "untrusted ca": `ConnectionError: ${SPARK_ERROR_SENTENCES.tlsUntrusted}`,
     reset: `ConnectionError: ${SPARK_ERROR_SENTENCES.connectionDropped}`,
+    // The cut connect ends cancelled, and its probe session is released before its channel closes.
+    "probe release past a disconnect": `QueryCancelledError: ${SPARK_ERROR_SENTENCES.cancelled} | disconnect answered | AnalyzePlan ReleaseSession`,
+    "probe release past a second connect": `QueryCancelledError: ${SPARK_ERROR_SENTENCES.cancelled} | connect answered | AnalyzePlan ReleaseSession, AnalyzePlan ReleaseSession, Config ExecutePlan ReleaseSession`,
     "ipc bounds": [
       unreadable("a message without the continuation marker"),
       unreadable("a message header longer than 1 MiB or past the end of the stream"),

@@ -252,6 +252,12 @@ interface SparkConnection {
   readonly sessions: SparkSessions;
   readonly runs: SparkRuns;
   readonly metadataSlots: SparkMetadataSlots;
+  /**
+   * The connect's version read and its probe's release, from the moment the read is sent, each call under its control
+   * deadline. It never rejects, the connect meets their failures itself, and the close waits for it before it closes
+   * the channel, so a release still to be sent goes out on an open channel.
+   */
+  probe: Promise<void>;
 }
 
 /** One completed statement as the grid's result; a cut is reported with its warning and on `pagination.wasLimited`. */
@@ -455,7 +461,15 @@ export class SparkProvider extends SQLBaseProvider {
       errorConnection,
       timeoutMs: options.callTimeoutMs,
     });
-    return { options, channel, metadata, sessions, runs, metadataSlots: new SparkMetadataSlots(options.callTimeoutMs) };
+    return {
+      options,
+      channel,
+      metadata,
+      sessions,
+      runs,
+      metadataSlots: new SparkMetadataSlots(options.callTimeoutMs),
+      probe: Promise.resolve(),
+    };
   }
 
   // -- lifecycle -----------------------------------------------------------------------------------------------------
@@ -465,9 +479,9 @@ export class SparkProvider extends SQLBaseProvider {
    * catalog and namespace read. A failure closes what it opened and is mapped once. A second `connect()` replaces the
    * first connection and closes it; when the second fails, it closes the first connection too, so no connection stays
    * open behind a provider that reports itself disconnected. A connect still running when a second one starts is
-   * displaced: its connection is closed at once, so it sends nothing more, and it ends cancelled. One still running
-   * when a disconnect begins ends cancelled too. A connect answers once every connection it replaced or displaced is
-   * closed.
+   * displaced: its connection's close begins at once, so it sends nothing more but its probe's release, and it ends
+   * cancelled. One still running when a disconnect begins ends cancelled too. A connect answers once every connection it
+   * replaced or displaced is closed.
    */
   public async connect(): Promise<void> {
     let options: SparkConnectionOptions | undefined;
@@ -483,8 +497,8 @@ export class SparkProvider extends SQLBaseProvider {
       this.connecting = opened;
       if (overtaken !== null) {
         this.displacedConnections.add(overtaken);
-        // Its close begins now, so the displaced connect sends nothing more; this connect waits for that close before
-        // it answers.
+        // Its close begins now, so the displaced connect sends nothing more but its probe's release; this connect waits
+        // for that close before it answers.
         void this.close(overtaken);
       }
       await this.checkVersion(opened);
@@ -541,8 +555,23 @@ export class SparkProvider extends SQLBaseProvider {
    * a connect that meets the floor sets up a metadata session of its own, because the session registry creates every
    * session id itself, and a refused one leaves no session behind on a server that offers ReleaseSession. A server below
    * the floor without ReleaseSession keeps the probe, so its id is remembered for the next connect of this connection.
+   * The read and the release are the connection's probe from the moment the read is sent, so a close that begins
+   * between the version answer and the release, a disconnect's or a second connect's, waits for the release before it
+   * closes the channel.
    */
   private async checkVersion(connection: SparkConnection): Promise<void> {
+    const probed = this.readVersionOnProbe(connection);
+    // The connect meets a failure of the read through `probed`; the close only waits.
+    connection.probe = probed.then(
+      () => undefined,
+      () => undefined,
+    );
+    const refusal = await probed;
+    if (refusal !== undefined) throw new SparkError("version", refusal);
+  }
+
+  /** The version read on the probe session and the probe's release; answers the floor's refusal, if any. */
+  private async readVersionOnProbe(connection: SparkConnection): Promise<string | undefined> {
     const { host, port } = connection.options.endpoint;
     const key = `${this.config.id}\u0000${host}\u0000${port}`;
     const probe: SparkSessionRef = { sessionId: REFUSED_PROBES.get(key) ?? crypto.randomUUID() };
@@ -572,7 +601,7 @@ export class SparkProvider extends SQLBaseProvider {
       });
       if (refusal !== undefined && category === "unimplemented") rememberRefusedProbe(key, probe.sessionId);
     }
-    if (refusal !== undefined) throw new SparkError("version", refusal);
+    return refusal;
   }
 
   /**
@@ -590,9 +619,9 @@ export class SparkProvider extends SQLBaseProvider {
 
   /**
    * Refuses the metadata statements still waiting for a slot and closes the session registry, both at once, then stops
-   * every run, releases every session under the control deadline, and closes the channel. The refusals come first, so
-   * no slot a stopped run gives back starts a statement, and no session setup or metadata read sends anything while
-   * the runs are being stopped.
+   * every run, releases every session under the control deadline, waits for the connect's version read and its probe's
+   * release, and closes the channel. The refusals come first, so no slot a stopped run gives back starts a statement,
+   * and no session setup or metadata read sends anything while the runs are being stopped.
    */
   private async tearDown(connection: SparkConnection): Promise<void> {
     this.closing.add(connection);
@@ -602,6 +631,7 @@ export class SparkProvider extends SQLBaseProvider {
     try {
       await connection.runs.cancelAll();
       await connection.sessions.releaseAll();
+      await connection.probe;
     } finally {
       connection.channel.close();
       this.releasing -= 1;
