@@ -39,7 +39,7 @@ The next connect of that connection reads the version on the remembered session,
 | Catalog | Container, level 0, labelled "Catalog" |
 | Namespace | Container, level 1, labelled "Namespace", in Spark's own spelling |
 | Table, view, function | Object kinds ([section 7](#7-the-tree)) |
-| Spark session | One per Studio request, released at its end ([section 4](#4-sessions-and-scripts)) |
+| Spark session | One per Studio request, released at its end, and one for the tree and the panels while the connection is open ([section 4](#4-sessions-and-scripts)) |
 
 | File | Role |
 | --- | --- |
@@ -460,7 +460,7 @@ No plan is requested beside an ordinary run.
 | Health | One AnalyzePlan round trip; size and cache ratio "N/A" |
 | Performance | Nothing |
 | Slow queries | Empty: `Spark keeps finished statements in the driver's web UI, which Studio does not read in this version.` |
-| Sessions | Empty: `Spark Connect sessions are listed in the driver's web UI, which Studio does not read in this version. Studio's own sessions last one request each.` |
+| Sessions | Empty: `Spark Connect sessions are listed in the driver's web UI, which Studio does not read in this version. Studio's own sessions last one request each, except the one for the tree and the panels, which Studio keeps while the connection is open.` |
 | Tables | Refused: `Spark keeps table statistics only where its catalog stores them, and Studio does not read them in this version.` |
 | Indexes | Empty: no Spark SQL statement lists indexes |
 | Storage | Refused: `Spark reports no storage figure Studio can read in this version.` |
