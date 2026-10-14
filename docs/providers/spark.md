@@ -287,9 +287,9 @@ Every other early end of a stream also sends Interrupt by tag, once, because can
 A run that starts once its connection's close began is refused as cancelled before it asks for a session, and nothing is sent for it.
 
 The connection's query timeout bounds each run: `The statement ran past the connection's query timeout (<n> ms); Studio asked Spark to stop it.`
-A run whose deadline passes before Studio sends it, such as while its session is still being set up, is not sent, and no Interrupt follows: `The statement was not sent: the connection's query timeout (<n> ms) passed before Studio could send it.`
+A run whose statement Studio has not sent before, and whose deadline passes before Studio sends it, such as while its session is still being set up, is not sent, and no Interrupt follows: `The statement was not sent: the connection's query timeout (<n> ms) passed before Studio could send it.`
 A deadline that passes between the two steps sends no second ExecutePlan call, and the run's Interrupt follows, with the first of these two sentences.
-A metadata statement sent once already, on a metadata session the server closed, is never refused with the not-sent sentence: a deadline that passes before it is sent again reads the lost-session sentence of [section 4](#4-sessions-and-scripts).
+A metadata statement whose deadline passes before Studio sends it again, on a new session after the server closed the one it was first sent on, is not sent again, and ends with the lost-session sentence of [section 4](#4-sessions-and-scripts).
 A dropped connection reads `The connection to Spark dropped while the statement ran. Studio asked Spark to stop it; run it again.`, and any other failure of the stream `The connection to Spark failed while the statement ran (<status text>). Studio asked Spark to stop it; run it again.`
 
 ## 6. Results
