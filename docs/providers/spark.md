@@ -540,6 +540,7 @@ Anywhere in the statement's code:
 - `USING '<command>'`, the word followed by a string, as `TRANSFORM (...) USING '<command>'`, `MAP ... USING` and `REDUCE ... USING` start an external process; `USING (id)` and `USING parquet` do not ask.
 - `REFLECT`, `JAVA_METHOD` and `TRY_REFLECT` call a Java method on the cluster; they match as whole words, so a name such as `reflection` does not ask, and as a name in backticks or double quotes that a `(` follows, such as `` `reflect`(...) ``.
 - `IDENTIFIER(...)(...)` calls a function whose name an expression computes, which the gate cannot read; the same shape in `CREATE TABLE IDENTIFIER('t') (a INT)` asks too.
+- `$$...$$` and `$tag$...$tag$` hold a dollar-quoted body, such as a Spark 4.2 metric view's YAML (`CREATE VIEW ... WITH METRICS LANGUAGE YAML AS $$...$$`), whose expressions the gate does not read.
 
 A `SET` with `=` or a `RESET` of `spark.sql.variable.substitute`, `spark.sql.defaultCatalog` or any key under `spark.sql.catalog.` asks, and so does a bare `RESET`, which restores every key.
 Not asked, on purpose: a plain INSERT, CREATE without REPLACE, `USE` and `SET CATALOG`, which change only the request's own session, and CACHE, UNCACHE, CLEAR CACHE and REFRESH, which change no data.

@@ -159,6 +159,7 @@ describe("the Spark grammar", () => {
       { quotedCall: "JAVA_METHOD" },
       { quotedCall: "TRY_REFLECT" },
       { computedCall: "IDENTIFIER" },
+      { dollarQuoted: true },
     ]);
     expect(grammar.confirmConfigKeys).toEqual([
       "spark.sql.variable.substitute",

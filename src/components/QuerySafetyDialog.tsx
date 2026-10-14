@@ -806,11 +806,28 @@ function computedCallInCode(text: string, word: string, grammar: SqlGrammar): bo
   return false;
 }
 
+/**
+ * Whether a dollar-quoted run (`$$...$$`, `$tag$...$tag$`) opens at a code position of `text`, the span reader asked at
+ * each character as `hasUnterminatedSpan` asks it: Spark's names hold no `$`, so a `$$` right after a name's letters
+ * opens a run there too. A run that never closes counts as well.
+ */
+function dollarQuotedInCode(text: string, grammar: SqlGrammar): boolean {
+  let i = 0;
+  while (i < text.length) {
+    const span = readSqlSpan(text, i, grammar);
+    if (span === null) i++;
+    else if (span.kind === "dollar-string") return true;
+    else i = span.end;
+  }
+  return false;
+}
+
 function codeFormInText(text: string, form: ConfirmCodeForm, grammar: SqlGrammar): boolean {
   if ("prefix" in form) return prefixInCode(text, form.prefix, grammar);
   if ("wordThenLiteral" in form) return wordThenLiteralInCode(text, form.wordThenLiteral, grammar);
   if ("quotedCall" in form) return quotedCallInCode(text, form.quotedCall, grammar);
   if ("computedCall" in form) return computedCallInCode(text, form.computedCall, grammar);
+  if ("dollarQuoted" in form) return dollarQuotedInCode(text, grammar);
   return sequenceInCode(text, form, grammar);
 }
 

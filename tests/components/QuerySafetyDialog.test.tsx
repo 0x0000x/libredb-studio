@@ -2492,6 +2492,33 @@ describe("a confirmCodeForms word whose parenthesised run names the function cal
   });
 });
 
+// The `dollarQuoted` code form, read before any row declares it: a dollar-quoted run, `$$` or a tagged opener, at a code
+// position as the span reader reads one at each character. Spark's row declares it, since Spark 4.2 reads such a run as
+// a metric view's YAML definition, which the gate does not read.
+describe("a confirmCodeForms dollar-quoted run", () => {
+  const FORM: SqlGrammar = { ...DEFAULT_SQL_GRAMMAR, confirmCodeForms: [{ dollarQuoted: true }] };
+
+  test.each([
+    "SELECT $$x$$",
+    "SELECT $tag$x$tag$",
+    "SELECT 1 /* c */, $$x$$ FROM t",
+    // The run is read at each character, as Spark's lexer reads it: Spark's names hold no `$`, so a `$$` right after a
+    // name's letters opens a run.
+    "SELECT a$$x$$",
+    // A run that never closes asks too; `isDangerousQuery` asks for it as unreadable text as well.
+    "SELECT $$x",
+  ])("asks for %j", (sql) => {
+    expect(writesUnderGrammar(sql, FORM)).toBe(true);
+  });
+
+  test.each(["SELECT '$$x$$'", "SELECT `$$x$$`", "SELECT 1 -- $$x$$", "SELECT 1 /* $t$x$t$ */", "SELECT $1"])(
+    "does not ask for %j",
+    (sql) => {
+      expect(writesUnderGrammar(sql, FORM)).toBe(false);
+    },
+  );
+});
+
 // The `confirmConfigKeys` fact, read before any row declares it: a SET or RESET of a listed session key asks, and so
 // does a RESET with no key, which restores every key. Spark's row lists variable substitution and the catalog keys.
 describe("a confirmConfigKeys key set or reset", () => {
@@ -2623,6 +2650,8 @@ describe("Apache Spark's confirmation forms", () => {
     "SELECT \"Java_Method\"('java.util.UUID', 'randomUUID')",
     "SELECT IDENTIFIER('reflect')('java.util.UUID', 'randomUUID')",
     "SELECT identifier -- c\n('java' || '_method') /* d */ ('java.util.UUID', 'randomUUID')",
+    // A dollar-quoted body is code the gate does not read: Spark 4.2 reads it as a metric view's YAML definition.
+    "CREATE VIEW mv WITH METRICS LANGUAGE YAML AS $$\nversion: 0.1\nsource: s\nmeasures:\n  - name: total\n    expr: SUM(amount)\n$$",
     "SET spark.sql.variable.substitute=true",
     "SET spark.sql.defaultCatalog=lake",
     "SET spark.sql.catalog.lake=org.apache.iceberg.spark.SparkCatalog",
@@ -2678,6 +2707,11 @@ describe("Apache Spark's confirmation forms", () => {
     expect(isDangerousQuery("SELECT * FROM IDENTIFIER('t') WHERE IDENTIFIER('c') > 1", "spark")).toBe(false);
     // The text cannot tell a column list from a call's arguments, so a table IDENTIFIER names before one asks too.
     expect(isDangerousQuery("CREATE TABLE IDENTIFIER('t') (a INT)", "spark")).toBe(true);
+  });
+
+  test("a dollar-quoted body asks only where it stands at a code position", () => {
+    expect(isDangerousQuery("CREATE VIEW mv WITH METRICS LANGUAGE YAML AS $m$ source: s $m$", "spark")).toBe(true);
+    expect(isDangerousQuery("SELECT '$$x$$', `$$y$$` FROM t -- $$z$$", "spark")).toBe(false);
   });
 
   test.each([

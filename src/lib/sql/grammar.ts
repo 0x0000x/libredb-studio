@@ -308,9 +308,10 @@ export interface SqlGrammar {
    * word sequence, the start of an identifier (`{ prefix: "SYSTEM$" }` matches `SYSTEM$CLUSTERING_INFORMATION`),
    * a word whose next code, past whitespace and comments, is a string literal (`{ wordThenLiteral: "USING" }`
    * matches `TRANSFORM (a) USING 'cat'` and not `JOIN u USING (id)`), a closed quoted name whose text is the name,
-   * compared without case, that a `(` follows (`{ quotedCall: "REFLECT" }` matches `` `Reflect`('a') ``), or a word
+   * compared without case, that a `(` follows (`{ quotedCall: "REFLECT" }` matches `` `Reflect`('a') ``), a word
    * followed by a parenthesised run and then a `(` (`{ computedCall: "IDENTIFIER" }` matches `IDENTIFIER('f')(1)`, a
-   * call whose function name the run computes). Absent means none.
+   * call whose function name the run computes), or a dollar-quoted run, read at each character (`{ dollarQuoted: true }`
+   * matches `$$...$$` and `$tag$...$tag$`, a body the gate does not read). Absent means none.
    */
   readonly confirmCodeForms?: readonly ConfirmCodeForm[];
   /**
@@ -331,14 +332,15 @@ export interface SqlGrammar {
 
 /**
  * A form `SqlGrammar.confirmCodeForms` looks for: a word sequence, an identifier prefix, a word a literal follows, a
- * quoted name called as a function, or a word whose parenthesised run names the function called.
+ * quoted name called as a function, a word whose parenthesised run names the function called, or a dollar-quoted run.
  */
 export type ConfirmCodeForm =
   | readonly string[]
   | { readonly prefix: string }
   | { readonly wordThenLiteral: string }
   | { readonly quotedCall: string }
-  | { readonly computedCall: string };
+  | { readonly computedCall: string }
+  | { readonly dollarQuoted: true };
 
 /**
  * What a call that names no dialect gets.
@@ -981,7 +983,8 @@ const SPARK_GRAMMAR: SqlGrammar = {
   // (`TRANSFORM`, `MAP` or `REDUCE` ... `USING '<command>'`) or call a Java method by reflection. `reflect`,
   // `java_method` and `try_reflect` are whole code words, so a name such as `reflection` does not ask, and a quoted
   // name of one asks where a `(` follows it, since Spark resolves a function name without case, quoted or not. A
-  // function `IDENTIFIER(<expr>)` names asks wherever it is called, since the gate cannot read the computed name.
+  // function `IDENTIFIER(<expr>)` names asks wherever it is called, since the gate cannot read the computed name, and so
+  // does a dollar-quoted body, which 4.2 reads as a metric view's YAML definition and the gate does not read.
   confirmCodeForms: [
     ["INSERT", "OVERWRITE"],
     ["EVOLUTION", "OVERWRITE"],
@@ -1001,6 +1004,7 @@ const SPARK_GRAMMAR: SqlGrammar = {
     { quotedCall: "JAVA_METHOD" },
     { quotedCall: "TRY_REFLECT" },
     { computedCall: "IDENTIFIER" },
+    { dollarQuoted: true },
   ],
   // Variable substitution is off in every session Studio opens; a SET or RESET that turns it back on, or rebinds a
   // catalog, asks.
