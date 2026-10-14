@@ -961,7 +961,7 @@ describe("every sentence, word for word", () => {
     [
       "tlsUntrusted",
       S.tlsUntrusted,
-      "The server's certificate is not signed by a CA Studio trusts. Paste the CA of the TLS proxy under SSL / TLS (verify-ca or verify-full), or choose require, which encrypts without verifying the certificate.",
+      "The server's certificate is not signed by a CA Studio trusts. Paste the CA of the TLS proxy under SSL / TLS (verify-ca or verify-full).",
     ],
     [
       "tokenMissing",

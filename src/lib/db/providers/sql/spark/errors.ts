@@ -93,8 +93,9 @@ export const SPARK_ERROR_SENTENCES = Object.freeze({
     `TLS was chosen, but ${host}:${port} answered without TLS. Spark Connect has no TLS of its own: point Host at a TLS proxy in front of it, or set SSL mode to disable and use an SSH tunnel.`,
   tlsPortExpected: (host: string, port: number) =>
     `${host}:${port} did not answer as a plaintext gRPC server: it expects TLS (choose an SSL mode under SSL / TLS), or it is not the Spark Connect port (15002 by default).`,
+  // It never suggests SSL mode require, which would send a token to a server whose certificate Studio did not verify.
   tlsUntrusted:
-    "The server's certificate is not signed by a CA Studio trusts. Paste the CA of the TLS proxy under SSL / TLS (verify-ca or verify-full), or choose require, which encrypts without verifying the certificate.",
+    "The server's certificate is not signed by a CA Studio trusts. Paste the CA of the TLS proxy under SSL / TLS (verify-ca or verify-full).",
   tlsNameMismatch: (host: string) =>
     `The server's certificate does not name ${host}. Set Host to a name or address the certificate lists.`,
   tlsCertificateDates:

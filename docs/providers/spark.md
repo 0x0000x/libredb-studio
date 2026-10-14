@@ -129,7 +129,7 @@ What a user sees for each outcome:
 | Nothing listening | `ConnectionError` | `No Spark Connect server answered at <host>:<port>. Start it with sbin/start-connect-server.sh, or check Host and Port (15002 by default).` |
 | TLS chosen, the server speaks plaintext gRPC | `ConnectionError` | `TLS was chosen, but <host>:<port> answered without TLS. Spark Connect has no TLS of its own: point Host at a TLS proxy in front of it, or set SSL mode to disable and use an SSH tunnel.` |
 | Plaintext to a TLS port, or a port that is not gRPC | `ConnectionError` | `<host>:<port> did not answer as a plaintext gRPC server: it expects TLS (choose an SSL mode under SSL / TLS), or it is not the Spark Connect port (15002 by default).` |
-| Certificate not trusted | `ConnectionError` | `The server's certificate is not signed by a CA Studio trusts. Paste the CA of the TLS proxy under SSL / TLS (verify-ca or verify-full), or choose require, which encrypts without verifying the certificate.` |
+| Certificate not trusted | `ConnectionError` | `The server's certificate is not signed by a CA Studio trusts. Paste the CA of the TLS proxy under SSL / TLS (verify-ca or verify-full).` |
 | Certificate does not name the host | `ConnectionError` | `The server's certificate does not name <host>. Set Host to a name or address the certificate lists.` |
 | Certificate expired or not yet valid | `ConnectionError` | `The server's certificate has expired or is not yet valid. Renew the TLS proxy's certificate, or check this machine's clock.` |
 | Client certificate required | `ConnectionError` | `The TLS proxy asked for a client certificate and did not get one it accepts. Add the client certificate and key under SSL / TLS (shown in verify-ca and verify-full).` |
