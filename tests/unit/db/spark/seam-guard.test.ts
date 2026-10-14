@@ -352,16 +352,21 @@ describe("pure modules import no I/O, no logger and no transport", () => {
   });
 });
 
-/** Every string in `sf` that names one of `rpcs` off SPARK_ALLOWLISTED_RPCS (syntactic, as Milvus's check is). */
+/**
+ * Every string and every identifier in `sf` that names one of `rpcs` off SPARK_ALLOWLISTED_RPCS, so an RPC read by a
+ * property access or a destructuring is found as one named in a string is. Syntactic: a name built at run time is not
+ * chased.
+ */
 function offAllowlist(sf: ts.SourceFile, rpcs: readonly string[]): string[] {
   const allowed: readonly string[] = SPARK_ALLOWLISTED_RPCS;
-  const strings: string[] = [];
+  const names: string[] = [];
   const visit = (node: ts.Node) => {
-    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) strings.push(node.text);
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isIdentifier(node))
+      names.push(node.text);
     ts.forEachChild(node, visit);
   };
   visit(sf);
-  return strings.filter((text) => rpcs.includes(text) && !allowed.includes(text));
+  return names.filter((text) => rpcs.includes(text) && !allowed.includes(text));
 }
 
 describe("the allowlist", () => {
@@ -375,7 +380,14 @@ describe("the allowlist", () => {
     expect(offAllowlist(adapter.sf, rpcs)).toStrictEqual([]);
   });
 
-  test("a planted RPC name off the allowlist fails by name", () => {
-    expect(offAllowlist(parse(ADAPTER, 'const rpc = "ReattachExecute";\n'), rpcs)).toStrictEqual(["ReattachExecute"]);
+  test.each([
+    ["a string", 'const rpc = "ReattachExecute";\n'],
+    ["a property access", "declare const full: Record<string, unknown>;\nfull.ReattachExecute;\n"],
+    [
+      "a destructured property",
+      "declare const full: Record<string, unknown>;\nconst { ReattachExecute: reattach } = full;\n",
+    ],
+  ])("an RPC off the allowlist named by %s fails by name", (_form, text) => {
+    expect(offAllowlist(parse(ADAPTER, text), rpcs)).toStrictEqual(["ReattachExecute"]);
   });
 });

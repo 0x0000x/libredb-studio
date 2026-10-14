@@ -369,7 +369,8 @@ export async function startSparkFake(options: SparkFakeOptions): Promise<SparkFa
       .map((option) => option.reattach_options as { reattachable?: boolean } | null | undefined)
       .find((value) => value);
     if (reattach?.reattachable === true) timers.push(setTimeout(end, options.reattachWindowMs ?? 120_000));
-    const plan = request.plan as {
+    // The decoder answers an absent plan as null, which the fake answers as a statement it holds no answer for.
+    const plan = (request.plan ?? {}) as {
       readonly command?: {
         readonly sql_command?: { readonly input?: { readonly sql?: { readonly query?: string } | null } | null } | null;
       } | null;
@@ -378,7 +379,8 @@ export async function startSparkFake(options: SparkFakeOptions): Promise<SparkFa
     const commandText = plan.command?.sql_command?.input?.sql?.query;
     const rootText = plan.root?.sql?.query;
     const text = commandText ?? rootText;
-    const answer = text === undefined ? undefined : options.statements[text];
+    // Only the table's own keys answer, so a statement such as "toString" finds no inherited member.
+    const answer = text !== undefined && Object.hasOwn(options.statements, text) ? options.statements[text] : undefined;
     if (answer === undefined) {
       execution.end(failure(3, `the fake has no answer for ${JSON.stringify(text)}`));
       return;

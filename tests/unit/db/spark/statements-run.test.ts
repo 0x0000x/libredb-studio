@@ -13,8 +13,10 @@
  * before the statement session's release, and a fetch that fails leaving the ErrorInfo message as it is; every exit
  * before Spark ended the stream, each refusal of a result and a server-side id that changed on an open stream among
  * them, sending one Interrupt by the run's tag, none when Spark ended it (a Spark error, a closed or changed session, a
- * session released under the run), and an Interrupt that fails changing nothing; the heartbeat; no reattach option; a
- * SET that changes only its own scope; and concurrent scopes that share no session, heartbeat hold, tag or Interrupt.
+ * session released under the run), and an Interrupt that fails changing nothing; a channel closed between the steps,
+ * whose second ExecutePlan grpc-js refuses before sending it, ending the run as a SparkError; the heartbeat; no
+ * reattach option; a SET that changes only its own scope; and concurrent scopes that share no session, heartbeat
+ * hold, tag or Interrupt.
  * A run stays in flight, and Stop reaches it, until it settled and its Interrupt, if it sent one, answered or failed,
  * in either order.
  */
@@ -286,6 +288,40 @@ const endAfter = (time: Date) =>
     if (response === undefined) await new Promise((resolve) => setTimeout(resolve, time.getTime() - Date.now() + 5));
     return response;
   });
+
+/**
+ * The fake's channel for every unary call, and ExecutePlan over a channel of its own that is closed once the first
+ * step's stream ended, so the second step meets a closed channel.
+ */
+function closedAfterFirstStep(): SparkWireChannel {
+  const own = grpcWireTransport(
+    buildSparkConnectionOptions(
+      { id: "c", name: "c", type: "spark", host: "127.0.0.1", port } as unknown as DatabaseConnection,
+      { queryTimeout: 5_000 },
+    ),
+  );
+  return {
+    unary: (rpc, request, call) => channel.unary(rpc, request, call),
+    executePlan: (request, call, limits) => {
+      const stream = own.executePlan(request, call, limits);
+      return {
+        read: async () => {
+          const response = await stream.read();
+          if (response === undefined) own.close();
+          return response;
+        },
+        get receivedBytes() {
+          return stream.receivedBytes;
+        },
+        get truncated() {
+          return stream.truncated;
+        },
+        cancel: () => stream.cancel(),
+      };
+    },
+    close: () => own.close(),
+  };
+}
 
 /**
  * Every relation-step response after the first given a new server-side id, as a server that never checks the observed
@@ -1383,6 +1419,19 @@ describe("errors", () => {
     expect(error.category).toBe(category);
     expect(plans()).toHaveLength(1);
     expect(interrupts()).toHaveLength(0);
+    await sessions.releaseAll();
+  });
+
+  test("a channel closed between the two steps ends the run as a SparkError: grpc-js refuses the second ExecutePlan before sending it, and no Interrupt follows", async () => {
+    const { sessions, runs } = world(closedAfterFirstStep());
+    const error = await failure(
+      runs.run({ sql: "SELECT id FROM t", session: () => sessions.forScope("closed-channel"), deadline: soon() }),
+    );
+    expect([error.category, error.message]).toStrictEqual(["spark", SPARK_ERROR_SENTENCES.localClientError]);
+    expect(toDatabaseError(error)).toBeInstanceOf(QueryError);
+    expect(plans()).toHaveLength(1);
+    expect(interrupts()).toHaveLength(0);
+    expect(runs.runsInFlight()).toBe(0);
     await sessions.releaseAll();
   });
 

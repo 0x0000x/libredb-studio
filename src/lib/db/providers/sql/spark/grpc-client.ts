@@ -75,6 +75,11 @@ export interface SparkWireCall {
 /** The transport's paused server stream under a Spark name, so readers import it type-only from here. */
 export type SparkPlanStream = GrpcServerStream;
 
+/**
+ * The channel of one connection. After close(), executePlan throws at once and unary rejects, each with grpc-js's own
+ * error, which carries no gRPC code and which toSparkError reads as a local client failure that sent nothing, so every
+ * caller opens a call inside the try that maps its failure; a call still open when close() runs ends CANCELLED.
+ */
 export interface SparkWireChannel {
   unary(rpc: Exclude<SparkRpc, "ExecutePlan">, request: object, call: SparkWireCall): Promise<object>;
   executePlan(request: object, call: SparkWireCall, limits: GrpcServerStreamLimits): SparkPlanStream;

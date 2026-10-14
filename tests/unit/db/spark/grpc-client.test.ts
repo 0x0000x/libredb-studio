@@ -1,8 +1,10 @@
 /**
  * The Apache Spark gRPC adapter over the fake server of tests/helpers/spark-connect-server.ts:
  * the loader options, the six allowlisted RPCs and the six the stub cannot call, the authorization metadata, a deadline
- * per call, the call's own signal, the 16 MiB receive cap, no retry after a reset, the unsent error, the TLS modes, the
- * cached definition, and every request builder sent through the real descriptor and decoded by the fake.
+ * per call, the call's own signal, the 16 MiB receive cap and retries off, a reset connection, the unsent error, the
+ * calls after close() and the call close() ends, the require, verify-ca and verify-full TLS modes, the cached
+ * definition, and every request builder sent through the real descriptor and decoded by the fake, the fixed identity
+ * included; and the fake's own answer to a statement it holds no answer for and to an ExecutePlan with no plan.
  */
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
@@ -40,6 +42,18 @@ import { loadTlsFixtures } from "../../../helpers/tls-fixtures";
 
 const LIMITS = { maxReceivedBytes: 33_554_432 };
 const TOKEN = "fake-token-3c9e1b77";
+/**
+ * The fixed identity every request carries, as the fake decodes it through the descriptor: a field the descriptor does
+ * not hold is dropped on the wire, and the decoder answers an absent message field as null.
+ */
+const IDENTITY = {
+  user_context: { user_id: "libredb-studio", user_name: "libredb-studio", extensions: [] },
+  client_type: "libredb-studio",
+};
+const identityOf = (entry: SparkFakeLogEntry) => {
+  const { user_context, client_type } = entry.request as { user_context?: unknown; client_type?: unknown };
+  return { user_context, client_type };
+};
 const portOf = (fake: SparkFakeServer) => Number(fake.target.slice(fake.target.lastIndexOf(":") + 1));
 const optionsFor = (fake: SparkFakeServer, overrides: Record<string, unknown> = {}): SparkConnectionOptions =>
   buildSparkConnectionOptions(
@@ -74,6 +88,19 @@ async function failure(promise: Promise<unknown>): Promise<{ code?: number; deta
     (error: unknown) => error as { code?: number; details?: string } & Error,
   );
 }
+/** What `act` throws before it returns. */
+function thrownBy(act: () => unknown): unknown {
+  try {
+    act();
+  } catch (error) {
+    return error;
+  }
+  throw new Error("the call returned, though this test expects it to throw at once");
+}
+/** The connection a mapped failure names: the fake's address and no secret. */
+const contextOf = (fake: SparkFakeServer) => ({
+  connection: { host: "127.0.0.1", port: portOf(fake), secretForms: [] },
+});
 async function readAll(stream: { read(): Promise<object | undefined> }): Promise<object[]> {
   const responses: object[] = [];
   // oxlint-disable-next-line no-await-in-loop -- one reader awaits each message before it asks for the next.
@@ -162,7 +189,7 @@ describe("the stub", () => {
 });
 
 describe("every request builder, sent through the descriptor and decoded by the fake", () => {
-  test("AnalyzePlan, Config set, get_option and get_all, Interrupt, FetchErrorDetails and ReleaseSession", async () => {
+  test("AnalyzePlan, Config set, get_option and get_all, Interrupt, FetchErrorDetails and ReleaseSession, each with the fixed identity", async () => {
     const channel = open(optionsFor(plain));
     const session = fresh();
     plain.log.clear();
@@ -206,9 +233,7 @@ describe("every request builder, sent through the descriptor and decoded by the 
     for (const entry of plain.log.entries) {
       expect(entry.sessionId).toBe(session.sessionId);
       expect(entry.metadata.authorization).toBeUndefined();
-      expect((entry.request as { user_context?: { user_id: string } }).user_context?.user_id ?? "libredb-studio").toBe(
-        "libredb-studio",
-      );
+      expect({ rpc: entry.rpc, ...identityOf(entry) }).toStrictEqual({ rpc: entry.rpc, ...IDENTITY });
     }
     const interrupt = plain.log.entries[4]?.request as {
       interrupt_type: string;
@@ -222,7 +247,7 @@ describe("every request builder, sent through the descriptor and decoded by the 
     });
   });
 
-  test("ExecutePlan: the statement as SqlCommand.input, the tag, 4 MiB chunks and no reattach option; the inline answer", async () => {
+  test("ExecutePlan: the fixed identity, the statement as SqlCommand.input, the tag, 4 MiB chunks and no reattach option; the inline answer", async () => {
     const channel = open(optionsFor(plain));
     const ids = run();
     plain.log.clear();
@@ -235,6 +260,7 @@ describe("every request builder, sent through the descriptor and decoded by the 
     expect([...result.sql_command_result.relation.local_relation.data]).toStrictEqual([1, 2, 3]);
     expect(plain.log.entries).toHaveLength(1);
     const entry = plain.log.entries[0] as SparkFakeLogEntry;
+    expect(identityOf(entry)).toStrictEqual(IDENTITY);
     expect(entry.operationId).toBe(ids.operationId);
     expect(entry.tags).toStrictEqual([ids.tag]);
     expect(entry.reattachOptions).toBeUndefined();
@@ -317,7 +343,9 @@ describe("the transport's rules", () => {
     expect(error.details).toContain("Received message larger than max");
   });
 
-  test("a reset connection fails the call, which is never sent again", async () => {
+  // grpc-js never sends a call again once the server took its stream, whatever the retry setting, so this case cannot
+  // show that retries are off: the channel-options test above, which reads `grpc.enable_retries` 0, holds that rule.
+  test("a reset connection fails the call with UNAVAILABLE, after the fake received it once", async () => {
     const channel = open(optionsFor(plain));
     const ids = run();
     plain.log.clear();
@@ -326,6 +354,70 @@ describe("the transport's rules", () => {
     );
     expect(error.code).toBe(14);
     expect(plain.log.entries.filter((entry) => entry.operationId === ids.operationId)).toHaveLength(1);
+  });
+
+  test("after close(), ExecutePlan throws at once and a unary call rejects, with grpc-js's error that has no gRPC code, which reads as a local client failure; nothing reaches the server", async () => {
+    const channel = open(optionsFor(plain));
+    await channel.unary("AnalyzePlan", versionRequest(fresh()), call());
+    channel.close();
+    plain.log.clear();
+    const thrown = thrownBy(() =>
+      channel.executePlan(sqlCommandRequest(fresh(), "SHOW TABLES", run()), call(), LIMITS),
+    );
+    const rejected = await failure(channel.unary("AnalyzePlan", versionRequest(fresh()), call()));
+    for (const error of [thrown, rejected]) {
+      expect(error).toBeInstanceOf(Error);
+      const { message, code, details } = error as { code?: unknown; details?: unknown } & Error;
+      expect({ message, code, details }).toStrictEqual({
+        message: "Channel has been shut down",
+        code: undefined,
+        details: undefined,
+      });
+      const mapped = toSparkError(error, { ...contextOf(plain), phase: "relation", timeoutMs: 5_000 });
+      expect([mapped.category, mapped.message]).toStrictEqual(["spark", SPARK_ERROR_SENTENCES.localClientError]);
+    }
+    expect(plain.log.entries).toStrictEqual([]);
+    // A second close() changes nothing.
+    channel.close();
+  });
+
+  test("close() ends a call still open with CANCELLED, which reads as cancelled", async () => {
+    const channel = open(optionsFor(plain));
+    const ids = run();
+    const reading = readAll(
+      channel.executePlan(relationRequest(fresh(), { sql: { query: "SELECT 1" } }, ids), call({}, 5_000), LIMITS),
+    );
+    await arrived(plain, ids.operationId);
+    channel.close();
+    const error = await failure(reading);
+    expect([error.code, error.details]).toStrictEqual([1, "Cancelled on client"]);
+    const mapped = toSparkError(error, { ...contextOf(plain), phase: "relation", timeoutMs: 5_000 });
+    expect([mapped.category, mapped.message]).toStrictEqual(["cancelled", SPARK_ERROR_SENTENCES.cancelled]);
+  });
+});
+
+describe("the fake's own answers", () => {
+  test("a statement it holds no answer for, an Object.prototype name among them, ends with INVALID_ARGUMENT", async () => {
+    const channel = open(optionsFor(plain));
+    for (const text of ["NO SUCH STATEMENT", "toString", "constructor", "valueOf", "hasOwnProperty", "__proto__"]) {
+      // oxlint-disable-next-line no-await-in-loop -- one statement at a time, each answered before the next.
+      const error = await failure(
+        readAll(channel.executePlan(sqlCommandRequest(fresh(), text, run()), call(), LIMITS)),
+      );
+      expect({ text, code: error.code, details: error.details }).toStrictEqual({
+        text,
+        code: 3,
+        details: `the fake has no answer for ${JSON.stringify(text)}`,
+      });
+    }
+  });
+
+  test("an ExecutePlan with no plan ends with INVALID_ARGUMENT, as a statement with no answer does", async () => {
+    const channel = open(optionsFor(plain));
+    const error = await failure(
+      readAll(channel.executePlan({ session_id: randomUUID(), operation_id: randomUUID() }, call(), LIMITS)),
+    );
+    expect([error.code, error.details]).toStrictEqual([3, "the fake has no answer for undefined"]);
   });
 });
 
@@ -350,16 +442,27 @@ describe("tokens", () => {
 });
 
 describe("TLS", () => {
-  const context = (fake: SparkFakeServer) => ({
-    connection: { host: "127.0.0.1", port: portOf(fake), secretForms: [] },
-    phase: "connect" as const,
-  });
+  const context = (fake: SparkFakeServer) => ({ ...contextOf(fake), phase: "connect" as const });
+  const versionOver = async (channel: SparkWireChannel) =>
+    ((await channel.unary("AnalyzePlan", versionRequest(fresh()), call())) as { spark_version: unknown }).spark_version;
 
   test("verify-full with the fake's CA answers, through the IP identity", async () => {
     const channel = open(optionsFor(secured, { ssl: { mode: "verify-full", caCert: secured.caPem } }));
     expect(await channel.unary("AnalyzePlan", versionRequest(fresh()), call())).toMatchObject({
       spark_version: { version: "4.2.0" },
     });
+  });
+
+  test("require with no CA answers: the channel encrypts without verifying the certificate", async () => {
+    expect(await versionOver(open(optionsFor(secured, { ssl: { mode: "require" } })))).toStrictEqual({
+      version: "4.2.0",
+    });
+  });
+
+  test("verify-ca with the fake's CA answers", async () => {
+    expect(
+      await versionOver(open(optionsFor(secured, { ssl: { mode: "verify-ca", caCert: secured.caPem } }))),
+    ).toStrictEqual({ version: "4.2.0" });
   });
 
   test("plaintext to the TLS port, TLS to the plaintext port and a CA that did not sign the certificate are tls failures", async () => {
