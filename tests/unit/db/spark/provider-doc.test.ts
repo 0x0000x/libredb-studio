@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { IMPORT_NO_TARGET, importRefusal } from "@/components/DataImportModal";
 import { packOperationsInventory } from "@/lib/agent/context-snapshot";
 import { MCP_EXPOSABLE } from "@/lib/db/compatibility";
 import { readIpcColumns } from "@/lib/db/providers/sql/spark/arrow";
@@ -205,6 +206,7 @@ describe("docs/providers/spark.md", () => {
     if (capabilities.supportsSqlFormat === false) off.push("Format");
     if (capabilities.supportsInlineRowEdit === false) off.push("Inline row edit");
     if (capabilities.supportsCreateTable === false) off.push("Create Table");
+    if (importRefusal(capabilities) !== null) off.push("Import Data");
     if (capabilities.supportsTestDataGeneration === false) off.push("Test data generation");
     if (capabilities.supportsResultPagination === false) off.push("Load More");
     if (capabilities.supportsColumnProfiling === false) off.push("Column profiler");
@@ -212,6 +214,13 @@ describe("docs/providers/spark.md", () => {
     if (capabilities.supportsMaintenance === false && capabilities.maintenanceOperations?.length === 0)
       off.push("Maintenance");
     expect(tableRows(sectionOf(DOC, "### 8.6 Off in this version")).map((cells) => cells[0])).toEqual(off);
+  });
+
+  test("the Import Data row quotes the import dialog's refusal, which no kind that takes row writes lifts", () => {
+    expect(importRefusal(capabilities)).toBe(IMPORT_NO_TARGET);
+    expect(SPARK_OBJECT_KINDS.some((kind) => kind.acceptsRowWrites === true)).toBe(false);
+    const row = tableRows(sectionOf(DOC, "### 8.6 Off in this version")).find((cells) => cells[0] === "Import Data");
+    expect(row?.[1]).toContain(`\`${IMPORT_NO_TARGET}\``);
   });
 
   test("states the capabilities the features section describes", () => {

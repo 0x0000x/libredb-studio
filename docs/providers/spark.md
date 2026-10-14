@@ -507,6 +507,7 @@ The DDL of an export names Spark's types: `STRING`, `DOUBLE` and `BINARY`.
 | Format | Both formatter modes change valid Spark SQL text, so no Format button or action is shown |
 | Inline row edit | Spark keys are informational, and writes depend on the table format |
 | Create Table | Table creation depends on the table format and the catalog; write the DDL in the editor |
+| Import Data | No Spark kind takes row writes and Create Table is off, so the dialog offers only Close and says `Studio's import has no target on this connection: it offers no existing table here to write into and cannot create one.` Load rows with INSERT in the editor |
 | Test data generation | Writes depend on the table format, and the generator would write to a shared cluster |
 | Load More | A page would run the whole statement again on the cluster, and pages without ORDER BY can repeat or drop rows |
 | Column profiler | Profiling runs full-scan aggregate jobs on tables a cluster's other users share |
